@@ -112,7 +112,10 @@ textarea {
 div[aria-label*="Your Privacy"],
 div[class*="ed-grid"] > nav,
 div[id*='view-collection-article-content-root'] > :not(#handleArticleScroll):not(:last-child), div[id*='view-collection-article-content-root']:not(:has(#handleArticleScroll)) > :not(:last-child),
-div[aria-labelledby*="simple-modal-title"] {
+div[aria-labelledby*="simple-modal-title"],
+nav,
+header,
+div[class*="PALBanner_container"] {
     display: none !important;
 }
 
