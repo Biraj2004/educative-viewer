@@ -40,18 +40,80 @@
             if (back_button.length > 0) {
                 back_button[0].parentNode.setAttribute('name', 'back');
             }
+        
+            enableSwipeNav();
         });
     </script>
     <script>
         function openNav() {
             const sidebarParent = document.querySelector('.sidebar');
             const navbarParent = document.querySelector('.navbar-start.topic');
-            const isOpen = sidebarParent.style.left === '0px';
+            if (!sidebarParent || !navbarParent) {
+                return;
+            }
+
+            const sidebarLeft = getComputedStyle(sidebarParent).left;
+            const isOpen = sidebarLeft === '0px';
 
             // Toggle the sidebar state
             sidebarParent.style.left = isOpen ? '-300px' : '0px';
             sidebarParent.style.overflowY = isOpen ? 'hidden' : 'auto';
             navbarParent.style.left = isOpen ? '-300px' : '39px';
+        }
+
+        // Swipe support for mobile: swipe right to open, left to close
+        function enableSwipeNav() {
+            const sidebarParent = document.querySelector('.sidebar');
+            const navbarParent = document.querySelector('.navbar-start.topic');
+            if (!sidebarParent || !navbarParent) {
+                return;
+            }
+
+            let startX = 0;
+            let endX = 0;
+            const threshold = 50; // minimal swipe distance in px
+
+            const closeNav = () => {
+                sidebarParent.style.left = '-300px';
+                sidebarParent.style.overflowY = 'hidden';
+                navbarParent.style.left = '-300px';
+            };
+
+            const openNavSwipe = () => {
+                sidebarParent.style.left = '0px';
+                sidebarParent.style.overflowY = 'auto';
+                navbarParent.style.left = '39px';
+            };
+
+            document.addEventListener('touchstart', function (e) {
+                if (window.innerWidth > 1200) {
+                    return;
+                }
+                startX = e.changedTouches[0].screenX;
+                endX = startX;
+            }, {passive: true});
+
+            document.addEventListener('touchmove', function (e) {
+                if (window.innerWidth > 1200) {
+                    return;
+                }
+                endX = e.changedTouches[0].screenX;
+            }, {passive: true});
+
+            document.addEventListener('touchend', function () {
+                if (window.innerWidth > 1200) {
+                    return;
+                }
+                const deltaX = endX - startX;
+                const sidebarLeft = getComputedStyle(sidebarParent).left;
+                const isOpen = sidebarLeft === '0px';
+
+                if (deltaX > threshold && !isOpen) {
+                    openNavSwipe();
+                } else if (deltaX < -threshold && isOpen) {
+                    closeNav();
+                }
+            }, {passive: true});
         }
     </script>
 </head>
@@ -61,8 +123,8 @@
         [([(= include webpage =)])]
     </div>
     <div class='sidebar'>
-        <div class="container">
-            <div id="navbarMenuHeroA">
+        <ul id="sidebar-ul">
+            <li id="sidebar-li"><div id="navbarMenuHeroA">
                 <!-- <h2 class="has-text-white navbar-item is-centered navbar-end">Educative Viewer</h2> -->
                 <a id="open-btn" class="navbar-item" onclick="openNav()" type="button">☰</a>
                 <div class="navbar-start topic">
@@ -81,8 +143,8 @@
                     [([(= endif =)])]
                 </div>
             </div>
-        </div>
-        <ul id="sidebar-ul">
+            </li>
+            <li id="sidebar-li">&nbsp;</li>
             [([(= for folder in folder_list =)])]
             <li id="sidebar-li">
                 [([(= if [([(loop.index0)])] == [([(itr)])] =)])]
