@@ -58,7 +58,7 @@
             // Toggle the sidebar state
             sidebarParent.style.left = isOpen ? '-300px' : '0px';
             sidebarParent.style.overflowY = isOpen ? 'hidden' : 'auto';
-            navbarParent.style.left = isOpen ? '-300px' : '39px';
+            navbarParent.style.left = isOpen ? '-300px' : '36px';
         }
 
         // Swipe support for mobile: swipe right to open, left to close
@@ -82,7 +82,7 @@
             const openNavSwipe = () => {
                 sidebarParent.style.left = '0px';
                 sidebarParent.style.overflowY = 'auto';
-                navbarParent.style.left = '39px';
+                navbarParent.style.left = '36px';
             };
 
             document.addEventListener('touchstart', function (e) {

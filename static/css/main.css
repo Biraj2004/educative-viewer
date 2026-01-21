@@ -158,7 +158,7 @@ a.navbar-item:hover, a#open-btn.navbar-item:hover, form[class*="navbar-item"]:ho
 div[class*="navbar-start"]{
     width: 230px;
     position: fixed;
-    left: 39px;
+    left: 36px;
     top: 0px;
     background-color: rgba(21, 21, 30, 1);
     transition: left 0.25s ease;
