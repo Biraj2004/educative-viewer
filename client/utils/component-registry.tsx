@@ -1,20 +1,20 @@
 import React from "react";
 import MarkdownEditor from "@/components/MarkdownEditor";
 import DrawIOWidget from "@/components/DrawIOWidget";
-import CodeComponent from "@/components/CodeComponent";
+import Code from "@/components/Code";
 import TabbedCode from "@/components/TabbedCode";
-import TableComponent from "@/components/TableComponent";
+import Table from "@/components/Table";
 import SpoilerEditor from "@/components/SpoilerEditor";
-import SlateHtml from "@/components/SlateHtml";
-import LatexComponent from "@/components/LatexComponent";
+import SlateHTML from "@/components/SlateHTML";
+import Latex from "@/components/Latex";
 import { CanvasAnimationViewer } from "@/components/CanvasAnimationViewer";
-import ApiWidget from "@/components/ApiWidget";
+import APIWidget from "@/components/APIWidget";
 import MxGraphWidget from "@/components/MxGraphWidget";
-import EditorCodeComponent from "@/components/EditorCodeComponent";
+import EditorCode from "@/components/EditorCode";
 import EducativeArray from "@/components/EducativeArray";
-import ColumnComponent from "@/components/ColumnComponent";
-import ImageComponent from "@/components/ImageComponent";
-import FileComponent from "@/components/FileComponent";
+import Columns from "@/components/Columns";
+import Image from "@/components/Image";
+import File from "@/components/File";
 import InstaCalc from "@/components/InstaCalc";
 import MatchTheAnswers from "@/components/MatchTheAnswers";
 import "katex/dist/katex.min.css";
@@ -40,24 +40,23 @@ export function UnknownRenderer({ type }: { type: string }) {
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 export const COMPONENT_REGISTRY: Record<string, RendererFn> = {
-  MxGraphWidget:         (c) => <MxGraphWidget             data={c as any} />,
-  EditorCodeComponent:   (c) => <EditorCodeComponent       data={c as any} />,
-  MarkdownEditor:        (c) => <MarkdownEditor            data={c as any} />,
-  DrawIOWidget:          (c) => <DrawIOWidget              data={c as any} />,
-  CodeComponent:         (c) => <CodeComponent             data={c as any} />,
-  TabbedCode:            (c) => <TabbedCode                data={c as any} />,
-  TableComponent:        (c) => <TableComponent            data={c as any} />,
-  SpoilerEditor:         (c) => <SpoilerEditor             data={c as any} />,
-  SlateHtml:             (c) => <SlateHtml                 data={c as any} />,
-  LatexComponent:        (c) => <LatexComponent            data={c as any} />,
-  CanvasAnimationViewer: (c) => <CanvasAnimationViewer     data={c as any} />,
-  ApiWidget:             (c) => <ApiWidget                 data={c as any} />,
-  ColumnComponent:       (c) => <ColumnComponent           data={c as any} />,
-  EducativeArray:        (c) => <EducativeArray            data={c as any} />,
-  ImageComponent:        (c) => <ImageComponent            data={c as any} />,
-  FileComponent:         (c) => <FileComponent             data={c as any} />,
-  InstaCalc:             (c) => <InstaCalc                 data={c as any} />,
-  MatchTheAnswers:       (c) => <MatchTheAnswers           data={c as any} />,
+  MxGraphWidget:         (c) => <MxGraphWidget          data={c as any} />,
+  MarkdownEditor:        (c) => <MarkdownEditor         data={c as any} />,
+  DrawIOWidget:          (c) => <DrawIOWidget           data={c as any} />,
+  Code:                  (c) => <Code                   data={c as any} />,
+  TabbedCode:            (c) => <TabbedCode             data={c as any} />,
+  Table:                 (c) => <Table                  data={c as any} />,
+  SpoilerEditor:         (c) => <SpoilerEditor          data={c as any} />,
+  SlateHTML:             (c) => <SlateHTML              data={c as any} />,
+  Latex:                 (c) => <Latex                  data={c as any} />,
+  CanvasAnimationViewer: (c) => <CanvasAnimationViewer  data={c as any} />,
+  APIWidget:             (c) => <APIWidget              data={c as any} />,
+  EditorCode:            (c) => <EditorCode             data={c as any} />,
+  EducativeArray:        (c) => <EducativeArray         data={c as any} />,
+  Columns:               (c) => <Columns                data={c as any} />,
+  // eslint-disable-next-line jsx-a11y/alt-text
+  Image:                 (c) => <Image                  data={c as any} />,
+  File:                  (c) => <File                   data={c as any} />,
+  InstaCalc:             (c) => <InstaCalc              data={c as any} />,
+  MatchTheAnswers:       (c) => <MatchTheAnswers        data={c as any} />,
 };
-
-/* eslint-enable @typescript-eslint/no-explicit-any */

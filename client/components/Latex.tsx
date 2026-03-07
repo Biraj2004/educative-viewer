@@ -10,7 +10,7 @@ export interface LatexComponentData {
   version: string;
 }
 
-export default function LatexComponent({ data }: { data: LatexComponentData }) {
+export default function Latex({ data }: { data: LatexComponentData }) {
   if (!data.isEquationValid) {
     return (
       <div className="text-red-500 text-sm px-6 py-4">

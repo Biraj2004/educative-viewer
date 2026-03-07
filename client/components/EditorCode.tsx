@@ -46,7 +46,7 @@ function defaultFileName(lang: string, provided?: string): string {
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export default function EditorCodeComponent({ data }: { data: EditorCodeComponentData }) {
+export default function EditorCode({ data }: { data: EditorCodeComponentData }) {
   const [copied, setCopied] = useState(false);
   const [wordWrap, setWordWrap] = useState<"off" | "on">("off");
   const [isFullscreen, setIsFullscreen] = useState(false);

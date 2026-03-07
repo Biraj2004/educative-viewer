@@ -85,7 +85,7 @@ function formatSize(bytes: number) {
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export default function ApiWidget({ data }: { data: ApiWidgetData }) {
+export default function APIWidget({ data }: { data: ApiWidgetData }) {
   const allItems = flattenItems(data.collections);
   const primary = allItems.find((i) => i.id === data.primaryRequestId) ?? allItems[0];
 

@@ -24,7 +24,7 @@ function formatBytes(bytes: number): string {
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export default function FileComponent({ data }: { data: FileComponentData }) {
+export default function File({ data }: { data: FileComponentData }) {
   const href = resolveEduUrl(data.path);
   const label = data.text ?? "Download";
   const fileName = data.file_name ?? "";

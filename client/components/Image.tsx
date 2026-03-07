@@ -20,7 +20,7 @@ export interface ImageComponentData {
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export default function ImageComponent({ data }: { data: ImageComponentData }) {
+export default function Image({ data }: { data: ImageComponentData }) {
   const src = resolveEduUrl(data.path);
   const alt = data.metadata?.name ?? data.caption ?? "image";
 

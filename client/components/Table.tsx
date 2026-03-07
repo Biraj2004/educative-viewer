@@ -26,7 +26,7 @@ function titleAlignClass(alignment: string) {
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export default function TableComponent({ data }: { data: TableComponentData }) {
+export default function Table({ data }: { data: TableComponentData }) {
   const isHeader = (rowIdx: number) => rowIdx === 0;
   const totalWidth = data.columnWidths.reduce((a, b) => a + b, 0);
 

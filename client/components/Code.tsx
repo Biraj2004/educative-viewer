@@ -74,7 +74,7 @@ function LangFileIcon({ lang }: { lang: string }) {
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export default function CodeComponent({ data }: { data: CodeComponentData }) {
+export default function Code({ data }: { data: CodeComponentData }) {
   const allFiles = [
     { fileName: data.entryFileName, content: data.content },
     ...(data.additionalContent ?? [])

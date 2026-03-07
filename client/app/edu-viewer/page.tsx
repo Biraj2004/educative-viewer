@@ -17,21 +17,21 @@ import fileComponentData from '../../public/fileComponent.json';
 import instaCalcData from '../../public/instaCalc.json';
 import matchTheAnswersData from '../../public/matchTheAnswers.json';
 import { CanvasAnimationViewer } from '@/components/CanvasAnimationViewer';
-import EditorCodeComponent, { EditorCodeComponentData } from '@/components/EditorCodeComponent';
-import SlateHtml from '@/components/SlateHtml';
-import LatexComponent from '@/components/LatexComponent';
+import EditorCode, { EditorCodeComponentData } from '@/components/EditorCode';
+import SlateHTML from '@/components/SlateHTML';
+import Latex from '@/components/Latex';
 import MarkdownEditor from '@/components/MarkdownEditor';
-import CodeComponent from '@/components/CodeComponent';
-import ColumnComponent from '@/components/ColumnComponent';
+import Code from '@/components/Code';
+import Columns from '@/components/Columns';
 import DrawIOWidget from '@/components/DrawIOWidget';
-import ApiWidget from '@/components/ApiWidget';
+import APIWidget from '@/components/APIWidget';
 import SpoilerEditor from '@/components/SpoilerEditor';
 import TabbedCode from '@/components/TabbedCode';
-import TableComponent from '@/components/TableComponent';
+import Table from '@/components/Table';
 import EducativeArray from '@/components/EducativeArray';
 import MatchTheAnswers from '@/components/MatchTheAnswers';
-import ImageComponent from '@/components/ImageComponent';
-import FileComponent, { FileComponentData } from '@/components/FileComponent';
+import Image from '@/components/Image';
+import File, { FileComponentData } from '@/components/File';
 import InstaCalc from '@/components/InstaCalc';
 
 export default function Home() {
@@ -47,7 +47,7 @@ export default function Home() {
 
       {/* LaTeX Component */}
       <div className="border-b border-gray-200">
-        <LatexComponent data={latexComponentData} />
+        <Latex data={latexComponentData} />
       </div>
 
       {/* Markdown Editor */}
@@ -57,12 +57,12 @@ export default function Home() {
 
       {/* Code Component */}
       <div className="border-b border-gray-200">
-        <CodeComponent data={codeComponentData} />
+        <Code data={codeComponentData} />
       </div>
 
       {/* Column Component */}
       <div className="border-b border-gray-200">
-        <ColumnComponent data={columnComponentData} />
+        <Columns data={columnComponentData} />
       </div>
 
       {/* DrawIO Widget */}
@@ -72,12 +72,12 @@ export default function Home() {
 
       {/* API Widget */}
       <div className="border-b border-gray-200">
-        <ApiWidget data={apiWidgetData} />
+        <APIWidget data={apiWidgetData} />
       </div>
 
       {/* Table Component */}
       <div className="border-b border-gray-200">
-        <TableComponent data={tableComponentData} />
+        <Table data={tableComponentData} />
       </div>
 
       {/* Tabbed Code */}
@@ -92,7 +92,7 @@ export default function Home() {
 
       {/* Editor Code Component */}
       <div className="border-b border-gray-200">
-        <EditorCodeComponent data={editorCodeComponentData as EditorCodeComponentData} />
+        <EditorCode data={editorCodeComponentData as EditorCodeComponentData} />
       </div>
 
       {/* Educative Array */}
@@ -102,12 +102,13 @@ export default function Home() {
 
       {/* Image Component */}
       <div className="border-b border-gray-200">
-        <ImageComponent data={imageComponentData} />
+        {/* eslint-disable-next-line jsx-a11y/alt-text */}
+        <Image data={imageComponentData} />
       </div>
 
       {/* File Component */}
       <div className="border-b border-gray-200">
-        <FileComponent data={fileComponentData as FileComponentData} />
+        <File data={fileComponentData as FileComponentData} />
       </div>
 
       {/* InstaCalc */}
@@ -121,7 +122,7 @@ export default function Home() {
       </div>
 
       {/* Slate HTML Content */}
-      <SlateHtml data={slateHtmlData} />
+      <SlateHTML data={slateHtmlData} />
     </div>
   );
 }

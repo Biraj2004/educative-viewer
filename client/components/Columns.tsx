@@ -11,14 +11,14 @@ interface ColumnComp {
   hash: string | number;
 }
 
-export interface ColumnComponentData {
+export interface ColumnsData {
   comp_id: string;
   comps: ColumnComp[];
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export default function ColumnComponent({ data }: { data: ColumnComponentData }) {
+export default function Columns({ data }: { data: ColumnsData }) {
   return (
     <div className="max-w-4xl mx-auto px-6 py-6">
       <div className="flex gap-4 items-stretch">

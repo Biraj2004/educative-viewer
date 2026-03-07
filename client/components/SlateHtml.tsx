@@ -106,7 +106,7 @@ function BulletList({ items }: { items: string[] }) {
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 
-export default function SlateHtml({ data }: { data: SlateHtmlData }) {
+export default function SlateHTML({ data }: { data: SlateHtmlData }) {
   const nodes = useMemo(() => parseHtml(data.html), [data.html]);
 
   return (
