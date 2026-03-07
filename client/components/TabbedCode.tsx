@@ -69,7 +69,7 @@ export default function TabbedCode({ data }: { data: TabbedCodeData }) {
   };
 
   return (
-    <div className="max-w-4xl mx-auto px-6 py-8">
+    <div className="max-w-4xl mx-auto px-6 py-2">
       <div className={isFullscreen ? "fixed inset-0 z-50 flex flex-col" : "rounded-lg overflow-hidden border border-gray-700 shadow-lg"}>
 
         {/* Tab bar */}

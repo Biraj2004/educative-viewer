@@ -16,6 +16,7 @@ import imageComponentData from '../../public/imageComponent.json';
 import fileComponentData from '../../public/fileComponent.json';
 import instaCalcData from '../../public/instaCalc.json';
 import matchTheAnswersData from '../../public/matchTheAnswers.json';
+import permutationData from '../../public/Permutation.json';
 import { CanvasAnimationViewer } from '@/components/CanvasAnimationViewer';
 import EditorCode, { EditorCodeComponentData } from '@/components/EditorCode';
 import SlateHTML from '@/components/SlateHTML';
@@ -30,6 +31,7 @@ import TabbedCode from '@/components/TabbedCode';
 import Table from '@/components/Table';
 import EducativeArray from '@/components/EducativeArray';
 import MatchTheAnswers from '@/components/MatchTheAnswers';
+import Permutation from '@/components/Permutation';
 import Image from '@/components/Image';
 import File, { FileComponentData } from '@/components/File';
 import InstaCalc from '@/components/InstaCalc';
@@ -119,6 +121,11 @@ export default function Home() {
       {/* Match The Answers */}
       <div className="border-b border-gray-200">
         <MatchTheAnswers data={matchTheAnswersData} />
+      </div>
+
+      {/* Permutation */}
+      <div className="border-b border-gray-200">
+        <Permutation data={permutationData} />
       </div>
 
       {/* Slate HTML Content */}

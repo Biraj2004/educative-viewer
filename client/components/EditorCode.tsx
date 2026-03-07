@@ -70,7 +70,7 @@ export default function EditorCode({ data }: { data: EditorCodeComponentData }) 
   };
 
   return (
-    <div className="max-w-4xl mx-auto px-6 py-8">
+    <div className="max-w-4xl mx-auto px-6 py-2">
       <div className={isFullscreen ? "fixed inset-0 z-50 flex flex-col" : "rounded-lg overflow-hidden border border-gray-700 shadow-lg"}>
         {/* Header */}
         <div className="flex items-center justify-between bg-[#1a1a2e] px-4 py-2.5 border-b border-gray-700 shrink-0">

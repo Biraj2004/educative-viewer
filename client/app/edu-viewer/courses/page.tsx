@@ -19,7 +19,7 @@ interface Course {
 // ─── Data Fetching ────────────────────────────────────────────────────────────
 
 async function fetchCourses(): Promise<Course[]> {
-  const base = process.env.NEXT_PUBLIC_API_BASE ?? "";
+  const base = process.env.BACKEND_API_BASE ?? "";
   const res = await fetch(`${base}/backend/courses`, {
     // ISR: revalidate every 60 seconds
     next: { revalidate: 60 },

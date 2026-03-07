@@ -31,7 +31,7 @@ export default function File({ data }: { data: FileComponentData }) {
   const size = data.metadata?.sizeInBytes;
 
   return (
-    <div className="max-w-4xl mx-auto px-6 py-8 flex justify-center">
+    <div className="max-w-4xl mx-auto px-6 py-2 flex justify-center">
       <div className="flex items-center gap-4 rounded-lg border border-gray-200 bg-gray-50 px-5 py-4">
         {/* File icon */}
         <div className="shrink-0 text-blue-500">

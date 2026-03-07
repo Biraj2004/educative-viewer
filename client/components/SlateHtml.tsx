@@ -109,25 +109,22 @@ function BulletList({ items }: { items: string[] }) {
 export default function SlateHTML({ data }: { data: SlateHtmlData }) {
   const nodes = useMemo(() => parseHtml(data.html), [data.html]);
 
+  if (nodes.length === 0) return null;
+
   return (
-    <div className="min-h-screen bg-white">
-      {/* Content area */}
-      <main className="max-w-4xl mx-auto px-6 py-10">
-        <article>
-          {nodes.map((node, i) => {
-            switch (node.type) {
-              case "h2":
-                return <SectionHeading key={i} text={node.text} />;
-              case "p":
-                return <BodyParagraph key={i} text={node.text} />;
-              case "ul":
-                return <BulletList key={i} items={node.items} />;
-              default:
-                return null;
-            }
-          })}
-        </article>
-      </main>
-    </div>
+    <article>
+      {nodes.map((node, i) => {
+        switch (node.type) {
+          case "h2":
+            return <SectionHeading key={i} text={node.text} />;
+          case "p":
+            return <BodyParagraph key={i} text={node.text} />;
+          case "ul":
+            return <BulletList key={i} items={node.items} />;
+          default:
+            return null;
+        }
+      })}
+    </article>
   );
 }

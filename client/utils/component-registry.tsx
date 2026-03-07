@@ -17,6 +17,8 @@ import Image from "@/components/Image";
 import File from "@/components/File";
 import InstaCalc from "@/components/InstaCalc";
 import MatchTheAnswers from "@/components/MatchTheAnswers";
+import LazyLoadPlaceholder from "@/components/LazyLoadPlaceholder";
+import Permutation from "@/components/Permutation";
 import "katex/dist/katex.min.css";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -59,4 +61,6 @@ export const COMPONENT_REGISTRY: Record<string, RendererFn> = {
   File:                  (c) => <File                   data={c as any} />,
   InstaCalc:             (c) => <InstaCalc              data={c as any} />,
   MatchTheAnswers:       (c) => <MatchTheAnswers        data={c as any} />,
+  LazyLoadPlaceholder:   (c) => <LazyLoadPlaceholder    data={c as any} />,
+  Permutation:           (c) => <Permutation            data={c as any} />,
 };

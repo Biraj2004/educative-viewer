@@ -127,7 +127,7 @@ export default function MatchTheAnswers({ data }: { data: MatchTheAnswersData })
   const uid = data.comp_id.replace(/[^a-zA-Z0-9]/g, "");
 
   return (
-    <div className="max-w-4xl mx-auto px-6 py-8">
+    <div className="max-w-4xl mx-auto px-6 py-2">
       <div className="border border-gray-200 rounded-xl bg-white shadow-sm">
 
         {/* Title */}

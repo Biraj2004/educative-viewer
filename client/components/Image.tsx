@@ -25,7 +25,7 @@ export default function Image({ data }: { data: ImageComponentData }) {
   const alt = data.metadata?.name ?? data.caption ?? "image";
 
   return (
-    <div className="max-w-4xl mx-auto px-6 py-8">
+    <div className="max-w-4xl mx-auto px-6 py-2">
       <div className="flex flex-col items-center gap-3">
         <div
           style={

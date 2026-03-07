@@ -150,7 +150,7 @@ export default function APIWidget({ data }: { data: ApiWidgetData }) {
     : "text-gray-400";
 
   return (
-    <div className="max-w-4xl mx-auto px-6 py-8">
+    <div className="max-w-4xl mx-auto px-6 py-2">
       <div className="rounded-lg border border-gray-200 shadow-sm overflow-hidden flex" style={{ minHeight: 420 }}>
 
         {/* ── Left sidebar: Collection ── */}

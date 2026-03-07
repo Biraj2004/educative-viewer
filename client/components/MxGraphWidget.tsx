@@ -16,7 +16,7 @@ export default function MxGraphWidget({ data }: { data: MxGraphWidgetData }) {
   const src = resolveEduUrl(data.path);
 
   return (
-    <div className="flex flex-col items-center justify-center h-full py-4">
+    <div className="flex flex-col items-center justify-center h-full py-2">
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
         src={src}

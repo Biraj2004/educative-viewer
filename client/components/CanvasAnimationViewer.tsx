@@ -80,7 +80,7 @@ export function CanvasAnimationViewer({ data }: { data: CanvasAnimationData }) {
         return <div className="p-8 text-center text-gray-500">No slides to display.</div>;
 
     return (
-        <div className={isFullscreen ? 'fixed inset-0 z-50 flex items-center justify-center bg-black/80' : 'max-w-4xl mx-auto px-6 py-8'}>
+        <div className={isFullscreen ? 'fixed inset-0 z-50 flex items-center justify-center bg-black/80' : 'max-w-4xl mx-auto px-6 py-2'}>
             <div className={`bg-white border border-gray-200 rounded-xl shadow-lg overflow-hidden flex flex-col ${isFullscreen ? 'w-full h-full rounded-none' : ''}`}>
                 {/* Slide area — all slides pre-rendered so images load immediately */}
                 <div style={{ position: 'relative', lineHeight: 0 }}>

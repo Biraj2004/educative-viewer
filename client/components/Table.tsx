@@ -31,7 +31,7 @@ export default function Table({ data }: { data: TableComponentData }) {
   const totalWidth = data.columnWidths.reduce((a, b) => a + b, 0);
 
   return (
-    <div className="max-w-4xl mx-auto px-6 py-8">
+    <div className="max-w-4xl mx-auto px-6 py-2">
       {/* Title */}
       {data.title && (
         <h2 className={`text-2xl font-bold text-gray-900 mb-5 ${titleAlignClass(data.titleAlignment)}`}>

@@ -108,7 +108,7 @@ export default function Code({ data }: { data: CodeComponentData }) {
   };
 
   return (
-    <div className="max-w-4xl mx-auto px-6 py-8">
+    <div className="max-w-4xl mx-auto px-6 py-2">
       <div className={
         isFullscreen
           ? "fixed inset-0 z-50 flex overflow-hidden"

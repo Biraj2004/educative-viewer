@@ -25,7 +25,7 @@ interface CourseDetail {
 
 async function fetchCourseDetail(courseId: number): Promise<CourseDetail | null> {
   try {
-    const base = process.env.NEXT_PUBLIC_API_BASE ?? "";
+    const base = process.env.BACKEND_API_BASE ?? "";
     const res = await fetch(`${base}/backend/course-details`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },

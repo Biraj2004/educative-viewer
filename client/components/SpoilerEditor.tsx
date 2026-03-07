@@ -47,7 +47,7 @@ export default function SpoilerEditor({ data }: { data: SpoilerEditorData }) {
 
   if (!open) {
     return (
-      <div className="max-w-4xl mx-auto px-6 py-6 flex justify-center">
+      <div className="max-w-4xl mx-auto px-6 py-2 flex justify-center">
         <button
           onClick={() => setOpen(true)}
           className="inline-flex items-center gap-2 px-4 py-2 rounded border border-gray-200 bg-white text-gray-700 text-sm font-medium shadow-sm hover:bg-gray-50 transition-colors"
@@ -62,7 +62,7 @@ export default function SpoilerEditor({ data }: { data: SpoilerEditorData }) {
   }
 
   return (
-    <div className="max-w-4xl mx-auto px-6 py-6">
+    <div className="max-w-4xl mx-auto px-6 py-2">
       <div className="relative rounded border border-amber-100 bg-amber-50 p-6">
         {/* Header row */}
         <div className="flex items-start justify-between mb-4">

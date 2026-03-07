@@ -1,5 +1,5 @@
-export const EDU_BASE = process.env.NEXT_PUBLIC_EDU_BASE ?? "";
-export const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? "";
+export const EDU_BASE = process.env.STATIC_FILES_BASE ?? process.env.NEXT_PUBLIC_STATIC_FILES_BASE ?? "";
+export const API_BASE = process.env.BACKEND_API_BASE ?? process.env.NEXT_PUBLIC_BACKEND_API_BASE ?? "";
 
 /**
  * Always resolve a path through EDU_BASE.
