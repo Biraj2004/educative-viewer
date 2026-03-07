@@ -187,10 +187,10 @@ export default function APIWidget({ data }: { data: ApiWidgetData }) {
           </div>
         </div>
 
-        {/* ── Right panel ── */}
+        {/* ── Right Panel ── */}
         <div className="flex-1 flex flex-col min-w-0">
 
-          {/* URL bar */}
+          {/* URL Bar */}
           <div className="flex items-center gap-2 px-4 py-3 border-b border-gray-200 bg-white">
             <select
               value={method}

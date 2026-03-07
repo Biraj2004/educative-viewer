@@ -20,7 +20,7 @@ export interface ColumnsData {
 
 export default function Columns({ data }: { data: ColumnsData }) {
   return (
-    <div className="max-w-4xl mx-auto px-6 py-2">
+    <div className="max-w-6xl mx-auto px-6 py-2">
       <div className="flex gap-4 items-stretch">
         {data.comps.map((comp, i) => {
           const renderer = COMPONENT_REGISTRY[comp.type];

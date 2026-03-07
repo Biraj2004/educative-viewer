@@ -112,7 +112,7 @@ export default function SlateHTML({ data }: { data: SlateHtmlData }) {
   if (nodes.length === 0) return null;
 
   return (
-    <article>
+    <article className="max-w-6xl mx-auto px-6 py-2">
       {nodes.map((node, i) => {
         switch (node.type) {
           case "h2":

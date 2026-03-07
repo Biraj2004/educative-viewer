@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef } from "react";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -32,6 +32,12 @@ export interface PermutationData {
   version: string;
 }
 
+// drag source: hashid being dragged + where it came from (null = pool, number = slot index)
+interface DragSource {
+  hashid: string;
+  fromSlot: number | null;
+}
+
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 function shuffle<T>(arr: T[]): T[] {
@@ -43,7 +49,6 @@ function shuffle<T>(arr: T[]): T[] {
   return a;
 }
 
-// Strip outer <p> wrapper for inline display in option chips
 function inlineHtml(mdhtml: string): string {
   return mdhtml.trim().replace(/^<p>([\s\S]*?)<\/p>\n?$/, "$1");
 }
@@ -57,8 +62,10 @@ export default function Permutation({ data }: { data: PermutationData }) {
   const [selectedHashid, setSelectedHashid] = useState<string | null>(null);
   const [submitted, setSubmitted] = useState(false);
   const [showSolution, setShowSolution] = useState(false);
+  const [dragOverTarget, setDragOverTarget] = useState<number | "pool" | null>(null);
 
-  // Stable shuffle on mount
+  const dragSource = useRef<DragSource | null>(null);
+
   const shuffledOptions = useMemo(() => shuffle(data.options), [data.options]);
 
   const optionMap = useMemo(() => {
@@ -74,7 +81,7 @@ export default function Permutation({ data }: { data: PermutationData }) {
   const placedHashids = new Set(activeSlots.filter(Boolean) as string[]);
   const poolOptions = shuffledOptions.filter((o) => !placedHashids.has(o.hashid));
 
-  // ── Interactions ──────────────────────────────────────────────────────────
+  // ── Click interactions ────────────────────────────────────────────────────
 
   function handleOptionClick(hashid: string) {
     if (submitted || showSolution) return;
@@ -83,17 +90,14 @@ export default function Permutation({ data }: { data: PermutationData }) {
 
   function handleSlotClick(slotIdx: number) {
     if (submitted || showSolution) return;
-
     if (selectedHashid) {
       const newSlots = [...slots];
-      // If selected option is already in another slot, remove it from there
       const prevIdx = newSlots.findIndex((h) => h === selectedHashid);
       if (prevIdx !== -1) newSlots[prevIdx] = null;
       newSlots[slotIdx] = selectedHashid;
       setSlots(newSlots);
       setSelectedHashid(null);
     } else if (slots[slotIdx]) {
-      // Remove from slot back to pool
       const newSlots = [...slots];
       newSlots[slotIdx] = null;
       setSlots(newSlots);
@@ -106,6 +110,77 @@ export default function Permutation({ data }: { data: PermutationData }) {
     newSlots[slotIdx] = null;
     setSlots(newSlots);
   }
+
+  // ── Drag interactions ─────────────────────────────────────────────────────
+
+  function onDragStartOption(e: React.DragEvent, hashid: string) {
+    dragSource.current = { hashid, fromSlot: null };
+    e.dataTransfer.effectAllowed = "move";
+    setSelectedHashid(null);
+  }
+
+  function onDragStartSlot(e: React.DragEvent, slotIdx: number, hashid: string) {
+    e.stopPropagation();
+    dragSource.current = { hashid, fromSlot: slotIdx };
+    e.dataTransfer.effectAllowed = "move";
+    setSelectedHashid(null);
+  }
+
+  function onDragEnd() {
+    dragSource.current = null;
+    setDragOverTarget(null);
+  }
+
+  function onDragOverSlot(e: React.DragEvent, slotIdx: number) {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    setDragOverTarget(slotIdx);
+  }
+
+  function onDropSlot(e: React.DragEvent, slotIdx: number) {
+    e.preventDefault();
+    setDragOverTarget(null);
+    const src = dragSource.current;
+    if (!src) return;
+
+    const newSlots = [...slots];
+
+    if (src.fromSlot === null) {
+      // From pool → slot: just place it (existing occupant stays until replaced)
+      const displaced = newSlots[slotIdx];
+      newSlots[slotIdx] = src.hashid;
+      // displaced goes back to pool automatically (not in placedHashids)
+      void displaced;
+    } else {
+      // From slot → slot: swap
+      const srcHashid = newSlots[src.fromSlot];
+      newSlots[src.fromSlot] = newSlots[slotIdx];
+      newSlots[slotIdx] = srcHashid;
+    }
+
+    setSlots(newSlots);
+    dragSource.current = null;
+  }
+
+  function onDragOverPool(e: React.DragEvent) {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    setDragOverTarget("pool");
+  }
+
+  function onDropPool(e: React.DragEvent) {
+    e.preventDefault();
+    setDragOverTarget(null);
+    const src = dragSource.current;
+    if (!src || src.fromSlot === null) return;
+    // Dragged from a slot back to pool: clear the slot
+    const newSlots = [...slots];
+    newSlots[src.fromSlot] = null;
+    setSlots(newSlots);
+    dragSource.current = null;
+  }
+
+  // ── Controls ──────────────────────────────────────────────────────────────
 
   function handleReset() {
     setSlots(Array(data.numberOfQuestionBlock).fill(null));
@@ -131,6 +206,7 @@ export default function Permutation({ data }: { data: PermutationData }) {
     : null;
 
   const allFilled = slots.every((s) => s !== null);
+  const interactive = !submitted && !showSolution;
 
   return (
     <div className="max-w-4xl mx-auto px-6 py-2">
@@ -151,46 +227,58 @@ export default function Permutation({ data }: { data: PermutationData }) {
               const option = hashid ? optionMap[hashid] : null;
               const isCorrect = submitted && hashid === data.protected_content[i];
               const isWrong = submitted && !!hashid && hashid !== data.protected_content[i];
-              const isClickable = !submitted && !showSolution;
+              const isDragOver = dragOverTarget === i;
 
               return (
                 <div
                   key={i}
                   onClick={() => handleSlotClick(i)}
+                  onDragOver={(e) => interactive && onDragOverSlot(e, i)}
+                  onDragLeave={() => setDragOverTarget(null)}
+                  onDrop={(e) => interactive && onDropSlot(e, i)}
                   className={[
                     "flex items-stretch rounded-lg border-2 min-h-11 transition-all duration-150 overflow-hidden",
-                    isClickable ? "cursor-pointer" : "cursor-default",
-                    isCorrect  ? "border-emerald-300 bg-emerald-50"
-                    : isWrong  ? "border-red-300 bg-red-50"
-                    : option   ? "border-indigo-200 bg-indigo-50/40 hover:border-indigo-400"
+                    interactive ? "cursor-pointer" : "cursor-default",
+                    isCorrect   ? "border-emerald-300 bg-emerald-50"
+                    : isWrong   ? "border-red-300 bg-red-50"
+                    : isDragOver ? "border-indigo-400 bg-indigo-50 scale-[1.01]"
+                    : option    ? "border-indigo-200 bg-indigo-50/40 hover:border-indigo-400"
                     : selectedHashid ? "border-indigo-200 border-dashed bg-indigo-50/20 hover:border-indigo-400"
                     : "border-dashed border-gray-200 bg-gray-50 hover:border-indigo-200",
                   ].join(" ")}
                 >
                   {/* Step number badge */}
                   <div className={[
-                    "w-10 shrink-0 flex items-center justify-center text-sm font-bold",
-                    isCorrect ? "bg-emerald-200 text-emerald-800"
-                    : isWrong ? "bg-red-200 text-red-800"
-                    : option  ? "bg-indigo-100 text-indigo-700"
+                    "w-10 shrink-0 flex items-center justify-center text-sm font-bold select-none",
+                    isCorrect  ? "bg-emerald-200 text-emerald-800"
+                    : isWrong  ? "bg-red-200 text-red-800"
+                    : option   ? "bg-indigo-100 text-indigo-700"
                     : "bg-gray-100 text-gray-400",
                   ].join(" ")}>
                     {i + 1}
                   </div>
 
-                  {/* Content */}
-                  <div className="flex-1 px-3 py-2.5 text-sm text-gray-800 perm-slot-content flex items-center">
+                  {/* Draggable content area */}
+                  <div
+                    draggable={!!(option && interactive)}
+                    onDragStart={option && interactive ? (e) => onDragStartSlot(e, i, hashid!) : undefined}
+                    onDragEnd={onDragEnd}
+                    className={[
+                      "flex-1 px-3 py-2.5 text-sm text-gray-800 perm-slot-content flex items-center",
+                      option && interactive ? "cursor-grab active:cursor-grabbing" : "",
+                    ].join(" ")}
+                  >
                     {option ? (
                       <span dangerouslySetInnerHTML={{ __html: option.content.mdhtml }} />
                     ) : (
                       <span className="text-gray-300 italic text-xs select-none">
-                        {selectedHashid ? "Click to place selected option" : "Click to select an option, then click here"}
+                        {selectedHashid ? "Click to place here" : "Drag or click an option here"}
                       </span>
                     )}
                   </div>
 
-                  {/* Remove ×  */}
-                  {option && !submitted && !showSolution && (
+                  {/* Remove × */}
+                  {option && interactive && (
                     <button
                       onClick={(e) => handleRemoveFromSlot(e, i)}
                       className="mr-2 shrink-0 self-center text-gray-300 hover:text-gray-600 transition-colors"
@@ -207,29 +295,42 @@ export default function Permutation({ data }: { data: PermutationData }) {
 
           {/* Options pool */}
           {data.showOptions && !showSolution && (
-            <div className="pt-1">
+            <div
+              className="pt-1"
+              onDragOver={interactive ? onDragOverPool : undefined}
+              onDragLeave={() => setDragOverTarget(null)}
+              onDrop={interactive ? onDropPool : undefined}
+            >
               <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">
                 Options
               </p>
-              <div className="flex flex-wrap gap-2">
+              <div className={[
+                "flex flex-wrap gap-2 min-h-10 rounded-lg p-1 transition-colors",
+                dragOverTarget === "pool" ? "bg-indigo-50/60 ring-1 ring-indigo-200" : "",
+              ].join(" ")}>
                 {poolOptions.map((opt) => (
-                  <button
+                  <div
                     key={opt.hashid}
+                    role="button"
+                    tabIndex={0}
+                    draggable={interactive && !submitted}
+                    onDragStart={interactive ? (e) => onDragStartOption(e, opt.hashid) : undefined}
+                    onDragEnd={onDragEnd}
                     onClick={() => handleOptionClick(opt.hashid)}
-                    disabled={submitted}
+                    onKeyDown={(e) => e.key === "Enter" && handleOptionClick(opt.hashid)}
                     className={[
-                      "rounded-lg border-2 px-3 py-2 text-sm text-left transition-all duration-150 perm-option-content",
+                      "rounded-lg border-2 px-3 py-2 text-sm text-left transition-all duration-150 perm-option-content select-none",
                       submitted
                         ? "cursor-default opacity-40 border-gray-200 bg-gray-50 text-gray-600"
                         : selectedHashid === opt.hashid
-                          ? "border-indigo-500 bg-indigo-50 text-indigo-900 shadow-sm"
-                          : "border-gray-200 bg-white text-gray-700 hover:border-indigo-300 hover:bg-indigo-50/40 cursor-pointer",
+                          ? "border-indigo-500 bg-indigo-50 text-indigo-900 shadow-sm cursor-grab"
+                          : "border-gray-200 bg-white text-gray-700 hover:border-indigo-300 hover:bg-indigo-50/40 cursor-grab active:cursor-grabbing",
                     ].join(" ")}
                     dangerouslySetInnerHTML={{ __html: inlineHtml(opt.content.mdhtml) }}
                   />
                 ))}
                 {poolOptions.length === 0 && !submitted && (
-                  <p className="text-xs text-gray-300 italic self-center">All options placed</p>
+                  <p className="text-xs text-gray-300 italic self-center px-2">All options placed — drag one back here to return it</p>
                 )}
               </div>
             </div>
