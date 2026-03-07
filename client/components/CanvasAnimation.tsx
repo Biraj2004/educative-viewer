@@ -11,18 +11,21 @@ interface SlideData {
     height: number;
 }
 
+interface CanvasObject {
+    svg_string?: string;
+    width?: number;
+    height?: number;
+}
+
 export interface CanvasAnimationData {
     width?: number;
     height?: number;
+    canvasObjects?: CanvasObject[];
     lazyLoadData?: {
         components?: Array<{
             type: string;
             content?: {
-                canvasObjects?: Array<{
-                    svg_string?: string;
-                    width?: number;
-                    height?: number;
-                }>;
+                canvasObjects?: CanvasObject[];
             };
         }>;
     };
@@ -32,6 +35,22 @@ export interface CanvasAnimationData {
 
 function parseSlides(data: CanvasAnimationData): SlideData[] {
     const slides: SlideData[] = [];
+
+    // Direct canvasObjects (when passed via LazyLoadPlaceholder)
+    const directObjects = data?.canvasObjects;
+    if (directObjects?.length) {
+        directObjects.forEach((obj, index) => {
+            slides.push({
+                id: index,
+                svgBackground: obj.svg_string ?? '',
+                width: obj.width ?? data.width ?? 710,
+                height: obj.height ?? data.height ?? 550,
+            });
+        });
+        return slides;
+    }
+
+    // Nested in lazyLoadData.components (when rendered directly)
     const components = data?.lazyLoadData?.components ?? [];
     for (const comp of components) {
         if (comp.type === 'CanvasAnimation') {

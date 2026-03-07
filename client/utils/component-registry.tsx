@@ -19,6 +19,9 @@ import InstaCalc from "@/components/InstaCalc";
 import MatchTheAnswers from "@/components/MatchTheAnswers";
 import LazyLoadPlaceholder from "@/components/LazyLoadPlaceholder";
 import Permutation from "@/components/Permutation";
+import Quiz from "@/components/Quiz";
+import StructuredQuiz from "@/components/StructuredQuiz";
+import Sandpack from "@/components/Sandpack";
 import "katex/dist/katex.min.css";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -63,4 +66,7 @@ export const COMPONENT_REGISTRY: Record<string, RendererFn> = {
   MatchTheAnswers:       (c) => <MatchTheAnswers        data={c as any} />,
   LazyLoadPlaceholder:   (c) => <LazyLoadPlaceholder    data={c as any} />,
   Permutation:           (c) => <Permutation            data={c as any} />,
+  Quiz:                  (c) => <Quiz                   data={c as any} />,
+  StructuredQuiz:        (c) => <StructuredQuiz         data={c as any} />,
+  Sandpack:              (c) => <Sandpack               data={c as any} />,
 };

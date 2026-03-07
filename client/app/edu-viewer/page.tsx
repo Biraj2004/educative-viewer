@@ -17,7 +17,10 @@ import fileComponentData from '../../public/fileComponent.json';
 import instaCalcData from '../../public/instaCalc.json';
 import matchTheAnswersData from '../../public/matchTheAnswers.json';
 import permutationData from '../../public/Permutation.json';
-import CanvasAnimation from '@/components/CanvasAnimation';
+import quizData from '../../public/Quiz.json';
+import structuredQuizData from '../../public/StructuredQuiz.json';
+import sandpackData from '../../public/Sandpack.json';
+import LazyLoadPlaceholder from '@/components/LazyLoadPlaceholder';
 import EditorCode, { EditorCodeComponentData } from '@/components/EditorCode';
 import SlateHTML from '@/components/SlateHTML';
 import Latex from '@/components/Latex';
@@ -32,6 +35,12 @@ import Table from '@/components/Table';
 import EducativeArray from '@/components/EducativeArray';
 import MatchTheAnswers from '@/components/MatchTheAnswers';
 import Permutation from '@/components/Permutation';
+import Quiz from '@/components/Quiz';
+import { QuizData } from '@/components/Quiz';
+import StructuredQuiz from '@/components/StructuredQuiz';
+import { StructuredQuizData } from '@/components/StructuredQuiz';
+import Sandpack from '@/components/Sandpack';
+import { SandpackData } from '@/components/Sandpack';
 import Image from '@/components/Image';
 import File, { FileComponentData } from '@/components/File';
 import InstaCalc from '@/components/InstaCalc';
@@ -43,7 +52,7 @@ export default function Home() {
       <div className="border-b border-gray-200 bg-gray-50 px-6 py-10">
         <div className="max-w-6xl mx-auto">
           <h2 className="text-[22px] font-bold text-gray-900 mb-6">Canvas Animation</h2>
-          <CanvasAnimation data={canvasAnimationData} />
+          <LazyLoadPlaceholder data={canvasAnimationData as any} />
         </div>
       </div>
 
@@ -126,6 +135,21 @@ export default function Home() {
       {/* Permutation */}
       <div className="border-b border-gray-200">
         <Permutation data={permutationData} />
+      </div>
+
+      {/* Quiz */}
+      <div className="border-b border-gray-200">
+        <Quiz data={quizData as QuizData} />
+      </div>
+
+      {/* Structured Quiz */}
+      <div className="border-b border-gray-200">
+        <StructuredQuiz data={structuredQuizData as StructuredQuizData} />
+      </div>
+
+      {/* Sandpack */}
+      <div className="border-b border-gray-200">
+        <Sandpack data={sandpackData as SandpackData} />
       </div>
 
       {/* Slate HTML Content */}
