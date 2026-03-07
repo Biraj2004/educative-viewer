@@ -11,6 +11,11 @@ import spoilerEditorData from '../../public/SpoilerEditor.json';
 import tabbedCodeData from '../../public/TabbedCode.json';
 import tableComponentData from '../../public/tableComponent.json';
 import editorCodeComponentData from '../../public/editorCodeComponent.json';
+import educativeArrayData from '../../public/educativeArray.json';
+import imageComponentData from '../../public/imageComponent.json';
+import fileComponentData from '../../public/fileComponent.json';
+import instaCalcData from '../../public/instaCalc.json';
+import matchTheAnswersData from '../../public/matchTheAnswers.json';
 import { CanvasAnimationViewer } from '@/components/CanvasAnimationViewer';
 import EditorCodeComponent, { EditorCodeComponentData } from '@/components/EditorCodeComponent';
 import SlateHtml from '@/components/SlateHtml';
@@ -23,6 +28,11 @@ import ApiWidget from '@/components/ApiWidget';
 import SpoilerEditor from '@/components/SpoilerEditor';
 import TabbedCode from '@/components/TabbedCode';
 import TableComponent from '@/components/TableComponent';
+import EducativeArray from '@/components/EducativeArray';
+import MatchTheAnswers from '@/components/MatchTheAnswers';
+import ImageComponent from '@/components/ImageComponent';
+import FileComponent, { FileComponentData } from '@/components/FileComponent';
+import InstaCalc from '@/components/InstaCalc';
 
 export default function Home() {
   return (
@@ -83,6 +93,31 @@ export default function Home() {
       {/* Editor Code Component */}
       <div className="border-b border-gray-200">
         <EditorCodeComponent data={editorCodeComponentData as EditorCodeComponentData} />
+      </div>
+
+      {/* Educative Array */}
+      <div className="border-b border-gray-200">
+        <EducativeArray data={educativeArrayData} />
+      </div>
+
+      {/* Image Component */}
+      <div className="border-b border-gray-200">
+        <ImageComponent data={imageComponentData} />
+      </div>
+
+      {/* File Component */}
+      <div className="border-b border-gray-200">
+        <FileComponent data={fileComponentData as FileComponentData} />
+      </div>
+
+      {/* InstaCalc */}
+      <div className="border-b border-gray-200">
+        <InstaCalc data={instaCalcData} />
+      </div>
+
+      {/* Match The Answers */}
+      <div className="border-b border-gray-200">
+        <MatchTheAnswers data={matchTheAnswersData} />
       </div>
 
       {/* Slate HTML Content */}

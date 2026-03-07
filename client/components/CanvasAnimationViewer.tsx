@@ -1,6 +1,6 @@
 "use client";
 import { useState, useEffect } from 'react';
-import { EDU_BASE } from '@/utils/constants';
+import { prepareSvg } from '@/utils/svg-helpers';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -30,17 +30,6 @@ export interface CanvasAnimationData {
 }
 
 // ─── Parsing ──────────────────────────────────────────────────────────────────
-
-function prepareSvg(svgString: string): string {
-    // XML declaration and DOCTYPE are invalid in HTML — must be stripped for inline use
-    let svg = svgString
-        .replace(/<\?xml[^?]*\?>/g, '')
-        .replace(/<!DOCTYPE[^>]*>/g, '');
-    // Rewrite relative image paths to absolute URLs via EDU_BASE
-    svg = svg.replace(/((?:xlink:)?href=")(\/[^"]+)/g, `$1${EDU_BASE}$2`);
-    return svg;
-}
-
 function parseCanvasAnimation(apiData: CanvasAnimationData): SlideData[] {
     const slides: SlideData[] = [];
     if (apiData?.actualType === 'CanvasAnimation') {
