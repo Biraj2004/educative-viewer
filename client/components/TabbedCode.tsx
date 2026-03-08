@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import Editor from "@monaco-editor/react";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -49,6 +49,7 @@ export default function TabbedCode({ data }: { data: TabbedCodeData }) {
   const [copied, setCopied] = useState(false);
   const [wordWrap, setWordWrap] = useState<"off" | "on">("off");
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const editorRef = useRef<any>(null);
 
   const active = tabs[activeIdx];
   const lineCount = active.content.split("\n").length;
@@ -94,6 +95,16 @@ export default function TabbedCode({ data }: { data: TabbedCodeData }) {
 
           {/* Right icons: word wrap + copy + fullscreen */}
           <div className="flex items-center gap-3 px-3 text-gray-500 shrink-0 border-l border-gray-700">
+            {/* Reset */}
+            <button
+              onClick={() => { editorRef.current?.setValue(active.content); editorRef.current?.revealLine(1); }}
+              title="Reset to original"
+              className="text-gray-400 hover:text-white transition-colors cursor-pointer"
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              </svg>
+            </button>
             <button onClick={handleCopy} title="Copy code" className="text-gray-400 hover:text-white transition-colors cursor-pointer">
               {copied ? (
                 <svg className="w-4 h-4 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -137,8 +148,8 @@ export default function TabbedCode({ data }: { data: TabbedCodeData }) {
             language={monacoLang(active.language)}
             value={active.content}
             theme="vs-dark"
+            onMount={(editor) => { editorRef.current = editor; }}
             options={{
-              readOnly: true,
               minimap: { enabled: false },
               scrollBeyondLastLine: false,
               fontSize: 14,
@@ -160,7 +171,7 @@ export default function TabbedCode({ data }: { data: TabbedCodeData }) {
 
       {/* Caption */}
       {(active.caption || data.caption) && !isFullscreen && (
-        <p className="text-center text-sm font-medium text-indigo-600 mt-3">
+        <p className="text-center text-sm font-medium text-indigo-600 dark:text-indigo-400 mt-3">
           {active.caption || data.caption}
         </p>
       )}

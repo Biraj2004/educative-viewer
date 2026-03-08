@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import Editor from "@monaco-editor/react";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -50,6 +50,7 @@ export default function EditorCode({ data }: { data: EditorCodeComponentData }) 
   const [copied, setCopied] = useState(false);
   const [wordWrap, setWordWrap] = useState<"off" | "on">("off");
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const editorRef = useRef<any>(null);
 
   const fileName = defaultFileName(data.language, data.entryFileName);
   const lineCount = data.content.split("\n").length;
@@ -84,6 +85,15 @@ export default function EditorCode({ data }: { data: EditorCodeComponentData }) 
             <span className="text-xs font-semibold text-blue-300 bg-blue-900/40 px-2 py-0.5 rounded">
               {langLabel(data.language)}
             </span>
+            <button
+              onClick={() => { editorRef.current?.setValue(data.content); editorRef.current?.revealLine(1); }}
+              title="Reset to original"
+              className="text-gray-400 hover:text-white transition-colors cursor-pointer"
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              </svg>
+            </button>
             <button onClick={handleCopy} title="Copy code" className="text-gray-400 hover:text-white transition-colors cursor-pointer">
               {copied ? (
                 <svg className="w-4 h-4 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -127,8 +137,8 @@ export default function EditorCode({ data }: { data: EditorCodeComponentData }) 
             language={monacoLang(data.language)}
             value={data.content}
             theme="vs-dark"
+            onMount={(editor) => { editorRef.current = editor; }}
             options={{
-              readOnly: true,
               minimap: { enabled: false },
               scrollBeyondLastLine: false,
               fontSize: 14,

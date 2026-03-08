@@ -20,6 +20,7 @@ import permutationData from '../../public/Permutation.json';
 import quizData from '../../public/Quiz.json';
 import structuredQuizData from '../../public/StructuredQuiz.json';
 import sandpackData from '../../public/Sandpack.json';
+import sandpackStaticData from '../../public/Sandpack-static.json';
 import webpackBinData from '../../public/WebpackBin.json';
 import androidData from '../../public/Android.json';
 import LazyLoadPlaceholder from '@/components/LazyLoadPlaceholder';
@@ -162,6 +163,10 @@ export default function Home() {
       {/* Sandpack */}
       <div className="border-b border-gray-200 dark:border-gray-800">
         <Sandpack data={sandpackData as SandpackData} />
+      </div>
+      {/* Sandpack Static */}
+      <div className="border-b border-gray-200 dark:border-gray-800">
+        <Sandpack data={sandpackStaticData.content as SandpackData} />
       </div>
       {/* WebpackBin */}
       <div className="border-b border-gray-200 dark:border-gray-800">
