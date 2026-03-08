@@ -46,6 +46,7 @@ function useDarkMode(): boolean {
   const [isDark, setIsDark] = useState(false);
   useEffect(() => {
     const el = document.documentElement;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setIsDark(el.classList.contains("dark"));
     const obs = new MutationObserver(() =>
       setIsDark(el.classList.contains("dark"))
@@ -54,6 +55,17 @@ function useDarkMode(): boolean {
     return () => obs.disconnect();
   }, []);
   return isDark;
+}
+
+// ─── Client-only guard ────────────────────────────────────────────────────────
+
+function useMounted(): boolean {
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setMounted(true);
+  }, []);
+  return mounted;
 }
 
 // ─── Icons ────────────────────────────────────────────────────────────────────
@@ -96,7 +108,8 @@ function ExternalLinkIcon() {
 // ─── Sandpack CSS injection ───────────────────────────────────────────────────
 
 function SandpackStyles() {
-  return <style dangerouslySetInnerHTML={{ __html: getSandpackCssText() }} />;
+  const css = getSandpackCssText();
+  return <style suppressHydrationWarning dangerouslySetInnerHTML={{ __html: css }} />;
 }
 
 // ─── Static view — sandpack-react (fast, fully client-side) ──────────────────
@@ -154,6 +167,7 @@ function StaticView({ data }: { data: SandpackData }) {
             style={{ height: previewHeight }}
             showOpenInCodeSandbox={false}
             showRefreshButton
+            showSandpackErrorOverlay
           />
         </SandpackLayout>
       </SandpackProvider>
@@ -301,9 +315,24 @@ function RemoteView({ data }: { data: SandpackData }) {
 // ─── Main export ──────────────────────────────────────────────────────────────
 
 export default function Sandpack({ data }: { data: SandpackData }) {
+  const mounted = useMounted();
   if (data.hideOutput) return null;
 
   const isStatic = !data.template || data.template === "static";
+
+  if (!mounted) {
+    const height = isStatic
+      ? (data.codeHeight ?? 350)
+      : (data.outputHeight ?? 500);
+    return (
+      <div className="max-w-6xl mx-auto px-4 py-4">
+        <div
+          className="rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden bg-white dark:bg-gray-900"
+          style={{ height: height + 42 }}
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-6xl mx-auto px-4 py-4">

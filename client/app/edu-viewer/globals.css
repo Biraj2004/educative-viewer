@@ -42,6 +42,10 @@ body {
 .dark *::-webkit-scrollbar-thumb       { background: #334155; }
 .dark *::-webkit-scrollbar-thumb:hover { background: #475569; }
 
+/* ─── Hide scrollbar (keep scroll functional) ───────────────────────────── */
+.no-scrollbar { scrollbar-width: none; }
+.no-scrollbar::-webkit-scrollbar { display: none; }
+
 /* ─── Dark mode image filter ─────────────────────────────────────────────── */
 .dark img,
 .dark .canvas-slide-area {

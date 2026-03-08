@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import TopicSidebar from "@/components/TopicSidebar";
-import DarkModeToggle from "@/components/DarkModeToggle";
+import AppNavbar from "@/components/AppNavbar";
 import { getRenderer, UnknownRenderer } from "@/utils/component-registry";
 
 interface Component {
@@ -62,29 +62,42 @@ export default function TopicLayoutClient({ courseId, slug, course, topic }: Pro
   const next = currentPos < allTopics.length - 1 ? allTopics[currentPos + 1] : null;
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-950 flex">
+    <div className="min-h-screen flex flex-col bg-gray-50 dark:bg-gray-950">
 
-      {/* Desktop sidebar — always visible on lg+ */}
-      {course && (
-        <TopicSidebar
-          courseId={courseId}
-          courseSlug={slug}
-          courseTitle={course.title}
-          toc={course.toc}
-          currentTopicIndex={topic.topic_index}
-        />
-      )}
+      {/* Full-width AppNavbar — consistent with the rest of the app */}
+      <AppNavbar
+        crumbs={[
+          { label: "Courses", href: "/edu-viewer/courses" },
+          ...(course
+            ? [{ label: course.title, href: `/edu-viewer/courses/${courseId}/${slug}` }]
+            : []),
+          { label: topic.topic_name },
+        ]}
+        backHref={`/edu-viewer/courses/${courseId}/${slug}`}
+        backLabel="Course"
+        actions={
+          course ? (
+            <button
+              onClick={() => setDrawerOpen((o) => !o)}
+              className="lg:hidden p-1.5 rounded-md text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors cursor-pointer"
+              aria-label="Toggle navigation"
+            >
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
+              </svg>
+            </button>
+          ) : undefined
+        }
+      />
 
-      {/* Tablet drawer overlay — only on < lg */}
+      {/* Tablet drawer overlay — only on < lg, offset below navbar */}
       {drawerOpen && course && (
         <>
-          {/* Backdrop */}
           <div
             className="fixed inset-0 bg-black/40 z-30 lg:hidden"
             onClick={() => setDrawerOpen(false)}
           />
-          {/* Drawer panel */}
-          <div className="fixed left-0 top-0 h-full z-40 lg:hidden shadow-2xl">
+          <div className="fixed left-0 top-14 h-[calc(100%-3.5rem)] z-40 lg:hidden shadow-2xl">
             <TopicSidebar
               courseId={courseId}
               courseSlug={slug}
@@ -98,36 +111,31 @@ export default function TopicLayoutClient({ courseId, slug, course, topic }: Pro
         </>
       )}
 
-      {/* Main content */}
+      {/* Sidebar + Main */}
+      <div className="flex flex-1">
+
+        {/* Desktop sidebar — sticky below navbar */}
+        {course && (
+          <TopicSidebar
+            courseId={courseId}
+            courseSlug={slug}
+            courseTitle={course.title}
+            toc={course.toc}
+            currentTopicIndex={topic.topic_index}
+          />
+        )}
+
+      {/* Main content — natural page scroll */}
       <main className="flex-1 min-w-0">
 
-        {/* Header */}
-        <div className="sticky top-0 z-20 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700 shadow-sm">
-          <div className="px-6 py-4 flex items-center justify-between gap-4">
-            <div className="flex items-center gap-3 min-w-0">
-              {/* Hamburger — tablet only (hidden on desktop lg+) */}
-              {course && (
-                <button
-                  onClick={() => setDrawerOpen((o) => !o)}
-                  className="block lg:hidden cursor-pointer text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200 transition-colors shrink-0"
-                  aria-label="Toggle navigation"
-                >
-                  <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
-                  </svg>
-                </button>
-              )}
-              <div className="min-w-0">
-                <h1 className="text-lg font-bold text-gray-900 dark:text-gray-100 truncate">
-                  {topic.topic_name}
-                </h1>
-                <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">
-                  Lesson {topic.topic_index + 1}
-                </p>
-              </div>
-            </div>
-            <DarkModeToggle />
-          </div>
+        {/* Non-sticky topic sub-header */}
+        <div className="px-6 py-4 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700">
+          <h1 className="text-lg font-bold text-gray-900 dark:text-gray-100">
+            {topic.topic_name}
+          </h1>
+          <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">
+            Lesson {topic.topic_index + 1}
+          </p>
         </div>
 
         {/* Components */}
@@ -169,6 +177,7 @@ export default function TopicLayoutClient({ courseId, slug, course, topic }: Pro
         </div>
 
       </main>
+      </div>
     </div>
   );
 }

@@ -30,7 +30,6 @@ interface TopicSidebarProps {
 export default function TopicSidebar({
     courseId,
     courseSlug,
-    courseTitle,
     toc,
     currentTopicIndex,
     asideClassName,
@@ -45,22 +44,11 @@ export default function TopicSidebar({
     }, [currentTopicIndex]);
 
     return (
-        <aside className={asideClassName ?? "w-72 shrink-0 hidden lg:flex flex-col"}>
-            <div className="sticky top-0 h-screen flex flex-col overflow-hidden">
+        <aside className={asideClassName ?? "w-72 shrink-0 hidden lg:flex flex-col sticky top-14 h-[calc(100vh-3.5rem)]"}>
+        <div className="h-full flex flex-col overflow-hidden">
                 {/* Sidebar header */}
-                <div className="px-4 py-4 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 shrink-0">
-                    <Link
-                        href={`/edu-viewer/courses/${courseId}/${courseSlug}`}
-                        className="inline-flex items-center gap-1.5 text-xs font-medium text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/20 hover:bg-indigo-100 dark:hover:bg-indigo-900/40 hover:text-indigo-800 dark:hover:text-indigo-200 px-3 py-1 rounded-full border border-indigo-200 dark:border-indigo-800 transition-all mb-2"
-                    >
-                        <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-                        </svg>
-                        Back to Course
-                    </Link>
-                    <p className="text-sm font-semibold text-gray-800 dark:text-gray-100 leading-snug line-clamp-2">
-                        {courseTitle}
-                    </p>
+                <div className="px-4 py-3 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 shrink-0">
+                    <p className="text-[11px] font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider">Contents</p>
                 </div>
 
                 {/* Scrollable TOC */}

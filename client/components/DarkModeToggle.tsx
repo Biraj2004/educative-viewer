@@ -22,12 +22,12 @@ export default function DarkModeToggle() {
   const [isDark, setIsDark] = useState(false);
 
   useEffect(() => {
-    // On first mount: prefer saved preference, default to light
     const saved = readSavedTheme();
     const useDark = saved === "dark";
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setIsDark(useDark);
     document.documentElement.classList.toggle("dark", useDark);
-    if (!saved) saveTheme("light"); // write default so it's persisted
+    if (!saved) saveTheme("light");
   }, []);
 
   const toggle = () => {
@@ -47,7 +47,7 @@ export default function DarkModeToggle() {
     >
       <span
         className={`inline-flex items-center justify-center w-5 h-5 rounded-full bg-white shadow-sm transform transition-transform duration-200 ${
-          isDark ? "translate-x-[22px]" : "translate-x-0.5"
+          isDark ? "translate-x-5.5" : "translate-x-0.5"
         }`}
       >
         {isDark ? (

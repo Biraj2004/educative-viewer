@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useRef } from "react";
+import { useState, useMemo, useRef, useEffect } from "react";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -66,7 +66,11 @@ export default function Permutation({ data }: { data: PermutationData }) {
 
   const dragSource = useRef<DragSource | null>(null);
 
-  const shuffledOptions = useMemo(() => shuffle(data.options), [data.options]);
+  const [shuffledOptions, setShuffledOptions] = useState<PermutationOption[]>(data.options);
+  useEffect(() => {
+    setShuffledOptions(shuffle(data.options));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const optionMap = useMemo(() => {
     const m: Record<string, PermutationOption> = {};

@@ -1,0 +1,203 @@
+"use client";
+
+import { useState } from "react";
+import Link from "next/link";
+
+interface Topic {
+  api_url: string;
+  course_id: number;
+  index: number;
+  slug: string;
+  title: string;
+  topic_index: number;
+}
+
+interface Category {
+  category: string;
+  topics: Topic[];
+}
+
+interface Props {
+  toc: Category[];
+  courseId: number;
+  slug: string;
+}
+
+function SearchIcon() {
+  return (
+    <svg
+      className="w-4 h-4 text-gray-400 dark:text-gray-500 pointer-events-none"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <circle cx="11" cy="11" r="8" />
+      <path d="m21 21-4.35-4.35" />
+    </svg>
+  );
+}
+
+function ClearIcon() {
+  return (
+    <svg
+      className="w-3.5 h-3.5"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2.5}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M18 6 6 18M6 6l12 12" />
+    </svg>
+  );
+}
+
+export default function CourseDetailToc({ toc, courseId, slug }: Props) {
+  const [q, setQ] = useState("");
+
+  const normalised = q.toLowerCase().trim();
+
+  const filtered = normalised
+    ? toc
+        .map((section) => ({
+          ...section,
+          topics: section.topics.filter((t) =>
+            t.title.toLowerCase().includes(normalised)
+          ),
+        }))
+        .filter((s) => s.topics.length > 0)
+    : toc;
+
+  const totalTopics = toc.reduce((a, s) => a + s.topics.length, 0);
+  const filteredTopics = filtered.reduce((a, s) => a + s.topics.length, 0);
+  const isFiltered = normalised.length > 0;
+
+  return (
+    <div>
+      {/* Heading + search row */}
+      <div className="flex flex-col sm:flex-row sm:items-center gap-4 mb-6">
+        <h2 className="text-lg font-semibold text-gray-800 dark:text-gray-200 shrink-0">
+          Table of Contents
+        </h2>
+
+        {/* Search */}
+        <div className="flex-1 sm:max-w-sm relative">
+          <span className="absolute left-3 top-1/2 -translate-y-1/2">
+            <SearchIcon />
+          </span>
+          <input
+            type="text"
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder="Search lessons…"
+            className="w-full pl-9 pr-8 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-sm text-gray-900 dark:text-gray-100 placeholder:text-gray-400 dark:placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400 dark:focus:border-indigo-600 shadow-sm transition-all"
+          />
+          {isFiltered && (
+            <button
+              onClick={() => setQ("")}
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 p-0.5 rounded-full text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors cursor-pointer"
+              aria-label="Clear search"
+            >
+              <ClearIcon />
+            </button>
+          )}
+        </div>
+
+        {/* Count pill */}
+        {isFiltered && (
+          <span className="text-xs text-gray-400 dark:text-gray-600 shrink-0">
+            {filteredTopics === 0 ? (
+              <span className="text-gray-500 dark:text-gray-400">No results</span>
+            ) : (
+              <>
+                <span className="font-medium text-indigo-600 dark:text-indigo-400">{filteredTopics}</span>
+                {" / "}
+                {totalTopics}
+                {" lessons"}
+              </>
+            )}
+          </span>
+        )}
+      </div>
+
+      {/* TOC list */}
+      {filtered.length === 0 ? (
+        <div className="text-center py-16 text-gray-400 dark:text-gray-600">
+          <svg className="w-8 h-8 mx-auto mb-3 opacity-40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5}>
+            <circle cx="11" cy="11" r="8" />
+            <path d="m21 21-4.35-4.35" />
+          </svg>
+          <p className="text-sm">No lessons matched &ldquo;{q}&rdquo;</p>
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {filtered.map((section, i) => (
+            <div
+              key={i}
+              className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden"
+            >
+              {/* Category header */}
+              <div className="px-5 py-3 bg-gray-50 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
+                <h3 className="font-semibold text-gray-700 dark:text-gray-200 text-sm">
+                  {section.category}
+                </h3>
+                <span className="text-xs text-gray-400 dark:text-gray-500 shrink-0">
+                  {section.topics.length} lesson{section.topics.length !== 1 ? "s" : ""}
+                </span>
+              </div>
+
+              {/* Topics list */}
+              <ul>
+                {section.topics.map((topic, j) => (
+                  <li
+                    key={j}
+                    className={
+                      j < section.topics.length - 1
+                        ? "border-b border-gray-100 dark:border-gray-800"
+                        : ""
+                    }
+                  >
+                    <Link
+                      href={`/edu-viewer/courses/${courseId}/${slug}/topics/${topic.index}/${topic.slug}`}
+                      className="flex items-center gap-4 px-5 py-3 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-colors group"
+                    >
+                      <span className="text-xs text-gray-300 dark:text-gray-600 w-7 text-right shrink-0 font-mono">
+                        {topic.index + 1}
+                      </span>
+                      <span className="text-sm text-gray-700 dark:text-gray-300 group-hover:text-indigo-700 dark:group-hover:text-indigo-400 transition-colors">
+                        {isFiltered ? (
+                          <HighlightMatch text={topic.title} query={normalised} />
+                        ) : (
+                          topic.title
+                        )}
+                      </span>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Bolds the matched portion of a string */
+function HighlightMatch({ text, query }: { text: string; query: string }) {
+  const idx = text.toLowerCase().indexOf(query);
+  if (idx === -1) return <>{text}</>;
+  return (
+    <>
+      {text.slice(0, idx)}
+      <mark className="bg-indigo-100 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300 rounded px-0.5 font-medium not-italic">
+        {text.slice(idx, idx + query.length)}
+      </mark>
+      {text.slice(idx + query.length)}
+    </>
+  );
+}
