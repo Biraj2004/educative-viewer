@@ -17,8 +17,10 @@ interface Category {
   topics: Topic[];
 }
 
+type TocEntry = Category | Topic;
+
 interface Props {
-  toc: Category[];
+  toc: TocEntry[];
   courseId: number;
   slug: string;
 }
@@ -61,19 +63,21 @@ export default function CourseDetailToc({ toc, courseId, slug }: Props) {
 
   const normalised = q.toLowerCase().trim();
 
-  const filtered = normalised
-    ? toc
-        .map((section) => ({
-          ...section,
-          topics: section.topics.filter((t) =>
+  const filtered: TocEntry[] = normalised
+    ? toc.flatMap((entry): TocEntry[] => {
+        if ('topics' in entry) {
+          const matchedTopics = entry.topics.filter((t) =>
             t.title.toLowerCase().includes(normalised)
-          ),
-        }))
-        .filter((s) => s.topics.length > 0)
+          );
+          return matchedTopics.length > 0 ? [{ ...entry, topics: matchedTopics }] : [];
+        } else {
+          return entry.title.toLowerCase().includes(normalised) ? [entry] : [];
+        }
+      })
     : toc;
 
-  const totalTopics = toc.reduce((a, s) => a + s.topics.length, 0);
-  const filteredTopics = filtered.reduce((a, s) => a + s.topics.length, 0);
+  const totalTopics = toc.reduce((a, entry) => a + ('topics' in entry ? entry.topics.length : 1), 0);
+  const filteredTopics = filtered.reduce((a, entry) => a + ('topics' in entry ? entry.topics.length : 1), 0);
   const isFiltered = normalised.length > 0;
 
   return (
@@ -135,52 +139,79 @@ export default function CourseDetailToc({ toc, courseId, slug }: Props) {
         </div>
       ) : (
         <div className="space-y-4">
-          {filtered.map((section, i) => (
-            <div
-              key={i}
-              className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden"
-            >
-              {/* Category header */}
-              <div className="px-5 py-3 bg-gray-50 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
-                <h3 className="font-semibold text-gray-700 dark:text-gray-200 text-sm">
-                  {section.category}
-                </h3>
-                <span className="text-xs text-gray-400 dark:text-gray-500 shrink-0">
-                  {section.topics.length} lesson{section.topics.length !== 1 ? "s" : ""}
-                </span>
+          {filtered.map((entry, i) => {
+            if ('topics' in entry) {
+              return (
+                <div
+                  key={i}
+                  className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden"
+                >
+                  {/* Category header */}
+                  <div className="px-5 py-3 bg-gray-50 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
+                    <h3 className="font-semibold text-gray-700 dark:text-gray-200 text-sm">
+                      {entry.category}
+                    </h3>
+                    <span className="text-xs text-gray-400 dark:text-gray-500 shrink-0">
+                      {entry.topics.length} lesson{entry.topics.length !== 1 ? "s" : ""}
+                    </span>
               </div>
 
-              {/* Topics list */}
-              <ul>
-                {section.topics.map((topic, j) => (
-                  <li
-                    key={j}
-                    className={
-                      j < section.topics.length - 1
-                        ? "border-b border-gray-100 dark:border-gray-800"
-                        : ""
-                    }
+                  {/* Topics list */}
+                  <ul>
+                    {entry.topics.map((topic, j) => (
+                      <li
+                        key={j}
+                        className={
+                          j < entry.topics.length - 1
+                            ? "border-b border-gray-100 dark:border-gray-800"
+                            : ""
+                        }
+                      >
+                        <Link
+                          href={`/edu-viewer/courses/${courseId}/${slug}/topics/${topic.index}/${topic.slug}`}
+                          className="flex items-center gap-4 px-5 py-3 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-colors group"
+                        >
+                          <span className="text-xs text-gray-300 dark:text-gray-600 w-7 text-right shrink-0 font-mono">
+                            {topic.index + 1}
+                          </span>
+                          <span className="text-sm text-gray-700 dark:text-gray-300 group-hover:text-indigo-700 dark:group-hover:text-indigo-400 transition-colors">
+                            {isFiltered ? (
+                              <HighlightMatch text={topic.title} query={normalised} />
+                            ) : (
+                              topic.title
+                            )}
+                          </span>
+                        </Link>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              );
+            } else {
+              return (
+                <div
+                  key={i}
+                  className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden"
+                >
+                  <Link
+                    href={`/edu-viewer/courses/${courseId}/${slug}/topics/${entry.index}/${entry.slug}`}
+                    className="flex items-center gap-4 px-5 py-3 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-colors group"
                   >
-                    <Link
-                      href={`/edu-viewer/courses/${courseId}/${slug}/topics/${topic.index}/${topic.slug}`}
-                      className="flex items-center gap-4 px-5 py-3 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-colors group"
-                    >
-                      <span className="text-xs text-gray-300 dark:text-gray-600 w-7 text-right shrink-0 font-mono">
-                        {topic.index + 1}
-                      </span>
-                      <span className="text-sm text-gray-700 dark:text-gray-300 group-hover:text-indigo-700 dark:group-hover:text-indigo-400 transition-colors">
-                        {isFiltered ? (
-                          <HighlightMatch text={topic.title} query={normalised} />
-                        ) : (
-                          topic.title
-                        )}
-                      </span>
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ))}
+                    <span className="text-xs text-gray-300 dark:text-gray-600 w-7 text-right shrink-0 font-mono">
+                      {entry.index + 1}
+                    </span>
+                    <span className="text-sm text-gray-700 dark:text-gray-300 group-hover:text-indigo-700 dark:group-hover:text-indigo-400 transition-colors">
+                      {isFiltered ? (
+                        <HighlightMatch text={entry.title} query={normalised} />
+                      ) : (
+                        entry.title
+                      )}
+                    </span>
+                  </Link>
+                </div>
+              );
+            }
+          })}
         </div>
       )}
     </div>

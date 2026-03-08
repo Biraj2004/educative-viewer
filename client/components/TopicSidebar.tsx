@@ -17,11 +17,13 @@ interface Category {
     topics: Topic[];
 }
 
+type TocEntry = Category | Topic;
+
 interface TopicSidebarProps {
     courseId: number;
     courseSlug: string;
     courseTitle: string;
-    toc: Category[];
+    toc: TocEntry[];
     currentTopicIndex: number;
     asideClassName?: string;
     onClose?: () => void;
@@ -54,48 +56,80 @@ export default function TopicSidebar({
                 {/* Scrollable TOC */}
                 <div className="flex-1 overflow-y-auto bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-700">
                     <nav aria-label="Course table of contents">
-                        {toc.map((section, i) => (
-                            <div key={i}>
-                                {/* Chapter heading */}
-                                <div className="px-4 py-2 bg-gray-50 dark:bg-gray-800 border-b border-t border-gray-100 dark:border-gray-700 sticky top-0 z-10">
-                                    <span className="text-[11px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                                        {section.category}
-                                    </span>
-                                </div>
-
-                                {/* Topic list */}
-                                <ul>
-                                    {section.topics.map((topic) => {
-                                        const isActive = topic.index === currentTopicIndex;
-                                        return (
-                                            <li key={topic.index}>
-                                                <Link
-                                                    ref={isActive ? activeRef : null}
-                                                    href={`/edu-viewer/courses/${courseId}/${courseSlug}/topics/${topic.index}/${topic.slug}`}
-                                                    onClick={onClose}
+                        {toc.map((entry, i) => {
+                            if ('topics' in entry) {
+                                return (
+                                    <div key={i}>
+                                        {/* Chapter heading */}
+                                        <div className="px-4 py-2 bg-gray-50 dark:bg-gray-800 border-b border-t border-gray-100 dark:border-gray-700 sticky top-0 z-10">
+                                            <span className="text-[11px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                                                {entry.category}
+                                            </span>
+                                        </div>
+                                        {/* Topic list */}
+                                        <ul>
+                                            {entry.topics.map((topic) => {
+                                                const isActive = topic.index === currentTopicIndex;
+                                                return (
+                                                    <li key={topic.index}>
+                                                        <Link
+                                                            ref={isActive ? activeRef : null}
+                                                            href={`/edu-viewer/courses/${courseId}/${courseSlug}/topics/${topic.index}/${topic.slug}`}
+                                                            onClick={onClose}
+                                                            className={[
+                                                                "flex items-start gap-3 px-4 py-2.5 text-sm transition-colors border-b border-gray-50 dark:border-gray-800",
+                                                                isActive
+                                                                    ? "bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 font-semibold border-l-2 border-l-indigo-500"
+                                                                    : "text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-gray-100 border-l-2 border-l-transparent",
+                                                            ].join(" ")}
+                                                        >
+                                                            <span
+                                                                className={[
+                                                                    "text-[11px] font-mono mt-0.5 w-5 shrink-0 text-right",
+                                                                    isActive ? "text-indigo-400 dark:text-indigo-400" : "text-gray-300 dark:text-gray-600",
+                                                                ].join(" ")}
+                                                            >
+                                                                {topic.index + 1}
+                                                            </span>
+                                                            <span className="leading-snug">{topic.title}</span>
+                                                        </Link>
+                                                    </li>
+                                                );
+                                            })}
+                                        </ul>
+                                    </div>
+                                );
+                            } else {
+                                const isActive = entry.index === currentTopicIndex;
+                                return (
+                                    <ul key={i}>
+                                        <li>
+                                            <Link
+                                                ref={isActive ? activeRef : null}
+                                                href={`/edu-viewer/courses/${courseId}/${courseSlug}/topics/${entry.index}/${entry.slug}`}
+                                                onClick={onClose}
+                                                className={[
+                                                    "flex items-start gap-3 px-4 py-2.5 text-sm transition-colors border-b border-gray-50 dark:border-gray-800",
+                                                    isActive
+                                                        ? "bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 font-semibold border-l-2 border-l-indigo-500"
+                                                        : "text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-gray-100 border-l-2 border-l-transparent",
+                                                ].join(" ")}
+                                            >
+                                                <span
                                                     className={[
-                                                        "flex items-start gap-3 px-4 py-2.5 text-sm transition-colors border-b border-gray-50 dark:border-gray-800",
-                                                        isActive
-                                                            ? "bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 font-semibold border-l-2 border-l-indigo-500"
-                                                            : "text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-gray-100 border-l-2 border-l-transparent",
+                                                        "text-[11px] font-mono mt-0.5 w-5 shrink-0 text-right",
+                                                        isActive ? "text-indigo-400 dark:text-indigo-400" : "text-gray-300 dark:text-gray-600",
                                                     ].join(" ")}
                                                 >
-                                                    <span
-                                                        className={[
-                                                            "text-[11px] font-mono mt-0.5 w-5 shrink-0 text-right",
-                                                            isActive ? "text-indigo-400 dark:text-indigo-400" : "text-gray-300 dark:text-gray-600",
-                                                        ].join(" ")}
-                                                    >
-                                                        {topic.index + 1}
-                                                    </span>
-                                                    <span className="leading-snug">{topic.title}</span>
-                                                </Link>
-                                            </li>
-                                        );
-                                    })}
-                                </ul>
-                            </div>
-                        ))}
+                                                    {entry.index + 1}
+                                                </span>
+                                                <span className="leading-snug">{entry.title}</span>
+                                            </Link>
+                                        </li>
+                                    </ul>
+                                );
+                            }
+                        })}
 
                     </nav>
                 </div>

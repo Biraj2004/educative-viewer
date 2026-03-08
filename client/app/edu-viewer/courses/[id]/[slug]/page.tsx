@@ -16,22 +16,25 @@ interface Category {
   topics: Topic[];
 }
 
+type TocEntry = Category | Topic;
+
 interface CourseDetail {
   id: number;
   slug: string;
   title: string;
-  toc: Category[];
+  toc: TocEntry[];
   type: string;
 }
 
 async function fetchCourseDetail(courseId: number): Promise<CourseDetail | null> {
   try {
     const base = process.env.BACKEND_API_BASE ?? "";
+    const isProd = process.env.VERCEL_ENV === "production";
     const res = await fetch(`${base}/backend/course-details`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ course_id: courseId }),
-      next: { revalidate: 60 },
+      ...(isProd ? { next: { revalidate: 3600, tags: ["course-details", `course-${courseId}`] } } : { cache: "no-store" }),
     } as RequestInit);
     if (!res.ok) return null;
     return (await res.json()) as CourseDetail;
@@ -53,7 +56,7 @@ export default async function CourseDetailPage({
   if (!course) notFound();
 
   const totalTopics = course.toc.reduce(
-    (acc, cat) => acc + cat.topics.length,
+    (acc, entry) => acc + ('topics' in entry ? entry.topics.length : 1),
     0
   );
 

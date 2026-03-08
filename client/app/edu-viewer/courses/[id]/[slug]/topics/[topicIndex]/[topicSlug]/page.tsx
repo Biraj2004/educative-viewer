@@ -47,11 +47,12 @@ async function fetchTopicDetail(
 ): Promise<TopicDetail | null> {
   try {
     const base = process.env.BACKEND_API_BASE ?? "";
+    const isProd = process.env.VERCEL_ENV === "production";
     const res = await fetch(`${base}/backend/topic-details`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ course_id: courseId, topic_index: topicIndex }),
-      next: { revalidate: 60 },
+      ...(isProd ? { next: { revalidate: 3600, tags: ["topic-details", `course-${courseId}`, `topic-${courseId}-${topicIndex}`] } } : { cache: "no-store" }),
     } as RequestInit);
     if (!res.ok) return null;
     return (await res.json()) as TopicDetail;
@@ -63,11 +64,12 @@ async function fetchTopicDetail(
 async function fetchCourseDetail(courseId: number): Promise<CourseDetail | null> {
   try {
     const base = process.env.BACKEND_API_BASE ?? "";
+    const isProd = process.env.NODE_ENV === "production";
     const res = await fetch(`${base}/backend/course-details`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ course_id: courseId }),
-      next: { revalidate: 60 },
+      ...(isProd ? { next: { revalidate: 3600, tags: ["course-details", `course-${courseId}`] } } : { cache: "no-store" }),
     } as RequestInit);
     if (!res.ok) return null;
     return (await res.json()) as CourseDetail;

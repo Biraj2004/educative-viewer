@@ -56,7 +56,7 @@ export default function ComponentTestPage() {
       <AppNavbar
         crumbs={[{ label: "Component Test" }]}
         backHref="/edu-viewer"
-        backLabel="Back to Viewer"
+        backLabel="Back to Home"
       />
 
       {/* Canvas Animation Section */}

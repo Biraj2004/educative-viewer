@@ -38,11 +38,13 @@ interface Category {
   topics: Topic[];
 }
 
+type TocEntry = Category | Topic;
+
 interface CourseDetail {
   id: number;
   slug: string;
   title: string;
-  toc: Category[];
+  toc: TocEntry[];
   type: string;
 }
 
@@ -56,7 +58,9 @@ interface Props {
 export default function TopicLayoutClient({ courseId, slug, course, topic }: Props) {
   const [drawerOpen, setDrawerOpen] = useState(false);
 
-  const allTopics = course ? course.toc.flatMap((cat) => cat.topics) : [];
+  const allTopics = course ? course.toc.flatMap((entry) =>
+    'topics' in entry ? entry.topics : [entry as Topic]
+  ) : [];
   const currentPos = allTopics.findIndex((t) => t.index === topic.topic_index);
   const prev = currentPos > 0 ? allTopics[currentPos - 1] : null;
   const next = currentPos < allTopics.length - 1 ? allTopics[currentPos + 1] : null;

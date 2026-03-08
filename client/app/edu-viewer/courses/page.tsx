@@ -23,8 +23,9 @@ interface Course {
 
 async function fetchCourses(): Promise<Course[]> {
   const base = process.env.BACKEND_API_BASE ?? "";
+  const isProd = process.env.VERCEL_ENV === "production";
   const res = await fetch(`${base}/backend/courses`, {
-    next: { revalidate: 60 },
+    ...(isProd ? { next: { revalidate: 3600, tags: ["courses"] } } : { cache: "no-store" }),
   } as RequestInit);
   if (!res.ok) throw new Error(`Failed to fetch courses: ${res.status}`);
   const json = await res.json();
@@ -106,7 +107,7 @@ export default async function CoursesPage({
       <AppNavbar
         crumbs={[{ label: "Courses" }]}
         backHref="/edu-viewer"
-        backLabel="Back to Viewer"
+        backLabel="Back to Home"
       />
 
       {/* Sub-header */}
