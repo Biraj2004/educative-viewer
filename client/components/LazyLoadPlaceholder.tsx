@@ -1,4 +1,4 @@
-import { COMPONENT_REGISTRY, UnknownRenderer } from "@/utils/component-registry";
+import { getRenderer, UnknownRenderer } from "@/utils/component-registry";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -21,7 +21,7 @@ export interface LazyLoadPlaceholderData {
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function LazyLoadPlaceholder({ data }: { data: LazyLoadPlaceholderData }) {
-  const renderer = COMPONENT_REGISTRY[data.actualType];
+  const renderer = getRenderer(data.actualType);
 
   if (!renderer) {
     return <UnknownRenderer type={data.actualType} />;

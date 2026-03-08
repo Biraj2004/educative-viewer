@@ -31,6 +31,22 @@ export interface SandpackData {
   version?: number;
 }
 
+// ─── Dark mode hook ─────────────────────────────────────────────────────────
+
+function useDarkMode(): boolean {
+  const [isDark, setIsDark] = useState(false);
+  useEffect(() => {
+    const el = document.documentElement;
+    setIsDark(el.classList.contains("dark"));
+    const obs = new MutationObserver(() =>
+      setIsDark(el.classList.contains("dark"))
+    );
+    obs.observe(el, { attributeFilter: ["class"] });
+    return () => obs.disconnect();
+  }, []);
+  return isDark;
+}
+
 // ─── Static template helpers (srcdoc + postMessage) ──────────────────────────
 
 function buildLookup(files: Record<string, SandpackFile>): Record<string, string> {
@@ -147,7 +163,7 @@ function Toolbar({
   caption?: string;
 }) {
   return (
-    <div className="border-t border-gray-200 px-4 py-2 flex items-center gap-2 bg-gray-50">
+    <div className="border-t border-gray-200 dark:border-gray-700 px-4 py-2 flex items-center gap-2 bg-gray-50 dark:bg-gray-800">
       {onPlay && (
         <button
           onClick={onPlay}
@@ -159,13 +175,13 @@ function Toolbar({
       )}
       <button
         onClick={onReset}
-        className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded hover:bg-gray-50 transition-colors"
+        className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors"
       >
         <ResetIcon />
         Reset
       </button>
       {caption && (
-        <span className="ml-auto text-xs text-gray-400 italic">{caption}</span>
+        <span className="ml-auto text-xs text-gray-400 dark:text-gray-500 italic">{caption}</span>
       )}
     </div>
   );
@@ -212,6 +228,7 @@ function RemoteView({ data }: { data: SandpackData }) {
   const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
   const [resetKey, setResetKey] = useState(0);
   const height = data.outputHeight ?? 600;
+  const isDark = useDarkMode();
 
   // Only re-create the sandbox when comp_id changes (not on every render)
   useEffect(() => {
@@ -226,19 +243,19 @@ function RemoteView({ data }: { data: SandpackData }) {
   const handleReset = useCallback(() => setResetKey((k) => k + 1), []);
 
   const embedUrl = sandboxId
-    ? `https://codesandbox.io/embed/${sandboxId}?fontsize=14&hidenavigation=1&theme=light&view=preview&hidedevtools=1`
+    ? `https://codesandbox.io/embed/${sandboxId}?fontsize=14&hidenavigation=1&theme=${isDark ? "dark" : "light"}&view=preview&hidedevtools=1`
     : null;
 
   return (
     <>
       <div style={{ width: "100%", height: `${height}px`, position: "relative" }}>
         {status === "loading" && (
-          <div className="absolute inset-0 flex items-center justify-center bg-gray-50">
+          <div className="absolute inset-0 flex items-center justify-center bg-gray-50 dark:bg-gray-800">
             <span className="text-sm text-gray-400 animate-pulse">Loading sandbox…</span>
           </div>
         )}
         {status === "error" && (
-          <div className="absolute inset-0 flex items-center justify-center bg-gray-50">
+          <div className="absolute inset-0 flex items-center justify-center bg-gray-50 dark:bg-gray-800">
             <span className="text-sm text-red-400">Failed to load sandbox.</span>
           </div>
         )}
@@ -265,7 +282,7 @@ export default function Sandpack({ data }: { data: SandpackData }) {
 
   return (
     <div className="max-w-6xl mx-auto px-4 py-4">
-      <div className="rounded-lg border border-gray-200 shadow-sm overflow-hidden bg-white">
+      <div className="rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden bg-white dark:bg-gray-900">
         {data.template === "static" ? (
           <StaticView data={data} />
         ) : (

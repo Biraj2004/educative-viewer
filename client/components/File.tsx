@@ -32,7 +32,7 @@ export default function File({ data }: { data: FileComponentData }) {
 
   return (
     <div className="max-w-4xl mx-auto px-6 py-2 flex justify-center">
-      <div className="flex items-center gap-4 rounded-lg border border-gray-200 bg-gray-50 px-5 py-4">
+      <div className="flex items-center gap-4 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 px-5 py-4">
         {/* File icon */}
         <div className="shrink-0 text-blue-500">
           <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
@@ -44,10 +44,10 @@ export default function File({ data }: { data: FileComponentData }) {
         {/* File info */}
         <div className="min-w-0">
           {fileName && (
-            <p className="text-sm font-medium text-gray-800 truncate">{fileName}</p>
+            <p className="text-sm font-medium text-gray-800 dark:text-gray-200 truncate">{fileName}</p>
           )}
           {size !== undefined && (
-            <p className="text-xs text-gray-400">{formatBytes(size)}</p>
+            <p className="text-xs text-gray-400 dark:text-gray-500">{formatBytes(size)}</p>
           )}
         </div>
 

@@ -140,50 +140,50 @@ function OptionCard({
 
   if (submitted) {
     if (option.correct) {
-      wrapperClass += " border-green-300 bg-green-50";
+      wrapperClass += " border-green-300 dark:border-green-700 bg-green-50 dark:bg-green-900/30";
       feedbackEl = (
-        <div className="mt-3 rounded border border-green-200 bg-white px-4 py-3">
+        <div className="mt-3 rounded border border-green-200 dark:border-green-800 bg-white dark:bg-gray-900 px-4 py-3">
           <p className="flex items-center gap-1.5 font-semibold text-green-600 text-sm mb-1">
             <CheckIcon />
             Correct
           </p>
           <div
-            className="quiz-explanation text-sm text-gray-700 leading-relaxed"
+            className="quiz-explanation text-sm text-gray-700 dark:text-gray-300 leading-relaxed"
             dangerouslySetInnerHTML={{ __html: option.explanation.mdHtml }}
           />
         </div>
       );
     } else if (isSelected) {
-      wrapperClass += " border-red-300 bg-red-50";
+      wrapperClass += " border-red-300 dark:border-red-700 bg-red-50 dark:bg-red-900/30";
       feedbackEl = (
-        <div className="mt-3 rounded border border-red-200 bg-white px-4 py-3">
+        <div className="mt-3 rounded border border-red-200 dark:border-red-800 bg-white dark:bg-gray-900 px-4 py-3">
           <p className="flex items-center gap-1.5 font-semibold text-red-500 text-sm mb-1">
             <XIcon />
             Incorrect
           </p>
           <div
-            className="quiz-explanation text-sm text-gray-700 leading-relaxed"
+            className="quiz-explanation text-sm text-gray-700 dark:text-gray-300 leading-relaxed"
             dangerouslySetInnerHTML={{ __html: option.explanation.mdHtml }}
           />
         </div>
       );
     } else {
-      wrapperClass += " border-gray-200 bg-gray-50 opacity-70";
+      wrapperClass += " border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 opacity-70";
     }
   } else {
     if (isSelected) {
-      wrapperClass += " border-indigo-400 bg-indigo-50 cursor-pointer";
+      wrapperClass += " border-indigo-400 bg-indigo-50 dark:bg-indigo-900/30 cursor-pointer";
     } else {
-      wrapperClass += " border-gray-200 bg-gray-50 hover:border-indigo-300 hover:bg-indigo-50/40 cursor-pointer";
+      wrapperClass += " border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 hover:border-indigo-300 hover:bg-indigo-50/40 dark:hover:bg-indigo-900/20 cursor-pointer";
     }
   }
 
   return (
     <div className={wrapperClass} onClick={submitted ? undefined : onClick}>
       <div className="flex items-start gap-2 px-4 py-3">
-        <span className="shrink-0 text-sm font-semibold text-gray-500 mt-0.5">{label}.</span>
+        <span className="shrink-0 text-sm font-semibold text-gray-500 dark:text-gray-400 mt-0.5">{label}.</span>
         <div
-          className="quiz-option-text text-sm text-gray-800 leading-relaxed"
+          className="quiz-option-text text-sm text-gray-800 dark:text-gray-200 leading-relaxed"
           dangerouslySetInnerHTML={{ __html: option.mdHtml }}
         />
       </div>
@@ -248,13 +248,13 @@ export default function Quiz({ data }: { data: QuizData }) {
   const showHelpful = isLastQuestion && state.submitted;
 
   return (
-    <div className="max-w-3xl mx-auto px-4 py-4">
+    <div className="max-w-4xl mx-auto px-4 py-4">
       {/* Card */}
-      <div className="rounded-lg border border-gray-200 shadow-sm overflow-hidden bg-white">
+      <div className="rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden bg-white dark:bg-gray-900">
         {/* Title bar */}
-        <div className="bg-indigo-50 border-b border-gray-200 px-6 py-3">
+        <div className="bg-indigo-50 dark:bg-indigo-950/50 border-b border-gray-200 dark:border-gray-700 px-6 py-3">
           <div
-            className="quiz-title font-semibold text-gray-800 text-sm [&_p]:m-0"
+            className="quiz-title font-semibold text-gray-800 dark:text-gray-200 text-sm [&_p]:m-0"
             dangerouslySetInnerHTML={{ __html: data.titleMdHtml }}
           />
         </div>
@@ -262,8 +262,8 @@ export default function Quiz({ data }: { data: QuizData }) {
         {/* Question body */}
         <div className="px-6 pt-5 pb-4">
           {/* Question text */}
-          <div className="flex items-start gap-1.5 mb-4 text-sm font-medium text-gray-800">
-            <span className="shrink-0 text-gray-500">{currentIndex + 1}.</span>
+          <div className="flex items-start gap-1.5 mb-4 text-sm font-medium text-gray-800 dark:text-gray-200">
+            <span className="shrink-0 text-gray-500 dark:text-gray-400">{currentIndex + 1}.</span>
             <div
               className="quiz-question [&_p]:m-0 [&_p]:leading-relaxed [&_code]:font-mono [&_code]:rounded [&_code]:px-1 [&_code]:py-0.5"
               dangerouslySetInnerHTML={{ __html: question.questionTextHtml }}
@@ -286,23 +286,23 @@ export default function Quiz({ data }: { data: QuizData }) {
         </div>
 
         {/* Navigation bar */}
-        <div className="border-t border-gray-200 px-6 py-3 flex items-center justify-between bg-white">
+        <div className="border-t border-gray-200 dark:border-gray-700 px-6 py-3 flex items-center justify-between bg-white dark:bg-gray-900">
           {/* Reset */}
           <button
             onClick={handleReset}
             aria-label="Reset"
-            className="text-gray-400 hover:text-gray-600 transition-colors p-1 rounded"
+            className="text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300 transition-colors p-1 rounded"
           >
             <ResetIcon />
           </button>
 
           {/* Pagination */}
-          <div className="flex items-center gap-2 text-gray-600 text-sm select-none">
+          <div className="flex items-center gap-2 text-gray-600 dark:text-gray-400 text-sm select-none">
             <button
               onClick={handlePrev}
               disabled={!canGoPrev}
               aria-label="Previous question"
-              className="p-1 rounded text-gray-400 hover:text-gray-600 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+              className="p-1 rounded text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
             >
               <ChevronLeft />
             </button>
@@ -313,7 +313,7 @@ export default function Quiz({ data }: { data: QuizData }) {
               onClick={handleNext}
               disabled={!canGoNext}
               aria-label="Next question"
-              className="p-1 rounded text-gray-400 hover:text-gray-600 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+              className="p-1 rounded text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
             >
               <ChevronRight />
             </button>
@@ -343,19 +343,19 @@ export default function Quiz({ data }: { data: QuizData }) {
 
       {/* Helpful feedback */}
       {showHelpful && (
-        <div className="mt-3 flex items-center gap-2 text-sm text-gray-500 px-1">
+        <div className="mt-3 flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400 px-1">
           <span>Did you find this helpful?</span>
           <button
             onClick={() => setHelpful(helpful === "up" ? null : "up")}
             aria-label="Thumbs up"
-            className="p-1 rounded hover:bg-gray-100 transition-colors"
+            className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
           >
             <ThumbsUp active={helpful === "up"} />
           </button>
           <button
             onClick={() => setHelpful(helpful === "down" ? null : "down")}
             aria-label="Thumbs down"
-            className="p-1 rounded hover:bg-gray-100 transition-colors"
+            className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
           >
             <ThumbsDown active={helpful === "down"} />
           </button>
@@ -390,6 +390,9 @@ export default function Quiz({ data }: { data: QuizData }) {
           padding: 0.1em 0.35em;
         }
         .quiz-title p { margin: 0; }
+        .dark .quiz-question code,
+        .dark .quiz-option-text code,
+        .dark .quiz-explanation code { background: #1e293b; color: #e2e8f0; }
       `}</style>
     </div>
   );

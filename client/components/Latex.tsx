@@ -22,7 +22,7 @@ export default function Latex({ data }: { data: LatexComponentData }) {
   return (
     <div className="max-w-6xl mx-auto px-6 py-2">
       <div
-        className="flex justify-center text-gray-700"
+        className="flex justify-center text-gray-700 dark:text-gray-200"
         dangerouslySetInnerHTML={{ __html: data.mdhtml }}
       />
     </div>

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import DarkModeToggle from "@/components/DarkModeToggle";
 
 interface Topic {
   api_url: string;
@@ -57,46 +58,49 @@ export default async function CourseDetailPage({
   );
 
   return (
-    <main className="min-h-screen bg-gray-50">
+    <main className="min-h-screen bg-gray-50 dark:bg-gray-950">
       {/* Header */}
-      <div className="bg-white border-b border-gray-200">
-        <div className="max-w-5xl mx-auto px-6 py-8">
-          <Link
-            href="/edu-viewer/courses"
-            className="text-sm text-indigo-600 hover:text-indigo-800 inline-flex items-center gap-1 mb-4"
-          >
-            ← All Courses
-          </Link>
-          <div className="mt-2">
-            <span className="inline-block text-xs font-semibold bg-indigo-100 text-indigo-700 px-2.5 py-0.5 rounded-full mb-3">
-              {course.type}
-            </span>
-            <h1 className="text-2xl font-bold text-gray-900">{course.title}</h1>
-            <p className="text-sm text-gray-400 mt-2">
+      <div className="sticky top-0 z-20 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700 shadow-sm">
+        <div className="max-w-5xl mx-auto px-6 py-4 flex items-start justify-between gap-4">
+          <div>
+            <Link
+              href="/edu-viewer/courses"
+              className="text-xs text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300 inline-flex items-center gap-1 mb-1 font-medium"
+            >
+              ← All Courses
+            </Link>
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="inline-block text-xs font-semibold bg-indigo-100 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300 px-2.5 py-0.5 rounded-full">
+                {course.type}
+              </span>
+              <h1 className="text-lg font-bold text-gray-900 dark:text-gray-100">{course.title}</h1>
+            </div>
+            <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">
               {totalTopics} lesson{totalTopics !== 1 ? "s" : ""} &middot;{" "}
               {course.toc.length} chapter{course.toc.length !== 1 ? "s" : ""}
             </p>
           </div>
+          <DarkModeToggle />
         </div>
       </div>
 
       {/* Table of Contents */}
       <div className="max-w-5xl mx-auto px-6 py-8">
-        <h2 className="text-lg font-semibold text-gray-800 mb-5">
+        <h2 className="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-5">
           Table of Contents
         </h2>
         <div className="space-y-4">
           {course.toc.map((section, i) => (
             <div
               key={i}
-              className="bg-white rounded-xl border border-gray-200 overflow-hidden"
+              className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden"
             >
               {/* Category header */}
-              <div className="px-5 py-3 bg-gray-50 border-b border-gray-200 flex items-center justify-between">
-                <h3 className="font-semibold text-gray-700 text-sm">
+              <div className="px-5 py-3 bg-gray-50 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
+                <h3 className="font-semibold text-gray-700 dark:text-gray-200 text-sm">
                   {section.category}
                 </h3>
-                <span className="text-xs text-gray-400 shrink-0">
+                <span className="text-xs text-gray-400 dark:text-gray-500 shrink-0">
                   {section.topics.length} lesson
                   {section.topics.length !== 1 ? "s" : ""}
                 </span>
@@ -109,18 +113,18 @@ export default async function CourseDetailPage({
                     key={j}
                     className={
                       j < section.topics.length - 1
-                        ? "border-b border-gray-100"
+                        ? "border-b border-gray-100 dark:border-gray-800"
                         : ""
                     }
                   >
                     <Link
                       href={`/edu-viewer/courses/${courseId}/${course.slug}/topics/${topic.index}/${topic.slug}`}
-                      className="flex items-center gap-4 px-5 py-3 hover:bg-indigo-50 transition-colors group"
+                      className="flex items-center gap-4 px-5 py-3 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-colors group"
                     >
-                      <span className="text-xs text-gray-300 w-7 text-right shrink-0 font-mono">
+                      <span className="text-xs text-gray-300 dark:text-gray-600 w-7 text-right shrink-0 font-mono">
                         {topic.index + 1}
                       </span>
-                      <span className="text-sm text-gray-700 group-hover:text-indigo-700 transition-colors">
+                      <span className="text-sm text-gray-700 dark:text-gray-300 group-hover:text-indigo-700 dark:group-hover:text-indigo-400 transition-colors">
                         {topic.title}
                       </span>
                     </Link>

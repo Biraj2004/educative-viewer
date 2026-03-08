@@ -38,11 +38,11 @@ export default function Image({ data }: { data: ImageComponentData }) {
           <img
             src={src}
             alt={alt}
-            className="max-w-full h-auto block"
+            className="max-w-full h-auto block dark:brightness-90 dark:contrast-95"
           />
         </div>
         {data.caption && (
-          <p className="text-sm text-gray-500 text-center">{data.caption}</p>
+          <p className="text-sm text-gray-500 dark:text-gray-400 text-center">{data.caption}</p>
         )}
       </div>
     </div>

@@ -210,12 +210,12 @@ export default function Permutation({ data }: { data: PermutationData }) {
 
   return (
     <div className="max-w-4xl mx-auto px-6 py-2">
-      <div className="border border-gray-200 rounded-xl bg-white shadow-sm">
+      <div className="border border-gray-200 dark:border-gray-700 rounded-xl bg-white dark:bg-gray-900 shadow-sm">
 
         {/* Header */}
-        <div className="px-6 py-4 border-b border-gray-100">
+        <div className="px-6 py-4 border-b border-gray-100 dark:border-gray-700">
           <p className="text-xs font-semibold text-indigo-500 uppercase tracking-wider mb-1">Arrange in order</p>
-          <h3 className="text-base font-semibold text-gray-900">{data.question_statement}</h3>
+          <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100">{data.question_statement}</h3>
         </div>
 
         <div className="px-6 pt-4 pb-2 space-y-5">
@@ -239,21 +239,21 @@ export default function Permutation({ data }: { data: PermutationData }) {
                   className={[
                     "flex items-stretch rounded-lg border-2 min-h-11 transition-all duration-150 overflow-hidden",
                     interactive ? "cursor-pointer" : "cursor-default",
-                    isCorrect   ? "border-emerald-300 bg-emerald-50"
-                    : isWrong   ? "border-red-300 bg-red-50"
-                    : isDragOver ? "border-indigo-400 bg-indigo-50 scale-[1.01]"
-                    : option    ? "border-indigo-200 bg-indigo-50/40 hover:border-indigo-400"
-                    : selectedHashid ? "border-indigo-200 border-dashed bg-indigo-50/20 hover:border-indigo-400"
-                    : "border-dashed border-gray-200 bg-gray-50 hover:border-indigo-200",
+                  isCorrect   ? "border-emerald-300 dark:border-emerald-700 bg-emerald-50 dark:bg-emerald-900/30"
+                  : isWrong   ? "border-red-300 dark:border-red-700 bg-red-50 dark:bg-red-900/30"
+                  : isDragOver ? "border-indigo-400 bg-indigo-50 dark:bg-indigo-900/30 scale-[1.01]"
+                  : option    ? "border-indigo-200 dark:border-indigo-700 bg-indigo-50/40 dark:bg-indigo-900/20 hover:border-indigo-400"
+                  : selectedHashid ? "border-indigo-200 dark:border-indigo-700 border-dashed bg-indigo-50/20 dark:bg-indigo-900/10 hover:border-indigo-400"
+                  : "border-dashed border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 hover:border-indigo-200",
                   ].join(" ")}
                 >
                   {/* Step number badge */}
                   <div className={[
                     "w-10 shrink-0 flex items-center justify-center text-sm font-bold select-none",
-                    isCorrect  ? "bg-emerald-200 text-emerald-800"
-                    : isWrong  ? "bg-red-200 text-red-800"
-                    : option   ? "bg-indigo-100 text-indigo-700"
-                    : "bg-gray-100 text-gray-400",
+                    isCorrect  ? "bg-emerald-200 dark:bg-emerald-800 text-emerald-800 dark:text-emerald-200"
+                    : isWrong  ? "bg-red-200 dark:bg-red-800 text-red-800 dark:text-red-200"
+                    : option   ? "bg-indigo-100 dark:bg-indigo-900 text-indigo-700 dark:text-indigo-300"
+                    : "bg-gray-100 dark:bg-gray-700 text-gray-400 dark:text-gray-500",
                   ].join(" ")}>
                     {i + 1}
                   </div>
@@ -264,7 +264,7 @@ export default function Permutation({ data }: { data: PermutationData }) {
                     onDragStart={option && interactive ? (e) => onDragStartSlot(e, i, hashid!) : undefined}
                     onDragEnd={onDragEnd}
                     className={[
-                      "flex-1 px-3 py-2.5 text-sm text-gray-800 perm-slot-content flex items-center",
+                      "flex-1 px-3 py-2.5 text-sm text-gray-800 dark:text-gray-200 perm-slot-content flex items-center",
                       option && interactive ? "cursor-grab active:cursor-grabbing" : "",
                     ].join(" ")}
                   >
@@ -301,12 +301,12 @@ export default function Permutation({ data }: { data: PermutationData }) {
               onDragLeave={() => setDragOverTarget(null)}
               onDrop={interactive ? onDropPool : undefined}
             >
-              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">
+              <p className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-2">
                 Options
               </p>
               <div className={[
                 "flex flex-wrap gap-2 min-h-10 rounded-lg p-1 transition-colors",
-                dragOverTarget === "pool" ? "bg-indigo-50/60 ring-1 ring-indigo-200" : "",
+                dragOverTarget === "pool" ? "bg-indigo-50/60 dark:bg-indigo-900/20 ring-1 ring-indigo-200 dark:ring-indigo-800" : "",
               ].join(" ")}>
                 {poolOptions.map((opt) => (
                   <div
@@ -321,16 +321,16 @@ export default function Permutation({ data }: { data: PermutationData }) {
                     className={[
                       "rounded-lg border-2 px-3 py-2 text-sm text-left transition-all duration-150 perm-option-content select-none",
                       submitted
-                        ? "cursor-default opacity-40 border-gray-200 bg-gray-50 text-gray-600"
+                        ? "cursor-default opacity-40 border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-gray-600 dark:text-gray-400"
                         : selectedHashid === opt.hashid
-                          ? "border-indigo-500 bg-indigo-50 text-indigo-900 shadow-sm cursor-grab"
-                          : "border-gray-200 bg-white text-gray-700 hover:border-indigo-300 hover:bg-indigo-50/40 cursor-grab active:cursor-grabbing",
+                          ? "border-indigo-500 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-900 dark:text-indigo-200 shadow-sm cursor-grab"
+                          : "border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:border-indigo-300 hover:bg-indigo-50/40 dark:hover:bg-indigo-900/20 cursor-grab active:cursor-grabbing",
                     ].join(" ")}
                     dangerouslySetInnerHTML={{ __html: inlineHtml(opt.content.mdhtml) }}
                   />
                 ))}
                 {poolOptions.length === 0 && !submitted && (
-                  <p className="text-xs text-gray-300 italic self-center px-2">All options placed — drag one back here to return it</p>
+                  <p className="text-xs text-gray-300 dark:text-gray-600 italic self-center px-2">All options placed — drag one back here to return it</p>
                 )}
               </div>
             </div>
@@ -339,19 +339,19 @@ export default function Permutation({ data }: { data: PermutationData }) {
 
         {/* Score banner */}
         {submitted && score !== null && (
-          <div className="mx-6 mt-2 mb-1 rounded-lg py-2 text-sm text-center bg-gray-50 border border-gray-100 text-gray-600">
+          <div className="mx-6 mt-2 mb-1 rounded-lg py-2 text-sm text-center bg-gray-50 dark:bg-gray-800 border border-gray-100 dark:border-gray-700 text-gray-600 dark:text-gray-400">
             You got{" "}
-            <span className="font-semibold text-indigo-600">{score}</span>
+            <span className="font-semibold text-indigo-600 dark:text-indigo-400">{score}</span>
             {" "}/ {data.numberOfQuestionBlock} in the correct position.
           </div>
         )}
 
         {/* Footer */}
-        <div className="px-6 py-4 border-t border-gray-100 flex items-center justify-between mt-2">
+        <div className="px-6 py-4 border-t border-gray-100 dark:border-gray-700 flex items-center justify-between mt-2">
           {!data.disableReset ? (
             <button
               onClick={handleReset}
-              className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-800 transition-colors"
+              className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200 transition-colors"
             >
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                 <path strokeLinecap="round" strokeLinejoin="round"
@@ -365,7 +365,7 @@ export default function Permutation({ data }: { data: PermutationData }) {
             {!data.disableSolution && (
               <button
                 onClick={handleShowSolution}
-                className="px-4 py-2 rounded-lg border border-gray-200 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                className="px-4 py-2 rounded-lg border border-gray-200 dark:border-gray-600 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
               >
                 {showSolution ? "Hide Solution" : "Show Solution"}
               </button>
@@ -388,6 +388,8 @@ export default function Permutation({ data }: { data: PermutationData }) {
         .perm-slot-content p { margin: 0; line-height: 1.5; }
         .perm-slot-content code { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 0.85em; color: #e11d48; background: #fff1f2; padding: 0.1em 0.35em; border-radius: 3px; }
         .perm-option-content code { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 0.85em; color: #e11d48; background: #fff1f2; padding: 0.1em 0.35em; border-radius: 3px; }
+        .dark .perm-slot-content code,
+        .dark .perm-option-content code { color: #fb7185; background: #4c0519; }
       `}</style>
     </div>
   );

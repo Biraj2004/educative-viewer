@@ -128,11 +128,11 @@ export default function MatchTheAnswers({ data }: { data: MatchTheAnswersData })
 
   return (
     <div className="max-w-4xl mx-auto px-6 py-2">
-      <div className="border border-gray-200 rounded-xl bg-white shadow-sm">
+      <div className="border border-gray-200 dark:border-gray-700 rounded-xl bg-white dark:bg-gray-900 shadow-sm">
 
         {/* Title */}
-        <div className="px-6 py-4 border-b border-gray-100">
-          <h3 className="text-lg font-bold text-gray-900">
+        <div className="px-6 py-4 border-b border-gray-100 dark:border-gray-700">
+          <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100">
             {data.title ?? "Match The Answer"}
           </h3>
         </div>
@@ -142,11 +142,11 @@ export default function MatchTheAnswers({ data }: { data: MatchTheAnswersData })
 
           {/* Column headers */}
           <div className="grid gap-4 mb-3" style={{ gridTemplateColumns: "5fr 3fr 5fr" }}>
-            <div className="text-center text-xs font-semibold text-gray-500 uppercase tracking-wide bg-gray-50 rounded py-1.5">
+            <div className="text-center text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide bg-gray-50 dark:bg-gray-800 rounded py-1.5">
               {data.leftHeader ?? "Statement"}
             </div>
             <div />
-            <div className="text-center text-xs font-semibold text-gray-500 uppercase tracking-wide bg-gray-50 rounded py-1.5">
+            <div className="text-center text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide bg-gray-50 dark:bg-gray-800 rounded py-1.5">
               {data.rightHeader ?? "Match With"}
             </div>
           </div>
@@ -173,19 +173,19 @@ export default function MatchTheAnswers({ data }: { data: MatchTheAnswersData })
                       "rounded-lg border-2 px-4 py-3 min-h-16 flex flex-col justify-center transition-all duration-150",
                       !submitted && !showSolution ? "cursor-pointer" : "cursor-default",
                       isSelectedLeft
-                        ? "border-indigo-400 bg-indigo-50 shadow-sm"
+                        ? "border-indigo-400 bg-indigo-50 dark:bg-indigo-900/30 shadow-sm"
                         : submitted
                           ? isCorrect
-                            ? "border-emerald-300 bg-emerald-50"
+                            ? "border-emerald-300 dark:border-emerald-700 bg-emerald-50 dark:bg-emerald-900/30"
                             : isWrong
-                              ? "border-red-300 bg-red-50"
-                              : "border-gray-200 bg-gray-50"
+                              ? "border-red-300 dark:border-red-700 bg-red-50 dark:bg-red-900/30"
+                              : "border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800"
                           : isConnected
-                            ? "border-indigo-200 bg-indigo-50/40"
-                            : "border-gray-200 bg-gray-50 hover:border-indigo-200",
+                            ? "border-indigo-200 dark:border-indigo-700 bg-indigo-50/40 dark:bg-indigo-900/20"
+                            : "border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 hover:border-indigo-200",
                     ].join(" ")}
                   >
-                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">
+                    <span className="text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-1">
                       {stmt.id}
                     </span>
                     <span className="text-sm font-mono text-rose-500 wrap-break-word leading-snug">
@@ -204,12 +204,12 @@ export default function MatchTheAnswers({ data }: { data: MatchTheAnswersData })
                       className={[
                         "rounded-lg border px-4 py-3 min-h-16 flex items-center transition-all duration-150",
                         !submitted && !showSolution && selectedLeft
-                          ? "cursor-pointer border-gray-200 hover:border-indigo-300 hover:bg-indigo-50/40"
+                          ? "cursor-pointer border-gray-200 dark:border-gray-600 hover:border-indigo-300 hover:bg-indigo-50/40 dark:hover:bg-indigo-900/20"
                           : "cursor-default border-transparent",
-                        rightConnected && !submitted && !showSolution ? "bg-indigo-50/20" : "",
+                        rightConnected && !submitted && !showSolution ? "bg-indigo-50/20 dark:bg-indigo-900/20" : "",
                       ].join(" ")}
                     >
-                      <span className="text-sm text-gray-700 leading-snug">{option.text}</span>
+                      <span className="text-sm text-gray-700 dark:text-gray-300 leading-snug">{option.text}</span>
                     </div>
                   ) : (
                     <div ref={(el) => { rightRefs.current[i] = el; }} className="min-h-16" />
@@ -269,18 +269,18 @@ export default function MatchTheAnswers({ data }: { data: MatchTheAnswersData })
 
         {/* Score banner */}
         {submitted && score !== null && (
-          <div className="px-6 py-2 border-t border-gray-100 text-sm text-center bg-gray-50 text-gray-600">
+          <div className="px-6 py-2 border-t border-gray-100 dark:border-gray-700 text-sm text-center bg-gray-50 dark:bg-gray-800 text-gray-600 dark:text-gray-400">
             You scored{" "}
-            <span className="font-semibold text-indigo-600">{score}</span>
+            <span className="font-semibold text-indigo-600 dark:text-indigo-400">{score}</span>
             {" "}/ {data.statements.length} correct.
           </div>
         )}
 
         {/* Footer */}
-        <div className="px-6 py-4 border-t border-gray-100 flex items-center justify-between">
+        <div className="px-6 py-4 border-t border-gray-100 dark:border-gray-700 flex items-center justify-between">
           <button
             onClick={handleReset}
-            className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-800 transition-colors"
+            className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200 transition-colors"
           >
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
               <path strokeLinecap="round" strokeLinejoin="round"
@@ -292,7 +292,7 @@ export default function MatchTheAnswers({ data }: { data: MatchTheAnswersData })
           <div className="flex gap-2">
             <button
               onClick={handleShowSolution}
-              className="px-4 py-2 rounded-lg border border-gray-200 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+              className="px-4 py-2 rounded-lg border border-gray-200 dark:border-gray-600 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
             >
               {showSolution ? "Hide Solution" : "Show Solution"}
             </button>

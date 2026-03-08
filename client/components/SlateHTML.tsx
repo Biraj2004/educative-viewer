@@ -80,7 +80,7 @@ function parseHtml(html: string): ContentNode[] {
 
 function SectionHeading({ text }: { text: string }) {
   return (
-    <h2 className="text-[22px] font-bold text-gray-900 mt-10 mb-3 leading-snug">
+    <h2 className="text-[22px] font-bold text-gray-900 dark:text-gray-100 mt-10 mb-3 leading-snug">
       {text}
     </h2>
   );
@@ -88,7 +88,7 @@ function SectionHeading({ text }: { text: string }) {
 
 function BodyParagraph({ text }: { text: string }) {
   return (
-    <p className="text-[15px] text-gray-600 leading-[1.8] mb-4">{text}</p>
+    <p className="text-[15px] text-gray-600 dark:text-gray-300 leading-[1.8] mb-4">{text}</p>
   );
 }
 
@@ -96,7 +96,7 @@ function BulletList({ items }: { items: string[] }) {
   return (
     <ul className="list-disc pl-6 mb-5 space-y-2">
       {items.map((item, i) => (
-        <li key={i} className="text-[15px] text-gray-600 leading-[1.8]">
+        <li key={i} className="text-[15px] text-gray-600 dark:text-gray-300 leading-[1.8]">
           {item}
         </li>
       ))}

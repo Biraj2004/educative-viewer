@@ -34,13 +34,13 @@ export default function Table({ data }: { data: TableComponentData }) {
     <div className="max-w-4xl mx-auto px-6 py-2">
       {/* Title */}
       {data.title && (
-        <h2 className={`text-2xl font-bold text-gray-900 mb-5 ${titleAlignClass(data.titleAlignment)}`}>
+        <h2 className={`text-2xl font-bold text-gray-900 dark:text-gray-100 mb-5 ${titleAlignClass(data.titleAlignment)}`}>
           {data.title}
         </h2>
       )}
 
       {/* Table wrapper — percentage widths, no scroll */}
-      <div className="rounded border border-gray-200 shadow-sm">
+      <div className="rounded border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden">
         <table className="w-full border-collapse">
           <colgroup>
             {data.columnWidths.map((w, i) => (
@@ -49,16 +49,20 @@ export default function Table({ data }: { data: TableComponentData }) {
           </colgroup>
           <tbody>
             {data.data.map((row, rowIdx) => (
-              <tr key={rowIdx}>
+              <tr key={rowIdx} className={isHeader(rowIdx) ? "bg-white dark:bg-gray-800" : "bg-white dark:bg-gray-900"}>
                 {row.map((cellHtml, colIdx) => {
+                  // Strip inline background-color from customStyles in dark mode via CSS;
+                  // still apply other style properties (width, text-align, etc.)
                   const cellStyle = data.customStyles?.[rowIdx]?.[colIdx] ?? {};
                   const Tag = isHeader(rowIdx) ? "th" : "td";
                   return (
                     <Tag
                       key={colIdx}
                       style={cellStyle}
-                      className={`border border-gray-200 px-4 py-3 align-middle table-cell-content ${
-                        isHeader(rowIdx) ? "font-semibold text-gray-700" : "text-gray-800"
+                      className={`border border-gray-200 dark:border-gray-700 px-4 py-3 align-middle table-cell-content ${
+                        isHeader(rowIdx)
+                          ? "font-semibold text-gray-700 dark:text-gray-100"
+                          : "text-gray-800 dark:text-gray-300"
                       }`}
                       dangerouslySetInnerHTML={{ __html: cellHtml }}
                     />
@@ -83,6 +87,16 @@ export default function Table({ data }: { data: TableComponentData }) {
           background: #fff1f2;
           padding: 0.1em 0.35em;
           border-radius: 3px;
+        }
+        .dark .table-cell-content code {
+          color: #fb7185;
+          background: #4c0519;
+        }
+        /* Override inline background-color set by customStyles in dark mode */
+        .dark .table-cell-content,
+        .dark th.table-cell-content,
+        .dark td.table-cell-content {
+          background-color: transparent !important;
         }
         .table-cell-content sup { font-size: 0.65em; vertical-align: super; line-height: 0; }
         .table-cell-content br  { display: block; content: ""; margin-top: 0.25rem; }

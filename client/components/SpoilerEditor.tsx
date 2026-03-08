@@ -50,7 +50,7 @@ export default function SpoilerEditor({ data }: { data: SpoilerEditorData }) {
       <div className="max-w-6xl mx-auto px-6 py-2 flex justify-center">
         <button
           onClick={() => setOpen(true)}
-          className="inline-flex items-center gap-2 px-4 py-2 rounded border border-gray-200 bg-white text-gray-700 text-sm font-medium shadow-sm hover:bg-gray-50 transition-colors"
+          className="inline-flex items-center gap-2 px-4 py-2 rounded border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 text-sm font-medium shadow-sm hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
         >
           {data.showIcon && (
             <LightbulbIcon className="w-4 h-4 text-amber-400" />
@@ -63,7 +63,7 @@ export default function SpoilerEditor({ data }: { data: SpoilerEditorData }) {
 
   return (
     <div className="max-w-6xl mx-auto px-6 py-2">
-      <div className="relative rounded border border-amber-100 bg-amber-50 p-6">
+      <div className="relative rounded border border-amber-100 dark:border-amber-900/40 bg-amber-50 dark:bg-amber-950/30 p-6">
         {/* Header row */}
         <div className="flex items-start justify-between mb-4">
           {data.showIcon && (
@@ -72,7 +72,7 @@ export default function SpoilerEditor({ data }: { data: SpoilerEditorData }) {
           <button
             onClick={() => setOpen(false)}
             aria-label={data.hideHintText}
-            className="ml-auto text-gray-400 hover:text-gray-600 transition-colors"
+            className="ml-auto text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors"
           >
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
@@ -82,7 +82,7 @@ export default function SpoilerEditor({ data }: { data: SpoilerEditorData }) {
 
         {/* Content */}
         <div
-          className="spoiler-content text-gray-800 text-[15px] leading-relaxed"
+          className="spoiler-content text-gray-800 dark:text-gray-200 text-[15px] leading-relaxed"
           dangerouslySetInnerHTML={{ __html: processedHtml }}
         />
       </div>
@@ -92,6 +92,7 @@ export default function SpoilerEditor({ data }: { data: SpoilerEditorData }) {
         .spoiler-content p { margin-bottom: 0.75rem; }
         .spoiler-content p:last-child { margin-bottom: 0; }
         .spoiler-content img { max-width: 100%; height: auto; margin: 1rem auto; display: block; border: 1px solid #e5e7eb; border-radius: 4px; }
+        .dark .spoiler-content img { border-color: #374151; }
         .spoiler-content em { font-style: italic; }
         .spoiler-content p[style*="text-align:center"] { text-align: center; }
       `}</style>

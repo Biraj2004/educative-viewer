@@ -67,11 +67,11 @@ function initValues(data: InstaCalcCell[][]): Record<string, string | number> {
   return vals;
 }
 
-// Maps a raw hex color to a tasteful muted equivalent based on perceived luminance.
-function softCellStyle(color?: string): React.CSSProperties {
-  if (!color || color === "transparent") return {};
+// Maps a raw hex color to Tailwind class names (with dark mode variants).
+function getCellClasses(color?: string): string {
+  if (!color || color === "transparent") return "dark:bg-gray-800/50 dark:text-gray-200";
   const hex = color.replace("#", "");
-  if (hex.length !== 6) return {};
+  if (hex.length !== 6) return "dark:bg-gray-800/50 dark:text-gray-200";
   const r = parseInt(hex.slice(0, 2), 16) / 255;
   const g = parseInt(hex.slice(2, 4), 16) / 255;
   const b = parseInt(hex.slice(4, 6), 16) / 255;
@@ -79,11 +79,11 @@ function softCellStyle(color?: string): React.CSSProperties {
   const lum = 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b);
 
   // Dark (e.g. #0000ff) → muted indigo header
-  if (lum < 0.15) return { backgroundColor: "#3d4e8a", color: "#e8ecf8" };
+  if (lum < 0.15) return "bg-[#3d4e8a] text-[#e8ecf8] dark:bg-[#1e2d5a] dark:text-[#c0d4f0]";
   // Warm / yellow (e.g. #ffff00) → soft amber tint
-  if (lum < 0.75) return { backgroundColor: "#fefce8", color: "#78600a" };
+  if (lum < 0.75) return "bg-[#fefce8] text-[#78600a] dark:bg-[#2c1f00] dark:text-[#fde68a]";
   // Light (e.g. #c9daf8) → very subtle slate
-  return { backgroundColor: "#f1f4f9", color: "#6b7280" };
+  return "bg-[#f1f4f9] text-[#6b7280] dark:bg-[#1e293b] dark:text-[#94a3b8]";
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -133,14 +133,14 @@ export default function InstaCalc({ data }: { data: InstaCalcData }) {
     <div className="max-w-4xl mx-auto px-6 py-2">
       {/* Title */}
       {data.title && (
-        <h3 className="text-center text-lg font-bold text-gray-900 mb-4">
+        <h3 className="text-center text-lg font-bold text-gray-900 dark:text-gray-100 mb-4">
           {data.title}
         </h3>
       )}
 
       {/* Grid */}
       <div
-        className="border border-gray-200 rounded overflow-hidden"
+        className="border border-gray-200 dark:border-gray-700 rounded overflow-hidden"
         style={{ display: "grid", gridTemplateColumns: `repeat(${data.cols}, 1fr)` }}
       >
         {data.data.map((row) =>
@@ -149,15 +149,14 @@ export default function InstaCalc({ data }: { data: InstaCalcData }) {
 
             const displayValue = values[cell.key] ?? "";
             const formula = isFormula(cell.expr);
-            const style = softCellStyle(cell.color);
+            const cellClasses = getCellClasses(cell.color);
 
             // Header / read-only display cell
             if (cell.readOnly) {
               return (
                 <div
                   key={cell.key}
-                  style={style}
-                  className="px-3 py-2 text-sm border border-gray-100 flex items-center font-medium"
+                  className={`px-3 py-2 text-sm border border-gray-100 dark:border-gray-700 flex items-center font-medium ${cellClasses}`}
                 >
                   {String(displayValue)}
                 </div>
@@ -169,12 +168,12 @@ export default function InstaCalc({ data }: { data: InstaCalcData }) {
               return (
                 <div
                   key={cell.key}
-                  className="px-3 py-2 text-sm border border-gray-100 flex items-center justify-between bg-white"
+                  className="px-3 py-2 text-sm border border-gray-100 dark:border-gray-700 flex items-center justify-between bg-white dark:bg-gray-900"
                 >
                   <span className="text-indigo-300 font-mono text-xs select-none italic mr-1">
                     f
                   </span>
-                  <span className="font-mono text-gray-700">{String(displayValue)}</span>
+                  <span className="font-mono text-gray-700 dark:text-gray-300">{String(displayValue)}</span>
                 </div>
               );
             }
@@ -183,13 +182,13 @@ export default function InstaCalc({ data }: { data: InstaCalcData }) {
             return (
               <div
                 key={cell.key}
-                className="border border-indigo-200 bg-white focus-within:border-indigo-400 transition-colors"
+                className="border border-indigo-200 dark:border-indigo-800 bg-white dark:bg-gray-800 focus-within:border-indigo-400 transition-colors"
               >
                 <input
                   type="text"
                   value={String(displayValue)}
                   onChange={(e) => handleChange(cell.key, e.target.value)}
-                  className="w-full h-full px-3 py-2 text-sm outline-none bg-transparent text-gray-800 placeholder:text-gray-300"
+                  className="w-full h-full px-3 py-2 text-sm outline-none bg-transparent text-gray-800 dark:text-gray-200 placeholder:text-gray-300 dark:placeholder:text-gray-600"
                   placeholder={cell.expr !== "" ? cell.expr : undefined}
                 />
               </div>

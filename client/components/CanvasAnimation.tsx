@@ -98,9 +98,9 @@ export default function CanvasAnimation({ data }: { data: CanvasAnimationData })
 
     return (
         <div className={isFullscreen ? 'fixed inset-0 z-50 flex items-center justify-center bg-black/80' : 'max-w-4xl mx-auto px-6 py-2'}>
-            <div className={`bg-white border border-gray-200 rounded-xl shadow-lg overflow-hidden flex flex-col ${isFullscreen ? 'w-full h-full rounded-none' : ''}`}>
-                {/* Slide area */}
-                <div style={{ position: 'relative', lineHeight: 0 }}>
+            <div className={`bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl shadow-lg overflow-hidden flex flex-col ${isFullscreen ? 'w-full h-full rounded-none' : ''}`}>
+                {/* Slide area – white background so SVG text/paths designed for light bg remain visible */}
+                <div className="canvas-slide-area" style={{ position: 'relative', lineHeight: 0, backgroundColor: 'white' }}>
                     <style>{`.canvas-slide svg { display: block; }`}</style>
                     {slides.map((slide, idx) => (
                         <div
@@ -114,13 +114,13 @@ export default function CanvasAnimation({ data }: { data: CanvasAnimationData })
                 </div>
 
                 {/* Bottom toolbar */}
-                <div className="flex items-center px-4 py-3 border-t border-gray-200 shrink-0">
+                <div className="flex items-center px-4 py-3 border-t border-gray-200 dark:border-gray-700 shrink-0">
                     {/* Left: fullscreen + reset */}
                     <div className="flex items-center gap-3">
                         <button
                             onClick={() => setIsFullscreen(f => !f)}
                             title={isFullscreen ? 'Exit fullscreen' : 'Fullscreen'}
-                            className="text-gray-500 hover:text-gray-800 transition-colors"
+                            className="text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200 transition-colors"
                         >
                             {isFullscreen ? (
                                 <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
@@ -135,7 +135,7 @@ export default function CanvasAnimation({ data }: { data: CanvasAnimationData })
                         <button
                             onClick={() => setCurrentSlide(0)}
                             title="Reset to first slide"
-                            className="text-gray-500 hover:text-gray-800 transition-colors"
+                            className="text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200 transition-colors"
                         >
                             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
                                 <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h5M4.93 14A8 8 0 1 0 6.34 7.34" />
@@ -144,9 +144,9 @@ export default function CanvasAnimation({ data }: { data: CanvasAnimationData })
                     </div>
 
                     {/* Center: slide counter */}
-                    <div className="flex-1 text-center text-sm font-medium text-gray-600">
-                        <span className="font-bold text-gray-900">{currentSlide + 1}</span>
-                        <span className="mx-1 text-gray-400">/</span>
+                    <div className="flex-1 text-center text-sm font-medium text-gray-600 dark:text-gray-400">
+                        <span className="font-bold text-gray-900 dark:text-gray-100">{currentSlide + 1}</span>
+                        <span className="mx-1 text-gray-400 dark:text-gray-600">/</span>
                         <span>{slides.length}</span>
                     </div>
 
@@ -155,7 +155,7 @@ export default function CanvasAnimation({ data }: { data: CanvasAnimationData })
                         <button
                             onClick={() => setCurrentSlide(s => Math.max(s - 1, 0))}
                             disabled={currentSlide === 0}
-                            className="w-8 h-8 flex items-center justify-center rounded-md border border-gray-300 text-gray-600 hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                            className="w-8 h-8 flex items-center justify-center rounded-md border border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
                         >
                             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                                 <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />

@@ -1,6 +1,6 @@
 "use client";
 
-import { COMPONENT_REGISTRY, UnknownRenderer } from "@/utils/component-registry";
+import { getRenderer, UnknownRenderer } from "@/utils/component-registry";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -23,7 +23,7 @@ export default function Columns({ data }: { data: ColumnsData }) {
     <div className="max-w-6xl mx-auto px-6 py-2">
       <div className="flex gap-4 items-stretch">
         {data.comps.map((comp, i) => {
-          const renderer = COMPONENT_REGISTRY[comp.type];
+          const renderer = getRenderer(comp.type);
           return (
             <div
               key={comp.hash ?? i}

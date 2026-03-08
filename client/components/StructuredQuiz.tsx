@@ -73,12 +73,12 @@ function QuestionRow({
       {/* Question text */}
       <div className="flex items-start gap-2 mb-4">
         {showNumber && (
-          <span className="shrink-0 text-sm font-medium text-gray-500 mt-0.5 w-5 text-right">
+          <span className="shrink-0 text-sm font-medium text-gray-500 dark:text-gray-400 mt-0.5 w-5 text-right">
             {index + 1}.
           </span>
         )}
         <div
-          className="sq-question text-sm text-gray-800 leading-relaxed"
+          className="sq-question text-sm text-gray-800 dark:text-gray-200 leading-relaxed"
           dangerouslySetInnerHTML={{ __html: question.questionTextHtml }}
         />
       </div>
@@ -87,7 +87,7 @@ function QuestionRow({
       <div className="flex justify-center mb-3">
         <button
           onClick={() => setOpen((v) => !v)}
-          className="inline-flex items-center gap-1 text-sm font-medium text-indigo-600 hover:text-indigo-800 transition-colors"
+          className="inline-flex items-center gap-1 text-sm font-medium text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300 transition-colors"
         >
           {open ? "Hide Answer" : "Show Answer"}
           {open ? <ChevronUp /> : <ChevronDown />}
@@ -97,7 +97,7 @@ function QuestionRow({
       {/* Answer */}
       {open && (
         <div
-          className="sq-answer text-sm text-gray-700 leading-relaxed"
+          className="sq-answer text-sm text-gray-700 dark:text-gray-300 leading-relaxed"
           dangerouslySetInnerHTML={{ __html: question.answerTextHtml }}
         />
       )}
@@ -115,12 +115,12 @@ export default function StructuredQuiz({ data }: { data: StructuredQuizData }) {
   const canGoNext = currentIndex < total - 1;
 
   const navBar = (
-    <div className="border-t border-gray-200 px-6 py-3 flex items-center justify-center gap-2 text-sm text-gray-600 select-none">
+    <div className="border-t border-gray-200 dark:border-gray-700 px-6 py-3 flex items-center justify-center gap-2 text-sm text-gray-600 dark:text-gray-400 select-none">
       <button
         onClick={() => setCurrentIndex((i) => Math.max(0, i - 1))}
         disabled={!canGoPrev}
         aria-label="Previous question"
-        className="p-1 rounded text-gray-400 hover:text-gray-600 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+        className="p-1 rounded text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
       >
         <ChevronLeft />
       </button>
@@ -131,7 +131,7 @@ export default function StructuredQuiz({ data }: { data: StructuredQuizData }) {
         onClick={() => setCurrentIndex((i) => Math.min(total - 1, i + 1))}
         disabled={!canGoNext}
         aria-label="Next question"
-        className="p-1 rounded text-gray-400 hover:text-gray-600 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+        className="p-1 rounded text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
       >
         <ChevronRight />
       </button>
@@ -139,13 +139,13 @@ export default function StructuredQuiz({ data }: { data: StructuredQuizData }) {
   );
 
   return (
-    <div className="max-w-3xl mx-auto px-4 py-4">
-      <div className="rounded-lg border border-gray-200 shadow-sm overflow-hidden bg-white">
+    <div className="max-w-4xl mx-auto px-4 py-4">
+      <div className="rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden bg-white dark:bg-gray-900">
         {/* Title (only if non-empty) */}
         {data.titleMdHtml && (
-          <div className="bg-indigo-50 border-b border-gray-200 px-6 py-3">
+          <div className="bg-indigo-50 dark:bg-indigo-950/50 border-b border-gray-200 dark:border-gray-700 px-6 py-3">
             <div
-              className="sq-title font-semibold text-gray-800 text-sm [&_p]:m-0"
+              className="sq-title font-semibold text-gray-800 dark:text-gray-200 text-sm [&_p]:m-0"
               dangerouslySetInnerHTML={{ __html: data.titleMdHtml }}
             />
           </div>
@@ -180,6 +180,8 @@ export default function StructuredQuiz({ data }: { data: StructuredQuizData }) {
           padding: 0.1em 0.35em;
         }
         .sq-title p { margin: 0; }
+        .dark .sq-question code,
+        .dark .sq-answer code { background: #1e293b; color: #e2e8f0; }
       `}</style>
     </div>
   );
