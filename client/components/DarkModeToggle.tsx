@@ -2,25 +2,46 @@
 
 import { useEffect, useState } from "react";
 
+function saveTheme(theme: "dark" | "light") {
+  try { localStorage.setItem("theme", theme); } catch {}
+  document.cookie = `theme=${theme}; path=/; max-age=31536000; SameSite=Lax`;
+}
+
+function readSavedTheme(): "dark" | "light" | null {
+  try {
+    const ls = localStorage.getItem("theme");
+    if (ls === "dark" || ls === "light") return ls;
+  } catch {}
+  // fall back to cookie
+  const match = document.cookie.match(/(?:^|;\s*)theme=(dark|light)/);
+  if (match) return match[1] as "dark" | "light";
+  return null;
+}
+
 export default function DarkModeToggle() {
   const [isDark, setIsDark] = useState(false);
 
   useEffect(() => {
-    setIsDark(document.documentElement.classList.contains("dark"));
+    // On first mount: prefer saved preference, default to light
+    const saved = readSavedTheme();
+    const useDark = saved === "dark";
+    setIsDark(useDark);
+    document.documentElement.classList.toggle("dark", useDark);
+    if (!saved) saveTheme("light"); // write default so it's persisted
   }, []);
 
   const toggle = () => {
     const next = !isDark;
     setIsDark(next);
     document.documentElement.classList.toggle("dark", next);
-    document.cookie = `theme=${next ? "dark" : "light"}; path=/; max-age=31536000; SameSite=Lax`;
+    saveTheme(next ? "dark" : "light");
   };
 
   return (
     <button
       onClick={toggle}
       title={isDark ? "Switch to light mode" : "Switch to dark mode"}
-      className={`relative inline-flex items-center w-11 h-6 rounded-full transition-colors duration-200 shrink-0 ${
+      className={`relative inline-flex items-center w-11 h-6 rounded-full transition-colors duration-200 shrink-0 cursor-pointer ${
         isDark ? "bg-indigo-600" : "bg-gray-300"
       }`}
     >

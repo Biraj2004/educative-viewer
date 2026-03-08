@@ -187,6 +187,7 @@ export default function Permutation({ data }: { data: PermutationData }) {
     setSelectedHashid(null);
     setSubmitted(false);
     setShowSolution(false);
+    setDragOverTarget(null);
   }
 
   function handleSubmit() {
@@ -281,7 +282,7 @@ export default function Permutation({ data }: { data: PermutationData }) {
                   {option && interactive && (
                     <button
                       onClick={(e) => handleRemoveFromSlot(e, i)}
-                      className="mr-2 shrink-0 self-center text-gray-300 hover:text-gray-600 transition-colors"
+                      className="mr-2 shrink-0 self-center text-gray-300 hover:text-gray-600 transition-colors cursor-pointer"
                     >
                       <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                         <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
@@ -351,7 +352,7 @@ export default function Permutation({ data }: { data: PermutationData }) {
           {!data.disableReset ? (
             <button
               onClick={handleReset}
-              className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200 transition-colors"
+              className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200 transition-colors cursor-pointer"
             >
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                 <path strokeLinecap="round" strokeLinejoin="round"
@@ -365,7 +366,7 @@ export default function Permutation({ data }: { data: PermutationData }) {
             {!data.disableSolution && (
               <button
                 onClick={handleShowSolution}
-                className="px-4 py-2 rounded-lg border border-gray-200 dark:border-gray-600 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+                className="px-4 py-2 rounded-lg border border-gray-200 dark:border-gray-600 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors cursor-pointer"
               >
                 {showSolution ? "Hide Solution" : "Show Solution"}
               </button>
@@ -374,7 +375,7 @@ export default function Permutation({ data }: { data: PermutationData }) {
               <button
                 onClick={handleSubmit}
                 disabled={submitted || !allFilled}
-                className="px-4 py-2 rounded-lg bg-indigo-600 text-sm text-white hover:bg-indigo-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                className="px-4 py-2 rounded-lg bg-indigo-600 text-sm text-white hover:bg-indigo-700 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
               >
                 Submit
               </button>

@@ -291,7 +291,7 @@ export default function Quiz({ data }: { data: QuizData }) {
           <button
             onClick={handleReset}
             aria-label="Reset"
-            className="text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300 transition-colors p-1 rounded"
+            className="text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300 transition-colors p-1 rounded cursor-pointer"
           >
             <ResetIcon />
           </button>
@@ -302,7 +302,7 @@ export default function Quiz({ data }: { data: QuizData }) {
               onClick={handlePrev}
               disabled={!canGoPrev}
               aria-label="Previous question"
-              className="p-1 rounded text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+              className="p-1 rounded text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300 cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
             >
               <ChevronLeft />
             </button>
@@ -313,7 +313,7 @@ export default function Quiz({ data }: { data: QuizData }) {
               onClick={handleNext}
               disabled={!canGoNext}
               aria-label="Next question"
-              className="p-1 rounded text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+              className="p-1 rounded text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300 cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
             >
               <ChevronRight />
             </button>
@@ -324,14 +324,14 @@ export default function Quiz({ data }: { data: QuizData }) {
             <button
               onClick={handleSubmit}
               disabled={state.selected.length === 0}
-              className="px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded hover:bg-indigo-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              className="px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded hover:bg-indigo-700 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
             >
               Submit Answer
             </button>
           ) : canGoNext ? (
             <button
               onClick={handleNext}
-              className="px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded hover:bg-indigo-700 transition-colors"
+              className="px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded hover:bg-indigo-700 transition-colors cursor-pointer"
             >
               Next Question
             </button>
@@ -348,14 +348,14 @@ export default function Quiz({ data }: { data: QuizData }) {
           <button
             onClick={() => setHelpful(helpful === "up" ? null : "up")}
             aria-label="Thumbs up"
-            className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+            className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors cursor-pointer"
           >
             <ThumbsUp active={helpful === "up"} />
           </button>
           <button
             onClick={() => setHelpful(helpful === "down" ? null : "down")}
             aria-label="Thumbs down"
-            className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+            className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors cursor-pointer"
           >
             <ThumbsDown active={helpful === "down"} />
           </button>

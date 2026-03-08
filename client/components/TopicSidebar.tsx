@@ -23,6 +23,8 @@ interface TopicSidebarProps {
     courseTitle: string;
     toc: Category[];
     currentTopicIndex: number;
+    asideClassName?: string;
+    onClose?: () => void;
 }
 
 export default function TopicSidebar({
@@ -31,6 +33,8 @@ export default function TopicSidebar({
     courseTitle,
     toc,
     currentTopicIndex,
+    asideClassName,
+    onClose,
 }: TopicSidebarProps) {
     const activeRef = useRef<HTMLAnchorElement>(null);
 
@@ -41,15 +45,18 @@ export default function TopicSidebar({
     }, [currentTopicIndex]);
 
     return (
-        <aside className="w-72 shrink-0 hidden lg:flex flex-col">
+        <aside className={asideClassName ?? "w-72 shrink-0 hidden lg:flex flex-col"}>
             <div className="sticky top-0 h-screen flex flex-col overflow-hidden">
                 {/* Sidebar header */}
                 <div className="px-4 py-4 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 shrink-0">
                     <Link
                         href={`/edu-viewer/courses/${courseId}/${courseSlug}`}
-                        className="text-xs text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300 flex items-center gap-1 mb-2 font-medium"
+                        className="inline-flex items-center gap-1.5 text-xs font-medium text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/20 hover:bg-indigo-100 dark:hover:bg-indigo-900/40 hover:text-indigo-800 dark:hover:text-indigo-200 px-3 py-1 rounded-full border border-indigo-200 dark:border-indigo-800 transition-all mb-2"
                     >
-                        ← Back to Course
+                        <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+                        </svg>
+                        Back to Course
                     </Link>
                     <p className="text-sm font-semibold text-gray-800 dark:text-gray-100 leading-snug line-clamp-2">
                         {courseTitle}
@@ -77,6 +84,7 @@ export default function TopicSidebar({
                                                 <Link
                                                     ref={isActive ? activeRef : null}
                                                     href={`/edu-viewer/courses/${courseId}/${courseSlug}/topics/${topic.index}/${topic.slug}`}
+                                                    onClick={onClose}
                                                     className={[
                                                         "flex items-start gap-3 px-4 py-2.5 text-sm transition-colors border-b border-gray-50 dark:border-gray-800",
                                                         isActive

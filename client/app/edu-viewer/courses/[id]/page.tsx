@@ -65,9 +65,12 @@ export default async function CourseDetailPage({
           <div>
             <Link
               href="/edu-viewer/courses"
-              className="text-xs text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300 inline-flex items-center gap-1 mb-1 font-medium"
+              className="inline-flex items-center gap-1.5 text-xs font-medium text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/20 hover:bg-indigo-100 dark:hover:bg-indigo-900/40 hover:text-indigo-800 dark:hover:text-indigo-200 px-3 py-1 rounded-full border border-indigo-200 dark:border-indigo-800 transition-all mb-2"
             >
-              ← All Courses
+              <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+              </svg>
+              All Courses
             </Link>
             <div className="flex items-center gap-2 flex-wrap">
               <span className="inline-block text-xs font-semibold bg-indigo-100 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300 px-2.5 py-0.5 rounded-full">

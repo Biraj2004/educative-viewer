@@ -50,7 +50,7 @@ export default function SpoilerEditor({ data }: { data: SpoilerEditorData }) {
       <div className="max-w-6xl mx-auto px-6 py-2 flex justify-center">
         <button
           onClick={() => setOpen(true)}
-          className="inline-flex items-center gap-2 px-4 py-2 rounded border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 text-sm font-medium shadow-sm hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+          className="inline-flex items-center gap-2 px-4 py-2 rounded border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 text-sm font-medium shadow-sm hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors cursor-pointer"
         >
           {data.showIcon && (
             <LightbulbIcon className="w-4 h-4 text-amber-400" />
@@ -72,7 +72,7 @@ export default function SpoilerEditor({ data }: { data: SpoilerEditorData }) {
           <button
             onClick={() => setOpen(false)}
             aria-label={data.hideHintText}
-            className="ml-auto text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors"
+            className="ml-auto text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors cursor-pointer"
           >
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />

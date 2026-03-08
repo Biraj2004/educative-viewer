@@ -84,7 +84,7 @@ export default function EditorCode({ data }: { data: EditorCodeComponentData }) 
             <span className="text-xs font-semibold text-blue-300 bg-blue-900/40 px-2 py-0.5 rounded">
               {langLabel(data.language)}
             </span>
-            <button onClick={handleCopy} title="Copy code" className="text-gray-400 hover:text-white transition-colors">
+            <button onClick={handleCopy} title="Copy code" className="text-gray-400 hover:text-white transition-colors cursor-pointer">
               {copied ? (
                 <svg className="w-4 h-4 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
@@ -98,7 +98,7 @@ export default function EditorCode({ data }: { data: EditorCodeComponentData }) 
             <button
               onClick={() => setWordWrap(w => w === "off" ? "on" : "off")}
               title={wordWrap === "off" ? "Enable word wrap" : "Disable word wrap"}
-              className={`text-xs px-1.5 py-0.5 rounded border transition-colors ${
+              className={`text-xs px-1.5 py-0.5 rounded border transition-colors cursor-pointer ${
                 wordWrap === "on"
                   ? "border-blue-500 text-blue-300 bg-blue-900/40"
                   : "border-gray-600 text-gray-400 hover:text-gray-200 hover:border-gray-400"
@@ -106,7 +106,7 @@ export default function EditorCode({ data }: { data: EditorCodeComponentData }) 
             >
               Wrap
             </button>
-            <button onClick={() => setIsFullscreen(f => !f)} title={isFullscreen ? "Exit fullscreen" : "Fullscreen"} className="text-gray-400 hover:text-white transition-colors">
+            <button onClick={() => setIsFullscreen(f => !f)} title={isFullscreen ? "Exit fullscreen" : "Fullscreen"} className="text-gray-400 hover:text-white transition-colors cursor-pointer">
               {isFullscreen ? (
                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M8 3v4a1 1 0 01-1 1H3m18 0h-4a1 1 0 01-1-1V3m0 18v-4a1 1 0 011-1h4M3 16h4a1 1 0 011 1v4" />

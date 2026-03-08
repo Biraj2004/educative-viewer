@@ -106,6 +106,7 @@ export default function MatchTheAnswers({ data }: { data: MatchTheAnswersData })
     setSelectedLeft(null);
     setSubmitted(false);
     setShowSolution(false);
+    setLines([]);
   }
 
   function handleShowSolution() {
@@ -280,7 +281,7 @@ export default function MatchTheAnswers({ data }: { data: MatchTheAnswersData })
         <div className="px-6 py-4 border-t border-gray-100 dark:border-gray-700 flex items-center justify-between">
           <button
             onClick={handleReset}
-            className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200 transition-colors"
+            className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200 transition-colors cursor-pointer"
           >
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
               <path strokeLinecap="round" strokeLinejoin="round"
@@ -292,14 +293,14 @@ export default function MatchTheAnswers({ data }: { data: MatchTheAnswersData })
           <div className="flex gap-2">
             <button
               onClick={handleShowSolution}
-              className="px-4 py-2 rounded-lg border border-gray-200 dark:border-gray-600 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+              className="px-4 py-2 rounded-lg border border-gray-200 dark:border-gray-600 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors cursor-pointer"
             >
               {showSolution ? "Hide Solution" : "Show Solution"}
             </button>
             <button
               onClick={handleSubmit}
               disabled={submitted || Object.keys(connections).length === 0}
-              className="px-4 py-2 rounded-lg bg-indigo-600 text-sm text-white hover:bg-indigo-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              className="px-4 py-2 rounded-lg bg-indigo-600 text-sm text-white hover:bg-indigo-700 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
             >
               Submit
             </button>

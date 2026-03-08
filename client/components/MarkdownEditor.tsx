@@ -12,9 +12,9 @@ function processHtml(html: string): string {
   return html.replace(
     /<keyword><word>([\s\S]*?)<\/word><meaning>([\s\S]*?)<\/meaning><\/keyword>/g,
     (_match, word, meaning) =>
-      `<span class="relative inline-block group cursor-help">` +
+      `<span class="relative inline-block group cursor-help" tabindex="0">` +
       `<span class="bg-yellow-100 text-yellow-900 font-medium px-0.5 rounded border-b border-yellow-400">${word}</span>` +
-      `<span class="absolute bottom-full left-0 z-10 hidden group-hover:block bg-gray-900 text-white text-xs rounded p-2 w-52 shadow-lg leading-relaxed">${meaning}</span>` +
+      `<span class="absolute bottom-full left-0 z-10 hidden group-hover:block group-focus-within:block bg-gray-900 text-white text-xs rounded p-2 w-52 shadow-lg leading-relaxed">${meaning}</span>` +
       `</span>`
   );
 }

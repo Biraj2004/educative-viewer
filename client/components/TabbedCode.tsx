@@ -80,7 +80,7 @@ export default function TabbedCode({ data }: { data: TabbedCodeData }) {
               <button
                 key={tab.id}
                 onClick={() => setActiveIdx(i)}
-                className={`flex items-center gap-1.5 px-4 py-2.5 text-sm whitespace-nowrap border-r border-gray-700 transition-colors ${
+                className={`flex items-center gap-1.5 px-4 py-2.5 text-sm whitespace-nowrap border-r border-gray-700 transition-colors cursor-pointer ${
                   i === activeIdx
                     ? "bg-[#1e1e1e] text-white font-medium"
                     : "bg-[#2d2d2d] text-gray-400 hover:text-gray-200"
@@ -94,7 +94,7 @@ export default function TabbedCode({ data }: { data: TabbedCodeData }) {
 
           {/* Right icons: word wrap + copy + fullscreen */}
           <div className="flex items-center gap-3 px-3 text-gray-500 shrink-0 border-l border-gray-700">
-            <button onClick={handleCopy} title="Copy code" className="text-gray-400 hover:text-white transition-colors">
+            <button onClick={handleCopy} title="Copy code" className="text-gray-400 hover:text-white transition-colors cursor-pointer">
               {copied ? (
                 <svg className="w-4 h-4 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
@@ -108,7 +108,7 @@ export default function TabbedCode({ data }: { data: TabbedCodeData }) {
             <button
               onClick={() => setWordWrap(w => w === "off" ? "on" : "off")}
               title={wordWrap === "off" ? "Enable word wrap" : "Disable word wrap"}
-              className={`text-xs px-1.5 py-0.5 rounded border transition-colors ${
+              className={`text-xs px-1.5 py-0.5 rounded border transition-colors cursor-pointer ${
                 wordWrap === "on"
                   ? "border-blue-500 text-blue-300 bg-blue-900/40"
                   : "border-gray-600 text-gray-400 hover:text-gray-200 hover:border-gray-400"
@@ -116,7 +116,7 @@ export default function TabbedCode({ data }: { data: TabbedCodeData }) {
             >
               Wrap
             </button>
-            <button onClick={() => setIsFullscreen(f => !f)} title={isFullscreen ? "Exit fullscreen" : "Fullscreen"} className="text-gray-400 hover:text-white transition-colors">
+            <button onClick={() => setIsFullscreen(f => !f)} title={isFullscreen ? "Exit fullscreen" : "Fullscreen"} className="text-gray-400 hover:text-white transition-colors cursor-pointer">
               {isFullscreen ? (
                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M8 3v4a1 1 0 01-1 1H3m18 0h-4a1 1 0 01-1-1V3m0 18v-4a1 1 0 011-1h4M3 16h4a1 1 0 011 1v4" />

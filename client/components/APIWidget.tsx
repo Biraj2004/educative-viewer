@@ -175,7 +175,7 @@ export default function APIWidget({ data }: { data: ApiWidgetData }) {
               <button
                 key={item.id}
                 onClick={() => handleSelect(item)}
-                className={`w-full text-left px-4 py-2.5 text-sm transition-colors truncate ${
+                className={`w-full text-left px-4 py-2.5 text-sm transition-colors truncate cursor-pointer ${
                   item.id === selectedId
                     ? "bg-indigo-50 text-indigo-600 font-medium"
                     : "text-gray-600 hover:bg-gray-100"
@@ -211,7 +211,7 @@ export default function APIWidget({ data }: { data: ApiWidgetData }) {
             <button
               onClick={handleSend}
               disabled={loading}
-              className="shrink-0 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 text-white text-sm font-semibold px-5 py-1.5 rounded transition-colors flex items-center gap-1.5"
+              className="shrink-0 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 text-white text-sm font-semibold px-5 py-1.5 rounded transition-colors flex items-center gap-1.5 cursor-pointer"
             >
               {loading ? (
                 <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
@@ -228,7 +228,7 @@ export default function APIWidget({ data }: { data: ApiWidgetData }) {
               <button
                 key={tab}
                 onClick={() => setActiveTab(tab)}
-                className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
+                className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors cursor-pointer ${
                   activeTab === tab
                     ? "border-indigo-600 text-gray-900 font-semibold"
                     : "border-transparent text-gray-500 hover:text-gray-700"

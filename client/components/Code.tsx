@@ -87,7 +87,7 @@ export default function Code({ data }: { data: CodeComponentData }) {
   const [copied, setCopied] = useState(false);
   const [wordWrap, setWordWrap] = useState<"off" | "on">("off");
   const [isFullscreen, setIsFullscreen] = useState(false);
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   const activeFile = allFiles[selectedIdx];
   const lineCount = activeFile.content.split("\n").length;
@@ -124,7 +124,7 @@ export default function Code({ data }: { data: CodeComponentData }) {
                 </svg>
                 <span className="text-xs font-semibold text-gray-700 dark:text-gray-300">Files</span>
               </div>
-              <button onClick={() => setSidebarOpen(false)} title="Collapse" className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors">
+              <button onClick={() => setSidebarOpen(false)} title="Collapse" className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors cursor-pointer">
                 <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
                 </svg>
@@ -154,11 +154,11 @@ export default function Code({ data }: { data: CodeComponentData }) {
           {/* Tab / header bar */}
           <div className="flex items-center justify-between bg-white dark:bg-[#0f172a] border-b border-gray-200 dark:border-gray-700 px-3 py-2 shrink-0">
             <div className="flex items-center gap-2">
-              {/* Reopen sidebar */}
-              {hasSidebar && !sidebarOpen && (
-                <button onClick={() => setSidebarOpen(true)} title="Show files" className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors mr-1">
-                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+              {/* Hamburger — toggle sidebar */}
+              {hasSidebar && (
+                <button onClick={() => setSidebarOpen(o => !o)} title={sidebarOpen ? "Hide files" : "Show files"} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors mr-1 cursor-pointer">
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
                   </svg>
                 </button>
               )}
@@ -176,7 +176,7 @@ export default function Code({ data }: { data: CodeComponentData }) {
               </div>
               <div className="w-px h-4 bg-gray-200 dark:bg-gray-700" />
               {/* Copy */}
-              <button onClick={handleCopy} title="Copy code" className="text-gray-400 hover:text-gray-700 dark:hover:text-gray-100 transition-colors">
+              <button onClick={handleCopy} title="Copy code" className="text-gray-400 hover:text-gray-700 dark:hover:text-gray-100 transition-colors cursor-pointer">
                 {copied ? (
                   <svg className="w-4 h-4 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
@@ -190,7 +190,7 @@ export default function Code({ data }: { data: CodeComponentData }) {
               {/* Word wrap */}
               <button
                 onClick={() => setWordWrap(w => w === "off" ? "on" : "off")}
-                className={`text-xs px-1.5 py-0.5 rounded border transition-colors ${
+                className={`text-xs px-1.5 py-0.5 rounded border transition-colors cursor-pointer ${
                   wordWrap === "on"
                     ? "border-blue-500 text-blue-600 dark:text-blue-300 bg-blue-50 dark:bg-blue-900/30"
                     : "border-gray-300 dark:border-gray-600 text-gray-500 dark:text-gray-400 hover:border-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
@@ -199,7 +199,7 @@ export default function Code({ data }: { data: CodeComponentData }) {
                 Wrap
               </button>
               {/* Fullscreen */}
-              <button onClick={() => setIsFullscreen(f => !f)} title={isFullscreen ? "Exit fullscreen" : "Fullscreen"} className="text-gray-400 hover:text-gray-700 dark:hover:text-gray-100 transition-colors">
+              <button onClick={() => setIsFullscreen(f => !f)} title={isFullscreen ? "Exit fullscreen" : "Fullscreen"} className="text-gray-400 hover:text-gray-700 dark:hover:text-gray-100 transition-colors cursor-pointer">
                 {isFullscreen ? (
                   <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M8 3v4a1 1 0 01-1 1H3m18 0h-4a1 1 0 01-1-1V3m0 18v-4a1 1 0 011-1h4M3 16h4a1 1 0 011 1v4" />
