@@ -26,6 +26,7 @@ const NEXT_DIR    = path.join(ROOT, '.next');
 const CHUNKS_DIR  = path.join(NEXT_DIR, 'static', 'chunks');
 const ZIP_PATH    = path.join(ROOT, '.next.zip');
 const ENV_PATH    = path.join(ROOT, '.env.local');
+const REPOS_PATH  = path.join(ROOT, '.gh-repos.json');
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -240,33 +241,137 @@ async function stepStartLocal(rl) {
   runServer();
 }
 
+// ─── Repo store ──────────────────────────────────────────────────────────────
+
+function loadRepos() {
+  if (!fs.existsSync(REPOS_PATH)) return [];
+  try { return JSON.parse(fs.readFileSync(REPOS_PATH, 'utf8')); } catch { return []; }
+}
+
+function saveRepos(repos) {
+  fs.writeFileSync(REPOS_PATH, JSON.stringify(repos, null, 2) + '\n', 'utf8');
+}
+
+/** Add/remove repos from the saved list. */
+async function stepManageRepos(rl) {
+  header('Manage GitHub Repos');
+
+  // eslint-disable-next-line no-constant-condition
+  while (true) {
+    const repos = loadRepos();
+
+    if (repos.length === 0) {
+      console.log('  [!] No saved repos.\n');
+    } else {
+      console.log('  Saved repos:');
+      repos.forEach((r, i) => console.log(`    ${i + 1}) ${r}`));
+    }
+    console.log('');
+    console.log('  a) Add new repo');
+    if (repos.length > 0) console.log('  r) Remove a repo');
+    console.log('  q) Done');
+    console.log('');
+
+    const choice = (await ask(rl, `  Choose [a${repos.length ? '|r' : ''}|q]: `)).trim().toLowerCase();
+
+    if (choice === 'a') {
+      let newRepo = '';
+      // eslint-disable-next-line no-constant-condition
+      while (true) {
+        newRepo = (await ask(rl, '  Enter repo as owner/repo (e.g. anilabhadatta/educative-viewer): ')).trim();
+        if (/^[\w.-]+\/[\w.-]+$/.test(newRepo)) break;
+        console.log('  [!] Invalid format. Use owner/repo.');
+      }
+      if (!repos.includes(newRepo)) {
+        repos.push(newRepo);
+        saveRepos(repos);
+        console.log(`  [+] Saved: ${newRepo}`);
+      } else {
+        console.log('  [!] Already in list.');
+      }
+
+    } else if (choice === 'r' && repos.length > 0) {
+      const idx = (await ask(rl, `  Remove repo number [1-${repos.length}]: `)).trim();
+      const n = parseInt(idx, 10);
+      if (n >= 1 && n <= repos.length) {
+        const removed = repos.splice(n - 1, 1)[0];
+        saveRepos(repos);
+        console.log(`  [-] Removed: ${removed}`);
+      } else {
+        console.log('  [!] Invalid number.');
+      }
+
+    } else if (choice === 'q') {
+      break;
+    } else {
+      console.log('  [!] Invalid choice.');
+    }
+  }
+}
+
+/**
+ * Ensure at least one repo is saved; if none exist, prompt to add one.
+ * Returns the full list of repos to upload to.
+ */
+async function ensureRepos(rl) {
+  let repos = loadRepos();
+  if (repos.length === 0) {
+    console.log('\n  [!] No saved repos. Add at least one to continue.');
+    let newRepo = '';
+    // eslint-disable-next-line no-constant-condition
+    while (true) {
+      newRepo = (await ask(rl, '  Enter repo as owner/repo (e.g. anilabhadatta/educative-viewer): ')).trim();
+      if (/^[\w.-]+\/[\w.-]+$/.test(newRepo)) break;
+      console.log('  [!] Invalid format. Use owner/repo.');
+    }
+    repos.push(newRepo);
+    saveRepos(repos);
+    console.log(`  [+] Saved: ${newRepo}`);
+  }
+  return repos;
+}
+
 async function stepUploadToRelease(rl, tagArg) {
   header('Upload to GitHub Release');
+
+  const repos = await ensureRepos(rl);
+  console.log(`\n  [*] Will upload to ${repos.length} repo(s): ${repos.join(', ')}`);
 
   const tag = tagArg || (await ask(rl, 'Release tag to upload to (e.g. v1.0.0): ')).trim();
   if (!tag) { console.error('[ERROR] Tag is required.'); process.exit(1); }
 
-  run(`gh release upload "${tag}" "${ZIP_PATH}" --clobber`);
-  console.log(`[+] Uploaded .next.zip to release ${tag}`);
+  for (const repo of repos) {
+    console.log(`\n  [→] Uploading to ${repo} ...`);
+    run(`gh release upload "${tag}" "${ZIP_PATH}" --clobber --repo "${repo}"`);
+    console.log(`  [+] Uploaded to ${repo} @ ${tag}`);
+  }
+  console.log(`\n[✓] Upload complete to all ${repos.length} repo(s).`);
 }
 
 async function stepCreateRelease(rl, tagArg) {
   header('Create GitHub Release');
 
-  // Suggest next patch version from latest tag
-  const latest = runCapture('gh release list --limit 1') || '';
-  const latestTag = latest.trim().split(/\s+/)[0] || '';
-  console.log(latestTag ? `[+] Latest release: ${latestTag}` : '[!] No existing releases found.');
+  const repos = await ensureRepos(rl);
+  console.log(`\n  [*] Will create release in ${repos.length} repo(s): ${repos.join(', ')}`);
 
-  const tag   = tagArg || (await ask(rl, `New release tag${latestTag ? ` (latest is ${latestTag})` : ''}: `)).trim();
+  // Use first repo to suggest a latest tag
+  const latest = runCapture(`gh release list --limit 1 --repo "${repos[0]}"`) || '';
+  const latestTag = latest.trim().split(/\s+/)[0] || '';
+  if (latestTag) console.log(`  [+] Latest release in ${repos[0]}: ${latestTag}`);
+
+  const tag     = tagArg || (await ask(rl, `New release tag${latestTag ? ` (latest is ${latestTag})` : ''}: `)).trim();
   if (!tag) { console.error('[ERROR] Tag is required.'); process.exit(1); }
 
   const titleIn = (await ask(rl, `Release title [${tag}]: `)).trim();
   const notes   = (await ask(rl, 'Release notes (leave blank for none): ')).trim();
   const title   = titleIn || tag;
 
-  run(`gh release create "${tag}" "${ZIP_PATH}" --title "${title}" --notes "${notes}" --target main`);
-  console.log(`[+] Release ${tag} created.`);
+  for (const repo of repos) {
+    console.log(`\n  [→] Creating release in ${repo} ...`);
+    run(`gh release create "${tag}" "${ZIP_PATH}" --title "${title}" --notes "${notes}" --target main --repo "${repo}"`);
+    console.log(`  [+] Release ${tag} created in ${repo}`);
+  }
+  console.log(`\n[✓] Release created in all ${repos.length} repo(s).`);
 }
 
 // ─── Main flows ──────────────────────────────────────────────────────────────
@@ -282,7 +387,8 @@ async function flowBuildOnly() {
 async function flowBuildNoObfuscate() {
   stepClean();
   stepBuild();
-  console.log('\n[\u2713] Build complete (no obfuscation).');
+  stepZip();
+  console.log('\n[\u2713] Build complete (no obfuscation). .next.zip is ready to upload.');
 }
 
 async function flowLocal(rl) {
@@ -325,14 +431,15 @@ async function interactiveMenu(rl) {
   console.log('  2) Full build + obfuscate + zip + upload to existing release');
   console.log('  3) Build + obfuscate + zip only (no upload)');
   console.log('  4) Build + obfuscate + run local server');
-  console.log('  5) Build only (no obfuscation, no zip)');
+  console.log('  5) Build only (no obfuscation) + zip');
   console.log('  6) Run local server (use existing .next folder)');
   console.log('  7) Upload existing .next.zip to existing release');
   console.log('  8) Upload existing .next.zip as new release');
+  console.log('  9) Manage saved GitHub repos');
   console.log('  0) Exit');
   console.log('');
 
-  const choice = (await ask(rl, 'Choose [0-8]: ')).trim();
+  const choice = (await ask(rl, 'Choose [0-9]: ')).trim();
 
   switch (choice) {
     case '1':
@@ -368,6 +475,9 @@ async function interactiveMenu(rl) {
       break;
     case '8':
       await stepCreateRelease(rl);
+      break;
+    case '9':
+      await stepManageRepos(rl);
       break;
     case '0':
       console.log('Bye.');

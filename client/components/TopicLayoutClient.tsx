@@ -132,17 +132,7 @@ export default function TopicLayoutClient({ courseId, slug, course, topic }: Pro
       {/* Main content — natural page scroll */}
       <main className="flex-1 min-w-0">
 
-        {/* Non-sticky topic sub-header */}
-        <div className="px-6 py-4 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700">
-          <h1 className="text-lg font-bold text-gray-900 dark:text-gray-100">
-            {topic.topic_name}
-          </h1>
-          <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">
-            Lesson {topic.topic_index + 1}
-          </p>
-        </div>
-
-        {/* Components */}
+          {/* Components */}
         <div className="max-w-6xl mx-auto px-6 py-8 space-y-6">
           {topic.components.map((comp, i) => {
             const renderer = getRenderer(comp.type);
