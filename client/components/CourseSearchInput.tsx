@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useRef, useTransition } from "react";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 
 function SearchIcon() {
@@ -41,6 +41,9 @@ interface Props {
   placeholder?: string;
   totalCount?: number;
   filteredCount?: number;
+  /** Controlled mode: provide value + onChange to handle filtering client-side (no URL updates) */
+  value?: string;
+  onChange?: (val: string) => void;
 }
 
 export default function CourseSearchInput({
@@ -48,24 +51,39 @@ export default function CourseSearchInput({
   placeholder = "Search courses…",
   totalCount,
   filteredCount,
+  value: controlledValue,
+  onChange: controlledOnChange,
 }: Props) {
+  const isControlled = controlledOnChange !== undefined;
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const [value, setValue] = useState(initialValue);
+  const [internalValue, setInternalValue] = useState(initialValue);
   const [, startTransition] = useTransition();
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const value = isControlled ? (controlledValue ?? "") : internalValue;
 
   function update(val: string) {
-    setValue(val);
-    const params = new URLSearchParams(searchParams.toString());
-    if (val.trim()) {
-      params.set("q", val);
-    } else {
-      params.delete("q");
+    if (isControlled) {
+      // Controlled mode: just update parent state, no server round-trip
+      controlledOnChange(val);
+      return;
     }
-    startTransition(() => {
-      router.replace(`${pathname}?${params.toString()}`);
-    });
+    // Uncontrolled mode: debounce URL updates to avoid an invocation per keystroke
+    setInternalValue(val);
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      const params = new URLSearchParams(searchParams.toString());
+      if (val.trim()) {
+        params.set("q", val);
+      } else {
+        params.delete("q");
+      }
+      startTransition(() => {
+        router.replace(`${pathname}?${params.toString()}`);
+      });
+    }, 400);
   }
 
   const isFiltered = value.trim().length > 0;
