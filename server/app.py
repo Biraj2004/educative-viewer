@@ -5,10 +5,10 @@ Simple Flask API server for the Educative scraper database.
 
 Endpoints  (all POST, params via JSON body)
 ---------
-POST /courses                   → list of all courses  body: {}
-POST /course                    → toc for a course     body: {"course_id": 1}
-POST /topic                     → topic components     body: {"course_id": 1, "topic_index": 3}
-POST /notify                    → trigger Next.js cache revalidation
+GET  /api/courses               → list of all courses  body: {}
+POST /api/course-details        → toc for a course     body: {"course_id": 1}
+POST /api/topic-details         → topic components     body: {"course_id": 1, "topic_index": 3}
+POST /api/notify                → trigger Next.js cache revalidation
                                   body: {"tag": "courses"} or {"course_id": 1} or {"course_id": 1, "topic_index": 3}
                                   optional: {"secret": "..."}  (falls back to NOTIFY_SECRET env var)
 
@@ -184,7 +184,7 @@ def _require_service_token():
 
 # ── API 1: GET /courses ──────────────────────────────────────────────────── #
 
-@app.route("/courses", methods=["GET"])
+@app.route("/api/courses", methods=["GET"])
 def get_all_courses():
     """Return all courses: id, slug, title, type.  Body: {} (no fields required)"""
     _require_service_token()
@@ -200,7 +200,7 @@ def get_all_courses():
 
 # ── API 2: POST /course-details ─────────────────────────────────────────── #
 
-@app.route("/course-details", methods=["POST"])
+@app.route("/api/course-details", methods=["POST"])
 def get_course_data():
     """Return toc_json for a course.  Body: {"course_id": <int>}"""
     _require_service_token()
@@ -227,7 +227,7 @@ def get_course_data():
 
 # ── API 3: POST /topic-details ──────────────────────────────────────────── #
 
-@app.route("/topic-details", methods=["POST"])
+@app.route("/api/topic-details", methods=["POST"])
 def get_topic_data():
     """Return all components for a topic, combined in order.
     Body: {"course_id": <int>, "topic_index": <int>}
@@ -328,7 +328,7 @@ def notify_courses_list():
 
 # ── POST /notify ────────────────────────────────────────────────────────── #
 
-@app.route("/notify", methods=["POST"])
+@app.route("/api/notify", methods=["POST"])
 def notify():
     """
     Trigger Next.js cache revalidation.
@@ -921,7 +921,7 @@ def _json_error(e):
 
 # ── POST /auth/signup ───────────────────────────────────────────────────── #
 
-@app.route("/auth/signup", methods=["POST"])
+@app.route("/api/auth/signup", methods=["POST"])
 def auth_signup():
     data     = request.get_json(force=True, silent=True) or {}
     email    = str(data.get("email", "")).strip().lower()
@@ -978,7 +978,7 @@ def auth_signup():
 
 # ── POST /auth/login ────────────────────────────────────────────────────── #
 
-@app.route("/auth/login", methods=["POST"])
+@app.route("/api/auth/login", methods=["POST"])
 def auth_login():
     data     = request.get_json(force=True, silent=True) or {}
     email    = str(data.get("email", "")).strip().lower()
@@ -1038,7 +1038,7 @@ def auth_login():
 
 # ── GET /auth/me ────────────────────────────────────────────────────────── #
 
-@app.route("/auth/me", methods=["GET"])
+@app.route("/api/auth/me", methods=["GET"])
 def auth_me():
     user, _ = _resolve_user(require_full=True)
     if not user:
@@ -1052,7 +1052,7 @@ def auth_me():
 
 # ── GET /auth/2fa/setup ─────────────────────────────────────────────────── #
 
-@app.route("/auth/2fa/setup", methods=["GET"])
+@app.route("/api/auth/2fa/setup", methods=["GET"])
 def auth_2fa_setup():
     user, _ = _resolve_user(require_full=False)
     if not user:
@@ -1086,7 +1086,7 @@ def auth_2fa_setup():
 
 # ── PUT /auth/theme ────────────────────────────────────────────────────────── #
 
-@app.route("/auth/theme", methods=["PUT"])
+@app.route("/api/auth/theme", methods=["PUT"])
 def auth_set_theme():
     """Persist the user's preferred theme ('light' | 'dark') server-side."""
     user, _ = _resolve_user(require_full=True)
@@ -1114,7 +1114,7 @@ def auth_set_theme():
 
 # ── POST /auth/progress/topic ────────────────────────────────────────────── #
 
-@app.route("/auth/progress/topic", methods=["POST"])
+@app.route("/api/auth/progress/topic", methods=["POST"])
 def auth_progress_topic():
     """Record that a user visited (and optionally completed) a topic.
 
@@ -1163,15 +1163,6 @@ def auth_progress_topic():
                     "now":         now,
                 },
             )
-        # Also keep the course-level timestamp current for all rows in this course
-        with conn.cursor() as cur:
-            cur.execute(
-                """
-                UPDATE user_progress SET last_visited_course_at = :now
-                WHERE user_id = :user_id AND course_id = :course_id
-                """,
-                {"now": now, "user_id": user["id"], "course_id": int(course_id)},
-            )
         conn.commit()
     finally:
         conn.close()
@@ -1181,7 +1172,7 @@ def auth_progress_topic():
 
 # ── GET /auth/progress ───────────────────────────────────────────────────── #
 
-@app.route("/auth/progress", methods=["GET"])
+@app.route("/api/auth/progress", methods=["GET"])
 def auth_get_progress():
     """Return compact progress for the authenticated user.
     Shape: {course_order: [id,...], completed: {"course_id": [topic_idx,...]}}
@@ -1199,7 +1190,7 @@ def auth_get_progress():
 
 # ── POST /auth/signup/rollback ───────────────────────────────────────────── #
 
-@app.route("/auth/signup/rollback", methods=["POST"])
+@app.route("/api/auth/signup/rollback", methods=["POST"])
 def auth_signup_rollback():
     """Delete an account created during signup if 2FA setup was never completed.
     Only deletes the account when two_factor_confirmed = 0 (i.e. partial signup).
@@ -1243,7 +1234,7 @@ def auth_signup_rollback():
 
 # ── POST /auth/2fa/enable ───────────────────────────────────────────────── #
 
-@app.route("/auth/2fa/enable", methods=["POST"])
+@app.route("/api/auth/2fa/enable", methods=["POST"])
 def auth_2fa_enable():
     """Verify TOTP code and mark 2FA as active. Called after scanning QR during signup."""
     user, _ = _resolve_user(require_full=False)
@@ -1300,7 +1291,7 @@ def auth_2fa_enable():
 
 # ── POST /auth/2fa/verify ──────────────────────────────────────────────────── #
 
-@app.route("/auth/2fa/verify", methods=["POST"])
+@app.route("/api/auth/2fa/verify", methods=["POST"])
 def auth_2fa_verify():
     """Verify TOTP code during login when 2FA is already configured."""
     user, _ = _resolve_user(require_full=False)

@@ -23,7 +23,7 @@ async function validateSession(): Promise<boolean> {
 
   const base = process.env.BACKEND_API_BASE ?? "";
   try {
-    const res = await fetch(`${base}/auth/me`, {
+    const res = await fetch(`${base}/api/auth/me`, {
       headers: { Authorization: `Bearer ${token}` },
       cache: "no-store",
     });

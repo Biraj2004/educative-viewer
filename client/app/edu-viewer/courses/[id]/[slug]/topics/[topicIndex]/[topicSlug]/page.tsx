@@ -57,7 +57,7 @@ async function fetchTopicDetail(
     const base = process.env.BACKEND_API_BASE ?? "";
     const isProd = process.env.VERCEL_ENV === "production";
     const serviceToken = await makeServiceToken();
-    const res = await fetch(`${base}/topic-details`, {
+    const res = await fetch(`${base}/api/topic-details`, {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${serviceToken}` },
       body: JSON.stringify({ course_id: courseId, topic_index: topicIndex }),
@@ -75,7 +75,7 @@ async function fetchCourseDetail(courseId: number): Promise<CourseDetail | null>
     const base = process.env.BACKEND_API_BASE ?? "";
     const isProd = process.env.NODE_ENV === "production";
     const serviceToken = await makeServiceToken();
-    const res = await fetch(`${base}/course-details`, {
+    const res = await fetch(`${base}/api/course-details`, {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${serviceToken}` },
       body: JSON.stringify({ course_id: courseId }),
@@ -93,7 +93,7 @@ async function fetchProgress(token: string | undefined): Promise<ProgressData> {
   if (!token) return empty;
   try {
     const base = process.env.BACKEND_API_BASE ?? "";
-    const res = await fetch(`${base}/auth/progress`, {
+    const res = await fetch(`${base}/api/auth/progress`, {
       headers: { Authorization: `Bearer ${token}` },
       cache: "no-store",
     });

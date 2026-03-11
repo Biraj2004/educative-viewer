@@ -10,7 +10,7 @@ const BACKEND = process.env.BACKEND_API_BASE ?? "";
 export async function POST(request: NextRequest) {
   const token = request.cookies.get(AUTH_COOKIE)?.value;
 
-  const res = await fetch(`${BACKEND}/auth/signup/rollback`, {
+  const res = await fetch(`${BACKEND}/api/auth/signup/rollback`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",

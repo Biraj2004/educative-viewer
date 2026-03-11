@@ -8,7 +8,7 @@ const COOKIE_MAX_AGE = 60 * 60 * 24 * 7; // 7 days
 
 export async function POST(request: NextRequest) {
   const body = await request.json().catch(() => ({}));
-  const res = await fetch(`${BACKEND}/auth/signup`, {
+  const res = await fetch(`${BACKEND}/api/auth/signup`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),

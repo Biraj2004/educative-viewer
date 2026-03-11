@@ -31,7 +31,7 @@ async function fetchCourses(): Promise<Course[]> {
   const base = process.env.BACKEND_API_BASE ?? "";
   const isProd = process.env.VERCEL_ENV === "production";
   const serviceToken = await makeServiceToken();
-  const res = await fetch(`${base}/courses`, {
+  const res = await fetch(`${base}/api/courses`, {
     headers: { Authorization: `Bearer ${serviceToken}` },
     ...(isProd ? { next: { revalidate: 3600, tags: ["courses"] } } : { cache: "no-store" }),
   } as RequestInit);
@@ -48,7 +48,7 @@ async function fetchProgress(token: string | undefined): Promise<ProgressData> {
   if (!token) return empty;
   const base = process.env.BACKEND_API_BASE ?? "";
   try {
-    const res = await fetch(`${base}/auth/progress`, {
+    const res = await fetch(`${base}/api/auth/progress`, {
       headers: { Authorization: `Bearer ${token}` },
       cache: "no-store",
     });

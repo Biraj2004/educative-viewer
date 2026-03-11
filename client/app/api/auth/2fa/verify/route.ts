@@ -13,7 +13,7 @@ export async function POST(request: NextRequest) {
   const headers: Record<string, string> = { "Content-Type": "application/json" };
   if (token) headers["Authorization"] = `Bearer ${token}`;
 
-  const res = await fetch(`${BACKEND}/auth/2fa/verify`, {
+  const res = await fetch(`${BACKEND}/api/auth/2fa/verify`, {
     method: "POST",
     headers,
     body: JSON.stringify(body),

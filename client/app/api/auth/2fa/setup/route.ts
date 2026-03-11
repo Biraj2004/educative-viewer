@@ -9,7 +9,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
   }
 
-  const res = await fetch(`${BACKEND}/auth/2fa/setup`, {
+  const res = await fetch(`${BACKEND}/api/auth/2fa/setup`, {
     headers: { Authorization: `Bearer ${token}` },
   });
 

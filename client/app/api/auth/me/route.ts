@@ -28,7 +28,7 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  const res = await fetch(`${BACKEND}/auth/me`, {
+  const res = await fetch(`${BACKEND}/api/auth/me`, {
     headers: { Authorization: `Bearer ${token}` },
   });
 

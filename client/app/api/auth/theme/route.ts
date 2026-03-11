@@ -14,7 +14,7 @@ export async function PUT(request: NextRequest) {
 
   const body = await request.json().catch(() => ({}));
 
-  const res = await fetch(`${BACKEND}/auth/theme`, {
+  const res = await fetch(`${BACKEND}/api/auth/theme`, {
     method: "PUT",
     headers: {
       "Content-Type": "application/json",
