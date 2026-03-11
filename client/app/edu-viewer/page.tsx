@@ -1,6 +1,10 @@
+"use client";
+
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import AppNavbar from "@/components/AppNavbar";
 import UserMenu from "@/components/UserMenu";
+import { getAuthToken } from "@/utils/authClient";
 
 // ─── Section data ─────────────────────────────────────────────────────────────
 
@@ -99,6 +103,18 @@ function IconArrow() {
 }
 
 export default function EduViewerHome() {
+  const [ready, setReady] = useState(false);
+
+  useEffect(() => {
+    if (!getAuthToken()) {
+      window.location.replace("/");
+    } else {
+      setReady(true);
+    }
+  }, []);
+
+  if (!ready) return null;
+
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
       <AppNavbar backHref="/" backLabel="Home" actions={<UserMenu />} />

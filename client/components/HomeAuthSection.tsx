@@ -16,26 +16,29 @@
 
 import { createContext, useContext, useEffect, useState } from "react";
 import Link from "next/link";
+import { getUser, clearAuthToken } from "@/utils/authClient";
 
 // ─── Auth context shared across all auth-sensitive spots on the page ──────────
 
 const HomeAuthCtx = createContext<boolean | null>(null); // null = still loading
 
 export function HomeAuthProvider({
-  initialIsAuthed,
   children,
 }: {
-  initialIsAuthed: boolean;
+  initialIsAuthed?: boolean; // kept for API compat, ignored — token is in localStorage
   children: React.ReactNode;
 }) {
-  // Initialise from SSR value so there is no flash on first load.
-  // The useEffect will immediately correct it if the router-cache was stale.
-  const [isAuthed, setIsAuthed] = useState<boolean | null>(initialIsAuthed);
+  // Start as null (loading) so we never flash "Sign In" for an authenticated user.
+  const [isAuthed, setIsAuthed] = useState<boolean | null>(null);
 
   useEffect(() => {
-    fetch("/api/auth/me", { credentials: "include" })
-      .then((r) => setIsAuthed(r.ok))
-      .catch(() => setIsAuthed(false));
+    getUser()
+      .then(() => setIsAuthed(true))
+      .catch((err) => {
+        // If the token was revoked (session superseded), clear stale token.
+        if (err?.status === 401) clearAuthToken();
+        setIsAuthed(false);
+      });
   }, []);
 
   return (

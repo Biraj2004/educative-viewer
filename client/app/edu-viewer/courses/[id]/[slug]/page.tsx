@@ -6,7 +6,7 @@ import { notFound } from "next/navigation";
 import AppNavbar from "@/components/AppNavbar";
 import CourseDetailToc from "@/components/CourseDetailToc";
 import UserMenu from "@/components/UserMenu";
-import { getAuthToken, getProgress } from "@/utils/authClient";
+import { getAuthToken, clearAuthToken, getProgress } from "@/utils/authClient";
 import type { ProgressData } from "@/utils/authClient";
 
 const BACKEND = (process.env.NEXT_PUBLIC_BACKEND_API_BASE ?? "").replace(/\/$/, "");
@@ -33,6 +33,7 @@ export default function CourseDetailPage() {
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({ course_id: courseId }),
       }).then(async (r) => {
+        if (r.status === 401) throw Object.assign(new Error("Unauthorized"), { status: 401 });
         if (r.status === 404) return null;
         if (!r.ok) throw new Error(`Failed to load course (${r.status})`);
         return r.json() as Promise<CourseDetail>;
@@ -40,19 +41,51 @@ export default function CourseDetailPage() {
       getProgress(),
     ])
       .then(([data, prog]) => {
-        if (!data) { setMissing(true); return; }
+        if (!data) { setMissing(true); setLoading(false); return; }
         setCourse(data);
         setProgress(prog);
+        setLoading(false);
       })
-      .catch(() => setMissing(true))
-      .finally(() => setLoading(false));
+      .catch((err: unknown) => {
+        if (err && (err as { status?: number }).status === 401) {
+          clearAuthToken();
+          window.location.replace("/auth?reason=session_expired");
+          return;
+        }
+        setMissing(true);
+        setLoading(false);
+      });
   }, [courseId]);
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 dark:bg-gray-950 flex items-center justify-center">
-        <div className="w-8 h-8 rounded-full border-2 border-indigo-600 border-t-transparent animate-spin" />
-      </div>
+      <main className="min-h-screen bg-gray-50 dark:bg-gray-950">
+        <AppNavbar
+          crumbs={[{ label: "Courses", href: "/edu-viewer/courses" }, { label: "\u2026" }]}
+          backHref="/edu-viewer/courses"
+          backLabel="Courses"
+          actions={<UserMenu />}
+        />
+        <div className="border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900">
+          <div className="max-w-5xl mx-auto px-6 py-5 space-y-2.5">
+            <div className="h-5 w-14 bg-gray-200 dark:bg-gray-700 rounded-full animate-pulse" />
+            <div className="h-6 bg-gray-200 dark:bg-gray-700 rounded animate-pulse" style={{ width: "55%" }} />
+            <div className="h-4 w-36 bg-gray-200 dark:bg-gray-700 rounded animate-pulse" />
+          </div>
+        </div>
+        <div className="max-w-5xl mx-auto px-6 py-8 space-y-7">
+          {([3,5,2,4] as const).map((count, i) => (
+            <div key={i}>
+              <div className="h-4 w-40 bg-gray-200 dark:bg-gray-700 rounded animate-pulse mb-3" />
+              <div className="space-y-2">
+                {Array.from({ length: count }).map((_, j) => (
+                  <div key={j} className="h-12 bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700 animate-pulse" />
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      </main>
     );
   }
 

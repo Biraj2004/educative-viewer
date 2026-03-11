@@ -1,7 +1,5 @@
 import Link from "next/link";
-import { cookies } from "next/headers";
 import AppNavbar from "@/components/AppNavbar";
-import { getServerUser } from "@/utils/auth";
 import {
   HomeAuthProvider,
   HomeNavSignIn,
@@ -100,13 +98,9 @@ const stats = [
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
-export default async function LandingPage() {
-  const cookieStore = await cookies();
-  const user = await getServerUser(cookieStore);
-  const isAuthed = Boolean(user);
-
+export default function LandingPage() {
   return (
-    <HomeAuthProvider initialIsAuthed={isAuthed}>
+    <HomeAuthProvider>
     <div className="h-screen overflow-y-auto bg-white dark:bg-gray-950 text-gray-900 dark:text-gray-100 no-scrollbar">
 
       {/* ── Nav ─────────────────────────────────────────────────────────── */}

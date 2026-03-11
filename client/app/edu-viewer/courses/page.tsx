@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import AppNavbar from "@/components/AppNavbar";
 import CoursesListClient from "@/components/CoursesListClient";
 import UserMenu from "@/components/UserMenu";
-import { getAuthToken, getProgress } from "@/utils/authClient";
+import { getAuthToken, clearAuthToken, getProgress } from "@/utils/authClient";
 import type { ProgressData } from "@/utils/authClient";
 
 const BACKEND = (process.env.NEXT_PUBLIC_BACKEND_API_BASE ?? "").replace(/\/$/, "");
@@ -34,13 +34,14 @@ export default function CoursesPage() {
   useEffect(() => {
     const token = getAuthToken();
     if (!token) {
-      router.replace("/auth?next=/edu-viewer/courses");
+      window.location.replace("/");
       return;
     }
     Promise.all([
       fetch(`${BACKEND}/api/courses`, {
         headers: { Authorization: `Bearer ${token}` },
       }).then(async (r) => {
+        if (r.status === 401) throw Object.assign(new Error("Unauthorized"), { status: 401 });
         if (!r.ok) throw new Error(`Failed to load courses (${r.status})`);
         const json = await r.json();
         return (Array.isArray(json) ? json : (json.courses ?? json.data ?? [])) as Course[];
@@ -50,15 +51,48 @@ export default function CoursesPage() {
       .then(([data, prog]) => {
         setCourses(data);
         setProgress(prog);
+        setLoading(false);
       })
-      .catch((err) => setError(err instanceof Error ? err.message : "Failed to load courses"))
-      .finally(() => setLoading(false));
+      .catch((err: unknown) => {
+        if (err && (err as { status?: number }).status === 401) {
+          clearAuthToken();
+          window.location.replace("/auth?reason=session_expired");
+          return;
+        }
+        setError(err instanceof Error ? err.message : "Failed to load courses");
+        setLoading(false);
+      });
   }, [router]);
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 dark:bg-gray-950 flex items-center justify-center">
-        <div className="w-8 h-8 rounded-full border-2 border-indigo-600 border-t-transparent animate-spin" />
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
+        <AppNavbar
+          crumbs={[{ label: "Courses" }]}
+          backHref="/edu-viewer"
+          backLabel="Dashboard"
+          actions={<UserMenu />}
+        />
+        <div className="border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900">
+          <div className="max-w-5xl mx-auto px-6 py-5 space-y-2">
+            <div className="h-6 w-28 bg-gray-200 dark:bg-gray-700 rounded animate-pulse" />
+            <div className="h-4 w-20 bg-gray-200 dark:bg-gray-700 rounded animate-pulse" />
+          </div>
+        </div>
+        <div className="max-w-5xl mx-auto px-6 py-6">
+          <div className="h-10 bg-gray-200 dark:bg-gray-700 rounded-xl animate-pulse mb-5" />
+          <div className="space-y-3">
+            {[1,2,3,4,5,6,7,8].map((i) => (
+              <div key={i} className="flex items-center gap-4 p-4 bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700" style={{ opacity: 1 - i * 0.07 }}>
+                <div className="w-11 h-11 rounded-lg bg-gray-200 dark:bg-gray-700 shrink-0 animate-pulse" />
+                <div className="flex-1 space-y-2">
+                  <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded animate-pulse" style={{ width: `${48 + (i % 3) * 14}%` }} />
+                  <div className="h-3 bg-gray-100 dark:bg-gray-800 rounded animate-pulse" style={{ width: `${60 + (i % 4) * 8}%` }} />
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
     );
   }
