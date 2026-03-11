@@ -123,12 +123,7 @@ JWT_SECRET            = os.environ.get("JWT_SECRET", "changeme-dev-secret")
 JWT_EXPIRES_DAYS      = int(os.environ.get("JWT_EXPIRES_DAYS", "7"))
 TOTP_ISSUER           = os.environ.get("TOTP_ISSUER", "EduViewer")
 CLIENT_SERVER_SECRET  = os.environ.get("CLIENT_SERVER_SECRET", "cs-internal-dev-secret-change-in-prod")
-# Comma-separated allowed browser origins for CORS (browser → Flask direct calls)
-CORS_ORIGINS: list[str] = [
-    o.strip()
-    for o in os.environ.get("CORS_ORIGINS", "http://localhost:3000").split(",")
-    if o.strip()
-]
+
 # Comma-separated list of valid invite codes; empty = accept any non-empty code (dev mode)
 _raw_codes       = os.environ.get("INVITE_CODES", "")
 INVITE_CODES: set = {c.strip() for c in _raw_codes.split(",") if c.strip()}
@@ -139,32 +134,6 @@ log = logging.getLogger(__name__)
 # ── App setup ─────────────────────────────────────────────────────────────── #
 
 app = Flask(__name__)
-
-
-@app.before_request
-def _handle_preflight():
-    """Respond to CORS preflight OPTIONS requests before any route logic runs."""
-    if request.method != "OPTIONS":
-        return None
-    origin = request.headers.get("Origin", "")
-    resp = app.make_response(("", 204))
-    if origin in CORS_ORIGINS:
-        resp.headers["Access-Control-Allow-Origin"]  = origin
-        resp.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
-        resp.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
-        resp.headers["Access-Control-Max-Age"]       = "3600"
-    return resp
-
-
-@app.after_request
-def _add_cors_headers(response):
-    """Attach CORS headers to every non-preflight response (including 401/403/5xx)."""
-    origin = request.headers.get("Origin", "")
-    if origin in CORS_ORIGINS:
-        response.headers["Access-Control-Allow-Origin"]  = origin
-        response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
-        response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
-    return response
 
 
 @app.after_request
