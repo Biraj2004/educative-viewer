@@ -2,7 +2,7 @@
 
 import { createContext, useContext, useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
-import { getUser, logout as logoutApi } from "@/utils/authClient";
+import { getUser, logout as logoutApi, ApiError } from "@/utils/authClient";
 import type { AuthUser } from "@/utils/authClient";
 
 // ─── Context ──────────────────────────────────────────────────────────────────
@@ -39,13 +39,13 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
     let cancelled = false;
     getUser()
       .then((u) => { if (!cancelled) setUser(u); })
-      .catch((err) => {
+      .catch(async (err) => {
         if (!cancelled) {
           setUser(null);
           // If the server rejected the session (401 — superseded by a newer login),
-          // force the user back to the sign-in page.
-          const msg: string = err instanceof Error ? err.message : "";
-          if (msg.includes("401") || msg.toLowerCase().includes("session") || msg.toLowerCase().includes("authenticated")) {
+          // clear the stale cookie and force the user back to the sign-in page.
+          if (err instanceof ApiError && err.status === 401) {
+            await logoutApi().catch(() => {});
             window.location.replace("/auth?reason=session_expired");
           }
         }

@@ -6,6 +6,16 @@
 
 const API = "/api/auth";
 
+// ─── Errors ──────────────────────────────────────────────────────────────────
+
+/** Carries the HTTP status so callers can react to 401 vs 5xx etc. */
+export class ApiError extends Error {
+  constructor(message: string, public readonly status: number) {
+    super(message);
+    this.name = "ApiError";
+  }
+}
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export interface ProgressData {
@@ -52,7 +62,7 @@ async function apiPost<T>(path: string, body: Record<string, unknown>): Promise<
   });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
-    throw new Error(data?.error ?? data?.message ?? `Request failed (${res.status})`);
+    throw new ApiError(data?.error ?? data?.message ?? `Request failed (${res.status})`, res.status);
   }
   return data as T;
 }
@@ -61,7 +71,7 @@ async function apiGet<T>(path: string): Promise<T> {
   const res = await fetch(path, { credentials: "include" });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
-    throw new Error(data?.error ?? data?.message ?? `Request failed (${res.status})`);
+    throw new ApiError(data?.error ?? data?.message ?? `Request failed (${res.status})`, res.status);
   }
   return data as T;
 }
@@ -112,6 +122,9 @@ export async function setTheme(theme: "light" | "dark"): Promise<void> {
 export async function getProgress(): Promise<ProgressData> {
   const res = await fetch(`${API}/progress`, { credentials: "include" });
   const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new ApiError(data?.error ?? data?.message ?? `Request failed (${res.status})`, res.status);
+  }
   return {
     course_order: Array.isArray(data?.course_order) ? data.course_order : [],
     completed: (data?.completed && typeof data.completed === "object") ? data.completed : {},
@@ -137,6 +150,6 @@ async function apiFetch(path: string, init: RequestInit): Promise<void> {
   const res = await fetch(path, { ...init, headers, credentials: "include" });
   if (!res.ok) {
     const data = await res.json().catch(() => ({}));
-    throw new Error(data?.error ?? `Request failed (${res.status})`);
+    throw new ApiError(data?.error ?? `Request failed (${res.status})`, res.status);
   }
 }
