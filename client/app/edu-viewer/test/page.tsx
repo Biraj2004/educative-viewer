@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 import canvasAnimationData from '../../../public/canvasAnimation.json';
 import slateHtmlData from '../../../public/slatehtml.json';
 import latexComponentData from '../../../public/latexComponent.json';
@@ -50,136 +50,227 @@ import File, { FileComponentData } from '@/components/File';
 import InstaCalc from '@/components/InstaCalc';
 import AppNavbar from '@/components/AppNavbar';
 
+function SectionHeader({ name, note }: { name: string; note?: string }) {
+  return (
+    <div className="flex items-center gap-2 mb-3">
+      <span className="text-xs font-mono font-semibold tracking-wide text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/60 border border-indigo-200 dark:border-indigo-800 px-2.5 py-1 rounded-md">
+        {name}
+      </span>
+      {note && (
+        <>
+          <span className="text-gray-300 dark:text-gray-700 text-xs select-none">·</span>
+          <span className="text-xs font-mono text-gray-400 dark:text-gray-500">{note}</span>
+        </>
+      )}
+    </div>
+  );
+}
+
 export default function ComponentTestPage() {
   return (
-    <div className="min-h-screen bg-white dark:bg-gray-950">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-950 overflow-x-hidden">
       <AppNavbar
         crumbs={[{ label: "Component Test" }]}
         backHref="/edu-viewer"
-        backLabel="Back to Home"
+        backLabel="Dashboard"
       />
 
-      {/* Canvas Animation Section */}
-      <div className="border-b border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-900 px-6 py-10">
-        <div className="max-w-6xl mx-auto">
-          <h2 className="text-[22px] font-bold text-gray-900 dark:text-gray-100 mb-6">Canvas Animation</h2>
-          <LazyLoadPlaceholder data={canvasAnimationData as LazyLoadPlaceholderData} />
-        </div>
-      </div>
+      <div className="max-w-5xl mx-auto px-4 sm:px-6 py-10 space-y-10">
 
-      {/* LaTeX Component */}
-      <div className="border-b border-gray-200 dark:border-gray-800">
-        <Latex data={latexComponentData} />
-      </div>
+        {/* Canvas Animation */}
+        <section>
+          <SectionHeader name="LazyLoadPlaceholder" note="Canvas Animation" />
+          <div className="rounded-xl border border-gray-200 dark:border-gray-800 overflow-hidden bg-white dark:bg-gray-900">
+            <LazyLoadPlaceholder data={canvasAnimationData as LazyLoadPlaceholderData} />
+          </div>
+        </section>
 
-      {/* Markdown Editor */}
-      <div className="border-b border-gray-200 dark:border-gray-800">
-        <MarkdownEditor data={markdownEditorData} />
-      </div>
+        {/* Latex */}
+        <section>
+          <SectionHeader name="Latex" />
+          <div className="rounded-xl border border-gray-200 dark:border-gray-800 overflow-hidden bg-white dark:bg-gray-900">
+            <Latex data={latexComponentData} />
+          </div>
+        </section>
 
-      {/* Code Component */}
-      <div className="border-b border-gray-200 dark:border-gray-800">
-        <Code data={codeComponentData} />
-      </div>
+        {/* MarkdownEditor */}
+        <section>
+          <SectionHeader name="MarkdownEditor" />
+          <div className="rounded-xl border border-gray-200 dark:border-gray-800 overflow-hidden bg-white dark:bg-gray-900">
+            <MarkdownEditor data={markdownEditorData} />
+          </div>
+        </section>
 
-      {/* Column Component */}
-      <div className="border-b border-gray-200 dark:border-gray-800">
-        <Columns data={columnComponentData} />
-      </div>
+        {/* Code */}
+        <section>
+          <SectionHeader name="Code" />
+          <div className="rounded-xl border border-gray-200 dark:border-gray-800 overflow-hidden bg-white dark:bg-gray-900">
+            <Code data={codeComponentData} />
+          </div>
+        </section>
 
-      {/* DrawIO Widget */}
-      <div className="border-b border-gray-200 dark:border-gray-800">
-        <DrawIOWidget data={drawIOWidgetData} />
-      </div>
+        {/* TabbedCode */}
+        <section>
+          <SectionHeader name="TabbedCode" />
+          <div className="rounded-xl border border-gray-200 dark:border-gray-800 overflow-hidden bg-white dark:bg-gray-900">
+            <TabbedCode data={tabbedCodeData} />
+          </div>
+        </section>
 
-      {/* API Widget */}
-      <div className="border-b border-gray-200 dark:border-gray-800">
-        <APIWidget data={apiWidgetData} />
-      </div>
+        {/* EditorCode */}
+        <section>
+          <SectionHeader name="EditorCode" />
+          <div className="rounded-xl border border-gray-200 dark:border-gray-800 overflow-hidden bg-white dark:bg-gray-900">
+            <EditorCode data={editorCodeComponentData as EditorCodeComponentData} />
+          </div>
+        </section>
 
-      {/* Table Component */}
-      <div className="border-b border-gray-200 dark:border-gray-800">
-        <Table data={tableComponentData} />
-      </div>
+        {/* Columns */}
+        <section>
+          <SectionHeader name="Columns" />
+          <div className="rounded-xl border border-gray-200 dark:border-gray-800 overflow-hidden bg-white dark:bg-gray-900">
+            <Columns data={columnComponentData} />
+          </div>
+        </section>
 
-      {/* Tabbed Code */}
-      <div className="border-b border-gray-200 dark:border-gray-800">
-        <TabbedCode data={tabbedCodeData} />
-      </div>
+        {/* Table */}
+        <section>
+          <SectionHeader name="Table" />
+          <div className="rounded-xl border border-gray-200 dark:border-gray-800 overflow-hidden bg-white dark:bg-gray-900">
+            <Table data={tableComponentData} />
+          </div>
+        </section>
 
-      {/* Spoiler Editor */}
-      <div className="border-b border-gray-200 dark:border-gray-800">
-        <SpoilerEditor data={spoilerEditorData} />
-      </div>
+        {/* SlateHTML */}
+        <section>
+          <SectionHeader name="SlateHTML" />
+          <div className="rounded-xl border border-gray-200 dark:border-gray-800 overflow-hidden bg-white dark:bg-gray-900">
+            <SlateHTML data={slateHtmlData} />
+          </div>
+        </section>
 
-      {/* Editor Code Component */}
-      <div className="border-b border-gray-200 dark:border-gray-800">
-        <EditorCode data={editorCodeComponentData as EditorCodeComponentData} />
-      </div>
+        {/* SpoilerEditor */}
+        <section>
+          <SectionHeader name="SpoilerEditor" />
+          <div className="rounded-xl border border-gray-200 dark:border-gray-800 overflow-hidden bg-white dark:bg-gray-900">
+            <SpoilerEditor data={spoilerEditorData} />
+          </div>
+        </section>
 
-      {/* Educative Array */}
-      <div className="border-b border-gray-200 dark:border-gray-800">
-        <EducativeArray data={educativeArrayData} />
-      </div>
+        {/* DrawIOWidget */}
+        <section>
+          <SectionHeader name="DrawIOWidget" />
+          <div className="rounded-xl border border-gray-200 dark:border-gray-800 overflow-hidden bg-white dark:bg-gray-900">
+            <DrawIOWidget data={drawIOWidgetData} />
+          </div>
+        </section>
 
-      {/* Image Component */}
-      <div className="border-b border-gray-200 dark:border-gray-800">
-        {/* eslint-disable-next-line jsx-a11y/alt-text */}
-        <Image data={imageComponentData} />
-      </div>
+        {/* APIWidget */}
+        <section>
+          <SectionHeader name="APIWidget" />
+          <div className="rounded-xl border border-gray-200 dark:border-gray-800 overflow-hidden bg-white dark:bg-gray-900">
+            <APIWidget data={apiWidgetData} />
+          </div>
+        </section>
 
-      {/* File Component */}
-      <div className="border-b border-gray-200 dark:border-gray-800">
-        <File data={fileComponentData as FileComponentData} />
-      </div>
+        {/* EducativeArray */}
+        <section>
+          <SectionHeader name="EducativeArray" />
+          <div className="rounded-xl border border-gray-200 dark:border-gray-800 overflow-hidden bg-white dark:bg-gray-900">
+            <EducativeArray data={educativeArrayData} />
+          </div>
+        </section>
 
-      {/* InstaCalc */}
-      <div className="border-b border-gray-200 dark:border-gray-800">
-        <InstaCalc data={instaCalcData} />
-      </div>
+        {/* Image */}
+        <section>
+          <SectionHeader name="Image" />
+          <div className="rounded-xl border border-gray-200 dark:border-gray-800 overflow-hidden bg-white dark:bg-gray-900">
+            {/* eslint-disable-next-line jsx-a11y/alt-text */}
+            <Image data={imageComponentData} />
+          </div>
+        </section>
 
-      {/* Match The Answers */}
-      <div className="border-b border-gray-200 dark:border-gray-800">
-        <MatchTheAnswers data={matchTheAnswersData} />
-      </div>
+        {/* File */}
+        <section>
+          <SectionHeader name="File" />
+          <div className="rounded-xl border border-gray-200 dark:border-gray-800 overflow-hidden bg-white dark:bg-gray-900">
+            <File data={fileComponentData as FileComponentData} />
+          </div>
+        </section>
 
-      {/* Permutation */}
-      <div className="border-b border-gray-200 dark:border-gray-800">
-        <Permutation data={permutationData} />
-      </div>
+        {/* InstaCalc */}
+        <section>
+          <SectionHeader name="InstaCalc" />
+          <div className="rounded-xl border border-gray-200 dark:border-gray-800 overflow-hidden bg-white dark:bg-gray-900">
+            <InstaCalc data={instaCalcData} />
+          </div>
+        </section>
 
-      {/* Quiz */}
-      <div className="border-b border-gray-200 dark:border-gray-800">
-        <Quiz data={quizData as QuizData} />
-      </div>
+        {/* MatchTheAnswers */}
+        <section>
+          <SectionHeader name="MatchTheAnswers" />
+          <div className="rounded-xl border border-gray-200 dark:border-gray-800 overflow-hidden bg-white dark:bg-gray-900">
+            <MatchTheAnswers data={matchTheAnswersData} />
+          </div>
+        </section>
 
-      {/* Structured Quiz */}
-      <div className="border-b border-gray-200 dark:border-gray-800">
-        <StructuredQuiz data={structuredQuizData as StructuredQuizData} />
-      </div>
+        {/* Permutation */}
+        <section>
+          <SectionHeader name="Permutation" />
+          <div className="rounded-xl border border-gray-200 dark:border-gray-800 overflow-hidden bg-white dark:bg-gray-900">
+            <Permutation data={permutationData} />
+          </div>
+        </section>
 
-      {/* Sandpack */}
-      <div className="border-b border-gray-200 dark:border-gray-800">
-        <Sandpack data={sandpackData as SandpackData} />
-      </div>
+        {/* Quiz */}
+        <section>
+          <SectionHeader name="Quiz" />
+          <div className="rounded-xl border border-gray-200 dark:border-gray-800 overflow-hidden bg-white dark:bg-gray-900">
+            <Quiz data={quizData as QuizData} />
+          </div>
+        </section>
 
-      {/* Sandpack Static */}
-      <div className="border-b border-gray-200 dark:border-gray-800">
-        <Sandpack data={sandpackStaticData.content as SandpackData} />
-      </div>
+        {/* StructuredQuiz */}
+        <section>
+          <SectionHeader name="StructuredQuiz" />
+          <div className="rounded-xl border border-gray-200 dark:border-gray-800 overflow-hidden bg-white dark:bg-gray-900">
+            <StructuredQuiz data={structuredQuizData as StructuredQuizData} />
+          </div>
+        </section>
 
-      {/* WebpackBin */}
-      <div className="border-b border-gray-200 dark:border-gray-800">
-        <WebpackBin data={webpackBinData as WebpackBinData} />
-      </div>
+        {/* Sandpack */}
+        <section>
+          <SectionHeader name="Sandpack" />
+          <div className="rounded-xl border border-gray-200 dark:border-gray-800 overflow-hidden bg-white dark:bg-gray-900">
+            <Sandpack data={sandpackData as SandpackData} />
+          </div>
+        </section>
 
-      {/* Android */}
-      <div className="border-b border-gray-200 dark:border-gray-800">
-        <WebpackBin data={androidData as WebpackBinData} />
-      </div>
+        {/* Sandpack Static */}
+        <section>
+          <SectionHeader name="Sandpack" note="static" />
+          <div className="rounded-xl border border-gray-200 dark:border-gray-800 overflow-hidden bg-white dark:bg-gray-900">
+            <Sandpack data={sandpackStaticData.content as SandpackData} />
+          </div>
+        </section>
 
-      {/* Slate HTML Content */}
-      <SlateHTML data={slateHtmlData} />
+        {/* WebpackBin */}
+        <section>
+          <SectionHeader name="WebpackBin" />
+          <div className="rounded-xl border border-gray-200 dark:border-gray-800 overflow-hidden bg-white dark:bg-gray-900">
+            <WebpackBin data={webpackBinData as WebpackBinData} />
+          </div>
+        </section>
+
+        {/* Android (WebpackBin) */}
+        <section>
+          <SectionHeader name="WebpackBin" note="Android" />
+          <div className="rounded-xl border border-gray-200 dark:border-gray-800 overflow-hidden bg-white dark:bg-gray-900">
+            <WebpackBin data={androidData as WebpackBinData} />
+          </div>
+        </section>
+
+      </div>
     </div>
   );
 }

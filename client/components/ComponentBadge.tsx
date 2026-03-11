@@ -14,7 +14,7 @@ export default function ComponentBadge({ componentName, subType }: ComponentBadg
   const label = subType ? `${componentName} - ${subType}` : componentName;
 
   return (
-    <span className="group/badge absolute top-1.5 -right-7 z-[15] inline-flex flex-col items-end cursor-pointer">
+    <span className="group/badge absolute top-2 -right-5 z-15 inline-flex flex-col items-end cursor-pointer">
 
       {/* ── Tooltip bubble ── appears ABOVE the icon, never overlaps content ── */}
       <span
@@ -56,7 +56,7 @@ export default function ComponentBadge({ componentName, subType }: ComponentBadg
           border border-gray-400 dark:border-gray-500
           bg-white dark:bg-gray-900
           text-gray-500 dark:text-gray-400
-          opacity-[65%] group-hover/badge:opacity-100
+          opacity-65 group-hover/badge:opacity-100
           shadow-sm group-hover/badge:shadow-md
           group-hover/badge:border-indigo-400 dark:group-hover/badge:border-indigo-500
           group-hover/badge:text-indigo-500 dark:group-hover/badge:text-indigo-400
