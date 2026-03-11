@@ -62,8 +62,8 @@ except ImportError:
 
 # ── Configuration ─────────────────────────────────────────────────────────── #
 
-DB_PATH            = os.environ.get("DB_PATH", r"D:\Development\Courses_main\educative_scraper.db")
-NEXTJS_WEBHOOK_URL = os.environ.get("NEXTJS_WEBHOOK_URL", "http://localhost:3000/api/revalidate")
+DB_PATH            = os.environ.get("DB_PATH", r"/path/to/educative_scraper.db")
+NEXTJS_WEBHOOK_URL = os.environ.get("NEXTJS_WEBHOOK_URL", "http://localhost:3000/webhook")
 REVALIDATE_SECRET  = os.environ.get("REVALIDATE_SECRET", "")   # shared with Next.js
 NOTIFY_SECRET      = os.environ.get("NOTIFY_SECRET", "")       # protects /backend/notify
 WATCH_DB_CHANGES   = os.environ.get("WATCH_DB_CHANGES", "0") == "1"
