@@ -179,7 +179,7 @@ function LoginForm({ onSuccess2FA }: { onSuccess2FA: () => void }) {
         onSuccess2FA();
         return;
       }
-      router.push(safeRedirect(searchParams.get("next")));
+      window.location.href = safeRedirect(searchParams.get("next"));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Login failed");
     } finally {
@@ -411,7 +411,7 @@ function AuthPageInner() {
   }
 
   function handleTwoFASuccess() {
-    router.push(safeRedirect(searchParams.get("next")));
+    window.location.href = safeRedirect(searchParams.get("next"));
   }
 
   async function handleBack() {

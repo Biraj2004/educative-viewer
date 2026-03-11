@@ -1,10 +1,30 @@
 /**
  * Client-side auth API helpers.
- * All calls go through the Next.js server (which proxies to BACKEND_API_BASE)
- * so we hit relative paths from the browser.
+ * All calls go directly from the browser to NEXT_PUBLIC_BACKEND_API_BASE (Flask).
+ * JWT is stored in localStorage — no httpOnly cookies, no Next.js proxy needed.
  */
 
-const API = "/api/auth";
+const BACKEND = (process.env.NEXT_PUBLIC_BACKEND_API_BASE ?? "").replace(/\/$/, "");
+const API = `${BACKEND}/api/auth`;
+const LS_KEY = "ev_token";
+const IS_BROWSER = typeof window !== "undefined";
+
+// ─── Token storage ────────────────────────────────────────────────────────────
+
+export function getAuthToken(): string | null {
+  if (!IS_BROWSER) return null;
+  return localStorage.getItem(LS_KEY);
+}
+
+export function storeAuthToken(token: string): void {
+  if (!IS_BROWSER) return;
+  localStorage.setItem(LS_KEY, token);
+}
+
+export function clearAuthToken(): void {
+  if (!IS_BROWSER) return;
+  localStorage.removeItem(LS_KEY);
+}
 
 // ─── Errors ──────────────────────────────────────────────────────────────────
 
@@ -54,12 +74,10 @@ export interface TwoFASetup {
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 async function apiPost<T>(path: string, body: Record<string, unknown>): Promise<T> {
-  const res = await fetch(path, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-    credentials: "include",
-  });
+  const token = getAuthToken();
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  if (token) headers["Authorization"] = `Bearer ${token}`;
+  const res = await fetch(path, { method: "POST", headers, body: JSON.stringify(body) });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
     throw new ApiError(data?.error ?? data?.message ?? `Request failed (${res.status})`, res.status);
@@ -68,7 +86,10 @@ async function apiPost<T>(path: string, body: Record<string, unknown>): Promise<
 }
 
 async function apiGet<T>(path: string): Promise<T> {
-  const res = await fetch(path, { credentials: "include" });
+  const token = getAuthToken();
+  const headers: Record<string, string> = {};
+  if (token) headers["Authorization"] = `Bearer ${token}`;
+  const res = await fetch(path, { headers });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
     throw new ApiError(data?.error ?? data?.message ?? `Request failed (${res.status})`, res.status);
@@ -79,7 +100,9 @@ async function apiGet<T>(path: string): Promise<T> {
 // ─── Auth API ─────────────────────────────────────────────────────────────────
 
 export async function login(email: string, password: string): Promise<AuthResponse> {
-  return apiPost<AuthResponse>(`${API}/login`, { email, password });
+  const result = await apiPost<AuthResponse>(`${API}/login`, { email, password });
+  if (result.token) storeAuthToken(result.token);
+  return result;
 }
 
 export async function signup(
@@ -88,11 +111,14 @@ export async function signup(
   inviteCode: string,
   name?: string
 ): Promise<AuthResponse> {
-  return apiPost<AuthResponse>(`${API}/signup`, { email, password, inviteCode, name });
+  const result = await apiPost<AuthResponse>(`${API}/signup`, { email, password, inviteCode, name });
+  if (result.token) storeAuthToken(result.token);
+  return result;
 }
 
 export async function logout(): Promise<void> {
-  await apiPost<unknown>(`${API}/logout`, {});
+  try { await apiPost<unknown>(`${API}/logout`, {}); } catch { /* best-effort */ }
+  clearAuthToken();
 }
 
 export async function getUser(): Promise<AuthUser> {
@@ -100,7 +126,9 @@ export async function getUser(): Promise<AuthUser> {
 }
 
 export async function verify2FA(code: string): Promise<AuthResponse> {
-  return apiPost<AuthResponse>(`${API}/2fa/verify`, { code });
+  const result = await apiPost<AuthResponse>(`${API}/2fa/verify`, { code });
+  if (result.token && !result.requiresTwoFactor) storeAuthToken(result.token);
+  return result;
 }
 
 export async function get2FASetup(): Promise<TwoFASetup> {
@@ -108,7 +136,9 @@ export async function get2FASetup(): Promise<TwoFASetup> {
 }
 
 export async function enable2FA(code: string): Promise<AuthResponse> {
-  return apiPost<AuthResponse>(`${API}/2fa/enable`, { code });
+  const result = await apiPost<AuthResponse>(`${API}/2fa/enable`, { code });
+  if (result.token) storeAuthToken(result.token);
+  return result;
 }
 
 export async function rollbackSignup(): Promise<void> {
@@ -120,15 +150,15 @@ export async function setTheme(theme: "light" | "dark"): Promise<void> {
 }
 
 export async function getProgress(): Promise<ProgressData> {
-  const res = await fetch(`${API}/progress`, { credentials: "include" });
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) {
-    throw new ApiError(data?.error ?? data?.message ?? `Request failed (${res.status})`, res.status);
+  try {
+    const data = await apiGet<{ course_order?: number[]; completed?: Record<string, number[]> }>(`${API}/progress`);
+    return {
+      course_order: Array.isArray(data?.course_order) ? data.course_order : [],
+      completed: (data?.completed && typeof data.completed === "object") ? data.completed : {},
+    };
+  } catch {
+    return { course_order: [], completed: {} };
   }
-  return {
-    course_order: Array.isArray(data?.course_order) ? data.course_order : [],
-    completed: (data?.completed && typeof data.completed === "object") ? data.completed : {},
-  };
 }
 
 export async function recordTopicVisit(
@@ -146,8 +176,10 @@ export async function recordTopicVisit(
 // ─── Internal helper ──────────────────────────────────────────────────────────
 
 async function apiFetch(path: string, init: RequestInit): Promise<void> {
-  const headers = { "Content-Type": "application/json", ...(init.headers as Record<string, string> | undefined) };
-  const res = await fetch(path, { ...init, headers, credentials: "include" });
+  const token = getAuthToken();
+  const authHeaders: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
+  const headers = { "Content-Type": "application/json", ...authHeaders, ...(init.headers as Record<string, string> | undefined) };
+  const res = await fetch(path, { ...init, headers });
   if (!res.ok) {
     const data = await res.json().catch(() => ({}));
     throw new ApiError(data?.error ?? `Request failed (${res.status})`, res.status);

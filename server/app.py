@@ -70,6 +70,7 @@ import oracledb
 import pyotp
 import segno
 from flask import Flask, jsonify, request, abort
+from flask_cors import CORS
 
 # ── Load .env file if present (python-dotenv optional) ───────────────────── #
 
@@ -134,6 +135,13 @@ log = logging.getLogger(__name__)
 
 app = Flask(__name__)
 
+_cors_origins = os.environ.get("CORS_ORIGINS", "*")
+CORS(app, resources={r"/api/*": {
+    "origins": _cors_origins,
+    "allow_headers": ["Content-Type", "Authorization"],
+    "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+}})
+
 
 @app.after_request
 def _log_request(response):
@@ -188,7 +196,9 @@ def _require_service_token():
 @app.route("/api/courses", methods=["GET"])
 def get_all_courses():
     """Return all courses: id, slug, title, type.  Body: {} (no fields required)"""
-    _require_service_token()
+    user, _ = _resolve_user(require_full=True)
+    if not user:
+        abort(401, description="Authentication required")
     conn = get_db()
     try:
         rows = conn.execute(
@@ -204,7 +214,9 @@ def get_all_courses():
 @app.route("/api/course-details", methods=["POST"])
 def get_course_data():
     """Return toc_json for a course.  Body: {"course_id": <int>}"""
-    _require_service_token()
+    user, _ = _resolve_user(require_full=True)
+    if not user:
+        abort(401, description="Authentication required")
     payload = request.get_json(force=True, silent=True) or {}
     _require(payload, "course_id")
     course_id = int(payload["course_id"])
@@ -233,7 +245,9 @@ def get_topic_data():
     """Return all components for a topic, combined in order.
     Body: {"course_id": <int>, "topic_index": <int>}
     """
-    _require_service_token()
+    user, _ = _resolve_user(require_full=True)
+    if not user:
+        abort(401, description="Authentication required")
     payload = request.get_json(force=True, silent=True) or {}
     _require(payload, "course_id", "topic_index")
     course_id   = int(payload["course_id"])
@@ -1049,6 +1063,29 @@ def auth_me():
         return jsonify(_user_public(user, conn=conn)), 200
     finally:
         conn.close()
+
+
+# ── POST /auth/logout ────────────────────────────────────────────────────── #
+
+@app.route("/api/auth/logout", methods=["POST"])
+def auth_logout():
+    """Invalidate the current session in the DB. Always returns 200."""
+    user, _ = _resolve_user(require_full=False)
+    if user:
+        conn = get_auth_db()
+        try:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "UPDATE users_sensitive SET session_id = NULL, current_token = NULL "
+                    "WHERE user_id = :user_id",
+                    {"user_id": user["id"]},
+                )
+            conn.commit()
+        except Exception:
+            pass
+        finally:
+            conn.close()
+    return jsonify({"message": "Logged out"}), 200
 
 
 # ── GET /auth/2fa/setup ─────────────────────────────────────────────────── #

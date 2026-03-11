@@ -1,12 +1,14 @@
-import { Suspense } from "react";
-import { cookies } from "next/headers";
+"use client";
+
+import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import AppNavbar from "@/components/AppNavbar";
 import CoursesListClient from "@/components/CoursesListClient";
 import UserMenu from "@/components/UserMenu";
-import { makeServiceToken } from "@/utils/serviceToken";
-import { AUTH_COOKIE } from "@/utils/auth";
+import { getAuthToken, getProgress } from "@/utils/authClient";
+import type { ProgressData } from "@/utils/authClient";
 
-// ─── Data Fetching ────────────────────────────────────────────────────────────
+const BACKEND = (process.env.NEXT_PUBLIC_BACKEND_API_BASE ?? "").replace(/\/$/, "");
 
 interface Course {
   id: number | string;
@@ -22,71 +24,44 @@ interface Course {
   [key: string]: unknown;
 }
 
-interface ProgressData {
-  course_order: number[];
-  completed: Record<string, number[]>;
-}
+export default function CoursesPage() {
+  const router = useRouter();
+  const [courses, setCourses] = useState<Course[]>([]);
+  const [progress, setProgress] = useState<ProgressData>({ course_order: [], completed: {} });
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-async function fetchCourses(): Promise<Course[]> {
-  const base = process.env.BACKEND_API_BASE ?? "";
-  const isProd = process.env.VERCEL_ENV === "production";
-  const serviceToken = await makeServiceToken();
-  const res = await fetch(`${base}/api/courses`, {
-    headers: { Authorization: `Bearer ${serviceToken}` },
-    ...(isProd ? { next: { revalidate: 3600, tags: ["courses"] } } : { cache: "no-store" }),
-  } as RequestInit);
-  if (!res.ok) throw new Error(`Failed to fetch courses: ${res.status}`);
-  const json = await res.json();
-  if (Array.isArray(json)) return json;
-  if (Array.isArray(json.data)) return json.data;
-  if (Array.isArray(json.courses)) return json.courses;
-  return [];
-}
+  useEffect(() => {
+    const token = getAuthToken();
+    if (!token) {
+      router.replace("/auth?next=/edu-viewer/courses");
+      return;
+    }
+    Promise.all([
+      fetch(`${BACKEND}/api/courses`, {
+        headers: { Authorization: `Bearer ${token}` },
+      }).then(async (r) => {
+        if (!r.ok) throw new Error(`Failed to load courses (${r.status})`);
+        const json = await r.json();
+        return (Array.isArray(json) ? json : (json.courses ?? json.data ?? [])) as Course[];
+      }),
+      getProgress(),
+    ])
+      .then(([data, prog]) => {
+        setCourses(data);
+        setProgress(prog);
+      })
+      .catch((err) => setError(err instanceof Error ? err.message : "Failed to load courses"))
+      .finally(() => setLoading(false));
+  }, [router]);
 
-async function fetchProgress(token: string | undefined): Promise<ProgressData> {
-  const empty: ProgressData = { course_order: [], completed: {} };
-  if (!token) return empty;
-  const base = process.env.BACKEND_API_BASE ?? "";
-  try {
-    const res = await fetch(`${base}/api/auth/progress`, {
-      headers: { Authorization: `Bearer ${token}` },
-      cache: "no-store",
-    });
-    if (!res.ok) return empty;
-    const data = await res.json().catch(() => ({}));
-    return {
-      course_order: Array.isArray(data?.course_order) ? data.course_order : [],
-      completed: (data?.completed && typeof data.completed === "object") ? data.completed : {},
-    };
-  } catch {
-    return empty;
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-950 flex items-center justify-center">
+        <div className="w-8 h-8 rounded-full border-2 border-indigo-600 border-t-transparent animate-spin" />
+      </div>
+    );
   }
-}
-
-// ─── Page ─────────────────────────────────────────────────────────────────────
-
-export const metadata = { title: "Courses · Edu-Viewer PRO" };
-
-export default async function CoursesPage() {
-  let courses: Course[] = [];
-  let error: string | null = null;
-
-  const cookieStore = await cookies();
-  const token = cookieStore.get(AUTH_COOKIE)?.value;
-
-  const [coursesResult, progress] = await Promise.allSettled([
-    fetchCourses(),
-    fetchProgress(token),
-  ]);
-
-  if (coursesResult.status === "fulfilled") {
-    courses = coursesResult.value;
-  } else {
-    error = coursesResult.reason instanceof Error ? coursesResult.reason.message : "Unknown error";
-  }
-
-  const progressData: ProgressData =
-    progress.status === "fulfilled" ? progress.value : { course_order: [], completed: {} };
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
@@ -96,8 +71,6 @@ export default async function CoursesPage() {
         backLabel="Dashboard"
         actions={<UserMenu />}
       />
-
-      {/* Sub-header */}
       <div className="border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900">
         <div className="max-w-5xl mx-auto px-6 py-5 flex items-end justify-between gap-4">
           <div>
@@ -110,16 +83,11 @@ export default async function CoursesPage() {
           </div>
         </div>
       </div>
-
-      {/* Search + list rendered entirely on the client — no server round-trip per keystroke */}
-      <Suspense fallback={<div className="h-11 mx-6 mt-6 rounded-xl bg-gray-100 dark:bg-gray-800 animate-pulse" />}>
-        <CoursesListClient
-          courses={courses}
-          courseOrder={progressData.course_order}
-          error={error ?? undefined}
-        />
-      </Suspense>
+      <CoursesListClient
+        courses={courses}
+        courseOrder={progress.course_order}
+        error={error ?? undefined}
+      />
     </div>
   );
 }
-
