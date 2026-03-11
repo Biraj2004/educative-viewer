@@ -1,8 +1,10 @@
+import { cookies } from "next/headers";
 import { notFound } from "next/navigation";
 import AppNavbar from "@/components/AppNavbar";
 import CourseDetailToc from "@/components/CourseDetailToc";
 import UserMenu from "@/components/UserMenu";
 import { makeServiceToken } from "@/utils/serviceToken";
+import { AUTH_COOKIE } from "@/utils/auth";
 
 interface Topic {
   api_url: string;
@@ -28,6 +30,11 @@ interface CourseDetail {
   type: string;
 }
 
+interface ProgressData {
+  course_order: number[];
+  completed: Record<string, number[]>;
+}
+
 async function fetchCourseDetail(courseId: number): Promise<CourseDetail | null> {
   try {
     const base = process.env.BACKEND_API_BASE ?? "";
@@ -46,6 +53,26 @@ async function fetchCourseDetail(courseId: number): Promise<CourseDetail | null>
   }
 }
 
+async function fetchProgress(token: string | undefined): Promise<ProgressData> {
+  const empty: ProgressData = { course_order: [], completed: {} };
+  if (!token) return empty;
+  try {
+    const base = process.env.BACKEND_API_BASE ?? "";
+    const res = await fetch(`${base}/auth/progress`, {
+      headers: { Authorization: `Bearer ${token}` },
+      cache: "no-store",
+    });
+    if (!res.ok) return empty;
+    const data = await res.json();
+    return {
+      course_order: Array.isArray(data?.course_order) ? data.course_order : [],
+      completed: (data?.completed && typeof data.completed === "object") ? data.completed : {},
+    };
+  } catch {
+    return empty;
+  }
+}
+
 export default async function CourseDetailPage({
   params,
 }: {
@@ -55,8 +82,17 @@ export default async function CourseDetailPage({
   const courseId = Number(id);
   if (isNaN(courseId)) notFound();
 
-  const course = await fetchCourseDetail(courseId);
+  const cookieStore = await cookies();
+  const token = cookieStore.get(AUTH_COOKIE)?.value;
+
+  const [course, progress] = await Promise.all([
+    fetchCourseDetail(courseId),
+    fetchProgress(token),
+  ]);
   if (!course) notFound();
+
+  const completedIds: number[] = progress.completed[String(courseId)] ?? [];
+  const completedTopicIndices = new Set(completedIds);
 
   const totalTopics = course.toc.reduce(
     (acc, entry) => acc + ('topics' in entry ? entry.topics.length : 1),
@@ -71,7 +107,7 @@ export default async function CourseDetailPage({
           { label: course.title },
         ]}
         backHref="/edu-viewer/courses"
-        backLabel="All Courses"
+        backLabel="Courses"
         actions={<UserMenu />}
       />
 
@@ -95,7 +131,7 @@ export default async function CourseDetailPage({
 
       {/* Table of Contents */}
       <div className="max-w-5xl mx-auto px-6 py-8">
-        <CourseDetailToc toc={course.toc} courseId={courseId} slug={course.slug} />
+        <CourseDetailToc toc={course.toc} courseId={courseId} slug={course.slug} completedTopicIndices={completedTopicIndices} />
       </div>
     </main>
   );

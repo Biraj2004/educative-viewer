@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, Suspense } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { login, signup, verify2FA, get2FASetup, enable2FA } from "@/utils/authClient";
+import { login, signup, verify2FA, get2FASetup, enable2FA, rollbackSignup } from "@/utils/authClient";
 
 // ─── Open-redirect guard ──────────────────────────────────────────────────────
 // Only allow same-origin relative paths (starts with "/", not "//").
@@ -62,16 +62,15 @@ function TwoFAStep({
 
   useEffect(() => { inputRef.current?.focus(); }, []);
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    if (code.length !== 6) { setError("Enter the 6-digit code"); return; }
+  async function handleVerify(digits: string) {
+    if (digits.length !== 6) return;
     setLoading(true);
     setError("");
     try {
       if (mode === "setup") {
-        await enable2FA(code);
+        await enable2FA(digits);
       } else {
-        await verify2FA(code);
+        await verify2FA(digits);
       }
       onSuccess();
     } catch (err) {
@@ -79,6 +78,20 @@ function TwoFAStep({
     } finally {
       setLoading(false);
     }
+  }
+
+  // Auto-submit when all 6 digits are entered
+  useEffect(() => {
+    if (code.length === 6) {
+      handleVerify(code);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [code]);
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (code.length !== 6) { setError("Enter the 6-digit code"); return; }
+    await handleVerify(code);
   }
 
   return (
@@ -134,9 +147,12 @@ function TwoFAStep({
       <button
         type="button"
         onClick={onBack}
-        className="text-xs text-gray-400 dark:text-gray-600 hover:text-gray-600 dark:hover:text-gray-400 transition-colors text-center cursor-pointer"
+        className="inline-flex items-center justify-center gap-1.5 w-full py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 hover:border-indigo-300 dark:hover:border-indigo-700 hover:text-indigo-700 dark:hover:text-indigo-400 text-xs font-medium transition-all cursor-pointer"
       >
-        ← Go back
+        <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">
+          <path d="m15 18-6-6 6-6" />
+        </svg>
+        Go back
       </button>
     </div>
   );
@@ -398,8 +414,17 @@ function AuthPageInner() {
     router.push(safeRedirect(searchParams.get("next")));
   }
 
-  function handleBack() {
-    setStep(tab);
+  async function handleBack() {
+    if (step === "2fa-setup") {
+      // Delete the partially-created account before going back so the user
+      // can re-submit the signup form with the same email without a 409 conflict.
+      try { await rollbackSignup(); } catch { /* best-effort */ }
+      setTab("signup");
+      setStep("signup");
+    } else {
+      setTab("login");
+      setStep("login");
+    }
   }
 
   const showTwoFA = step === "2fa-verify" || step === "2fa-setup";
@@ -408,15 +433,6 @@ function AuthPageInner() {
     <div className="flex-1 flex flex-col items-center justify-center px-4 py-12">
       {/* Card */}
       <div className="w-full max-w-md">
-        {/* Logo */}
-        <div className="flex items-center justify-center gap-2.5 mb-8">
-          <span className="w-9 h-9 rounded-lg bg-indigo-600 flex items-center justify-center select-none">
-            <span className="text-white font-bold text-xs tracking-tight">EV</span>
-          </span>
-          <span className="font-semibold text-gray-800 dark:text-gray-200 text-lg">
-            Edu-Viewer <span className="text-indigo-600 dark:text-indigo-400 font-bold">PRO</span>
-          </span>
-        </div>
 
         <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 shadow-lg shadow-gray-100/50 dark:shadow-black/30 overflow-hidden">
         {/* Session expired notice */}
@@ -512,7 +528,8 @@ function AuthPageInner() {
           )}
         </div>
 
-        {/* Back to home */}
+        {/* Back to home — hidden during 2FA (go-back inside card replaces it) */}
+        {!showTwoFA && (
         <div className="mt-6 flex justify-center">
           <Link
             href="/"
@@ -524,6 +541,7 @@ function AuthPageInner() {
             Back to home
           </Link>
         </div>
+        )}
       </div>
     </div>
   );

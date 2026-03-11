@@ -13,6 +13,7 @@ export interface AuthUser {
   role?: string;
   twoFactorEnabled?: boolean;
   createdAt?: string;
+  theme?: "light" | "dark";
 }
 
 function getJwtSecret(): Uint8Array {

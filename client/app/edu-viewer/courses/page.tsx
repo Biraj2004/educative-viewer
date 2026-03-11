@@ -1,8 +1,10 @@
 import { Suspense } from "react";
+import { cookies } from "next/headers";
 import AppNavbar from "@/components/AppNavbar";
 import CoursesListClient from "@/components/CoursesListClient";
 import UserMenu from "@/components/UserMenu";
 import { makeServiceToken } from "@/utils/serviceToken";
+import { AUTH_COOKIE } from "@/utils/auth";
 
 // ─── Data Fetching ────────────────────────────────────────────────────────────
 
@@ -18,6 +20,11 @@ interface Course {
   chapters?: number;
   rating?: number;
   [key: string]: unknown;
+}
+
+interface ProgressData {
+  course_order: number[];
+  completed: Record<string, number[]>;
 }
 
 async function fetchCourses(): Promise<Course[]> {
@@ -36,6 +43,26 @@ async function fetchCourses(): Promise<Course[]> {
   return [];
 }
 
+async function fetchProgress(token: string | undefined): Promise<ProgressData> {
+  const empty: ProgressData = { course_order: [], completed: {} };
+  if (!token) return empty;
+  const base = process.env.BACKEND_API_BASE ?? "";
+  try {
+    const res = await fetch(`${base}/auth/progress`, {
+      headers: { Authorization: `Bearer ${token}` },
+      cache: "no-store",
+    });
+    if (!res.ok) return empty;
+    const data = await res.json().catch(() => ({}));
+    return {
+      course_order: Array.isArray(data?.course_order) ? data.course_order : [],
+      completed: (data?.completed && typeof data.completed === "object") ? data.completed : {},
+    };
+  } catch {
+    return empty;
+  }
+}
+
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export const metadata = { title: "Courses · Edu-Viewer PRO" };
@@ -44,18 +71,29 @@ export default async function CoursesPage() {
   let courses: Course[] = [];
   let error: string | null = null;
 
-  try {
-    courses = await fetchCourses();
-  } catch (e) {
-    error = e instanceof Error ? e.message : "Unknown error";
+  const cookieStore = await cookies();
+  const token = cookieStore.get(AUTH_COOKIE)?.value;
+
+  const [coursesResult, progress] = await Promise.allSettled([
+    fetchCourses(),
+    fetchProgress(token),
+  ]);
+
+  if (coursesResult.status === "fulfilled") {
+    courses = coursesResult.value;
+  } else {
+    error = coursesResult.reason instanceof Error ? coursesResult.reason.message : "Unknown error";
   }
+
+  const progressData: ProgressData =
+    progress.status === "fulfilled" ? progress.value : { course_order: [], completed: {} };
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
       <AppNavbar
         crumbs={[{ label: "Courses" }]}
         backHref="/edu-viewer"
-        backLabel="Back to Home"
+        backLabel="Dashboard"
         actions={<UserMenu />}
       />
 
@@ -75,7 +113,11 @@ export default async function CoursesPage() {
 
       {/* Search + list rendered entirely on the client — no server round-trip per keystroke */}
       <Suspense fallback={<div className="h-11 mx-6 mt-6 rounded-xl bg-gray-100 dark:bg-gray-800 animate-pulse" />}>
-        <CoursesListClient courses={courses} error={error ?? undefined} />
+        <CoursesListClient
+          courses={courses}
+          courseOrder={progressData.course_order}
+          error={error ?? undefined}
+        />
       </Suspense>
     </div>
   );

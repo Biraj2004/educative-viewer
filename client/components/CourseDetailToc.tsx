@@ -23,6 +23,8 @@ interface Props {
   toc: TocEntry[];
   courseId: number;
   slug: string;
+  /** Set of topic_index values the user has completed */
+  completedTopicIndices?: Set<number>;
 }
 
 function SearchIcon() {
@@ -58,7 +60,7 @@ function ClearIcon() {
   );
 }
 
-export default function CourseDetailToc({ toc, courseId, slug }: Props) {
+export default function CourseDetailToc({ toc, courseId, slug, completedTopicIndices }: Props) {
   const [q, setQ] = useState("");
 
   const normalised = q.toLowerCase().trim();
@@ -158,36 +160,51 @@ export default function CourseDetailToc({ toc, courseId, slug }: Props) {
 
                   {/* Topics list */}
                   <ul>
-                    {entry.topics.map((topic, j) => (
-                      <li
-                        key={j}
-                        className={
-                          j < entry.topics.length - 1
-                            ? "border-b border-gray-100 dark:border-gray-800"
-                            : ""
-                        }
-                      >
-                        <Link
-                          href={`/edu-viewer/courses/${courseId}/${slug}/topics/${topic.index}/${topic.slug}`}
-                          className="flex items-center gap-4 px-5 py-3 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-colors group"
+                    {entry.topics.map((topic, j) => {
+                      const isDone = completedTopicIndices?.has(topic.index);
+                      return (
+                        <li
+                          key={j}
+                          className={
+                            j < entry.topics.length - 1
+                              ? "border-b border-gray-100 dark:border-gray-800"
+                              : ""
+                          }
                         >
-                          <span className="text-xs text-gray-300 dark:text-gray-600 w-7 text-right shrink-0 font-mono">
-                            {topic.index + 1}
-                          </span>
-                          <span className="text-sm text-gray-700 dark:text-gray-300 group-hover:text-indigo-700 dark:group-hover:text-indigo-400 transition-colors">
-                            {isFiltered ? (
-                              <HighlightMatch text={topic.title} query={normalised} />
+                          <Link
+                            href={`/edu-viewer/courses/${courseId}/${slug}/topics/${topic.index}/${topic.slug}`}
+                            className={[
+                              "flex items-center gap-3 px-4 py-2.5 text-sm transition-colors border-l-2",
+                              isDone
+                                ? "border-l-emerald-400 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-900/20"
+                                : "border-l-transparent text-gray-700 dark:text-gray-300 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 hover:text-indigo-700 dark:hover:text-indigo-400",
+                            ].join(" ")}
+                          >
+                            {isDone ? (
+                              <svg className="w-3.5 h-3.5 shrink-0 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                              </svg>
                             ) : (
-                              topic.title
+                              <span className="text-[11px] font-mono text-gray-300 dark:text-gray-600 w-5 text-right shrink-0">
+                                {topic.index + 1}
+                              </span>
                             )}
-                          </span>
-                        </Link>
-                      </li>
-                    ))}
+                            <span className="leading-snug">
+                              {isFiltered ? (
+                                <HighlightMatch text={topic.title} query={normalised} />
+                              ) : (
+                                topic.title
+                              )}
+                            </span>
+                          </Link>
+                        </li>
+                      );
+                    })}
                   </ul>
                 </div>
               );
             } else {
+              const isDone = completedTopicIndices?.has(entry.index);
               return (
                 <div
                   key={i}
@@ -195,12 +212,23 @@ export default function CourseDetailToc({ toc, courseId, slug }: Props) {
                 >
                   <Link
                     href={`/edu-viewer/courses/${courseId}/${slug}/topics/${entry.index}/${entry.slug}`}
-                    className="flex items-center gap-4 px-5 py-3 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-colors group"
+                    className={[
+                      "flex items-center gap-3 px-4 py-2.5 text-sm transition-colors border-l-2",
+                      isDone
+                        ? "border-l-emerald-400 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-900/20"
+                        : "border-l-transparent text-gray-700 dark:text-gray-300 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 hover:text-indigo-700 dark:hover:text-indigo-400",
+                    ].join(" ")}
                   >
-                    <span className="text-xs text-gray-300 dark:text-gray-600 w-7 text-right shrink-0 font-mono">
-                      {entry.index + 1}
-                    </span>
-                    <span className="text-sm text-gray-700 dark:text-gray-300 group-hover:text-indigo-700 dark:group-hover:text-indigo-400 transition-colors">
+                    {isDone ? (
+                      <svg className="w-3.5 h-3.5 shrink-0 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                    ) : (
+                      <span className="text-[11px] font-mono text-gray-300 dark:text-gray-600 w-5 text-right shrink-0">
+                        {entry.index + 1}
+                      </span>
+                    )}
+                    <span className="leading-snug">
                       {isFiltered ? (
                         <HighlightMatch text={entry.title} query={normalised} />
                       ) : (

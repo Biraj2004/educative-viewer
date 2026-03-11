@@ -509,36 +509,160 @@ def get_auth_db():
 
 
 def init_auth_db():
-    """Create users table if it doesn't exist."""
+    """Create all auth tables if they don't exist.
+
+    Tables
+    ------
+    roles           — role definitions (id, name, description)
+    users           — non-sensitive profile data; role_id → roles(id)
+    users_sensitive — credentials, 2FA secrets, session token, IP log
+    user_progress   — per-user topic visit / completion tracking
+    """
     os.makedirs(os.path.dirname(os.path.abspath(AUTH_DB_PATH)), exist_ok=True)
     conn = get_auth_db()
-    conn.executescript("""
-        CREATE TABLE IF NOT EXISTS users (
-            id                   INTEGER PRIMARY KEY AUTOINCREMENT,
-            email                TEXT    NOT NULL UNIQUE COLLATE NOCASE,
-            name                 TEXT,
-            username             TEXT,
-            avatar               TEXT,
-            role                 TEXT    NOT NULL DEFAULT 'user',
-            password_hash        TEXT    NOT NULL,
-            two_factor_enabled   INTEGER NOT NULL DEFAULT 0,
-            two_factor_secret    TEXT,
-            two_factor_confirmed INTEGER NOT NULL DEFAULT 0,
-            session_id           TEXT,
-            created_at           TEXT    NOT NULL
-                DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
-        );
-    """)
-    # Migrate existing DB: add session_id column if missing
     try:
-        conn.execute("ALTER TABLE users ADD COLUMN session_id TEXT")
-        conn.commit()
-        log.info("Auth DB: added session_id column")
-    except Exception:
-        pass  # column already exists
-    conn.commit()
-    conn.close()
+        conn.executescript("""
+            PRAGMA foreign_keys = OFF;
+
+            -- ── roles ───────────────────────────────────────────────────── --
+            CREATE TABLE IF NOT EXISTS roles (
+                id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                name        TEXT    NOT NULL UNIQUE COLLATE NOCASE,
+                description TEXT
+            );
+
+            -- Seed default roles (ignore if already present)
+            INSERT OR IGNORE INTO roles (id, name, description) VALUES
+                (1, 'user',  'Regular authenticated user'),
+                (2, 'admin', 'Administrator with no restrictions');
+
+            -- ── users ───────────────────────────────────────────────────── --
+            CREATE TABLE IF NOT EXISTS users (
+                id                 INTEGER PRIMARY KEY AUTOINCREMENT,
+                email              TEXT    NOT NULL UNIQUE COLLATE NOCASE,
+                name               TEXT,
+                username           TEXT,
+                avatar             TEXT,
+                role_id            INTEGER NOT NULL DEFAULT 1
+                                       REFERENCES roles(id),
+                two_factor_enabled INTEGER NOT NULL DEFAULT 0,
+                login_ip_log       TEXT,
+                theme              TEXT    NOT NULL DEFAULT 'light',
+                created_at         TEXT    NOT NULL
+                    DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+            );
+
+            -- ── users_sensitive ──────────────────────────────────────────── --
+            CREATE TABLE IF NOT EXISTS users_sensitive (
+                user_id              INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+                password_hash        TEXT    NOT NULL DEFAULT '',
+                two_factor_secret    TEXT,
+                two_factor_confirmed INTEGER NOT NULL DEFAULT 0,
+                session_id           TEXT,
+                last_login_ip        TEXT,
+                last_login_at        TEXT,
+                current_token        TEXT
+            );
+
+            -- ── user_progress ────────────────────────────────────────────── --
+            -- One row per (user, course, topic).
+            -- last_visited_at  — when this specific topic was last opened.
+            -- last_visited_course_at — when ANY topic in this course was opened;
+            --                          denormalised here for efficient course sorting.
+            -- completed        — 1 when user ticked "Mark complete" or navigated away
+            --                    via prev/next.
+            CREATE TABLE IF NOT EXISTS user_progress (
+                id                     INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id                INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                course_id              INTEGER NOT NULL,
+                topic_index            INTEGER NOT NULL,
+                completed              INTEGER NOT NULL DEFAULT 0,
+                last_visited_at        TEXT    NOT NULL
+                    DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+                last_visited_course_at TEXT    NOT NULL
+                    DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+                UNIQUE (user_id, course_id, topic_index)
+            );
+
+            PRAGMA foreign_keys = ON;
+        """)
+    finally:
+        conn.close()
     log.info("Auth DB ready at %s", AUTH_DB_PATH)
+
+
+# ── Auth DB query helpers ─────────────────────────────────────────────────── #
+
+_USER_JOIN = """
+    SELECT u.id, u.email, u.name, u.username, u.avatar,
+           r.name  AS role,
+           u.role_id, u.two_factor_enabled, u.login_ip_log, u.theme, u.created_at,
+           s.password_hash, s.two_factor_secret, s.two_factor_confirmed,
+           s.session_id, s.last_login_ip, s.last_login_at, s.current_token
+    FROM users u
+    LEFT JOIN roles             r ON r.id      = u.role_id
+    LEFT JOIN users_sensitive   s ON s.user_id = u.id
+"""
+
+
+def _fetch_user_by_id(conn, user_id: int) -> dict | None:
+    row = conn.execute(_USER_JOIN + "WHERE u.id = ?", (user_id,)).fetchone()
+    return dict(row) if row else None
+
+
+def _fetch_user_by_email(conn, email: str) -> dict | None:
+    row = conn.execute(_USER_JOIN + "WHERE u.email = ? COLLATE NOCASE", (email,)).fetchone()
+    return dict(row) if row else None
+
+
+def _get_client_ip() -> str | None:
+    """Return the originating IP, honouring X-Forwarded-For if present."""
+    forwarded = request.headers.get("X-Forwarded-For")
+    if forwarded:
+        return forwarded.split(",")[0].strip()
+    return request.remote_addr
+
+
+def _check_ip_restriction(conn, user: dict, client_ip: str) -> None:
+    """Enforce a max-2-unique-IPs-per-day login limit for non-admin users.
+
+    Rules:
+    - Admins (role='admin') are exempt — no restriction.
+    - Logging in from the same IP any number of times is always allowed.
+    - Logging in from a 3rd *distinct* IP within the same UTC calendar day → HTTP 403.
+    - The counter resets automatically at UTC midnight each day.
+
+    Side-effect: updates users.login_ip_log via *conn* (caller must commit).
+    If an abort() is raised, no UPDATE has been queued.
+    """
+    if user.get("role", "user") == "admin":
+        return
+
+    today = time.strftime("%Y-%m-%d", time.gmtime())
+    try:
+        ip_log = json.loads(user.get("login_ip_log") or "{}")
+    except (json.JSONDecodeError, TypeError):
+        ip_log = {}
+
+    if ip_log.get("date") != today:
+        # New day — reset log
+        ip_log = {"date": today, "ips": []}
+
+    ips: list = ip_log.get("ips", [])
+
+    if client_ip not in ips:
+        if len(ips) >= 2:
+            abort(403, description=(
+                "Login restricted: you have already signed in from 2 different IP addresses "
+                "today. Try again tomorrow or log in from an IP you have used today."
+            ))
+        ips.append(client_ip)
+
+    ip_log["ips"] = ips
+    conn.execute(
+        "UPDATE users SET login_ip_log = ? WHERE id = ?",
+        (json.dumps(ip_log), user["id"]),
+    )
 
 
 # ── JWT helpers ───────────────────────────────────────────────────────────── #
@@ -552,6 +676,7 @@ def _make_full_token(user: dict) -> str:
         "username":         user.get("username"),
         "avatar":           user.get("avatar"),
         "role":             user.get("role", "user"),
+        "theme":            user.get("theme", "light"),
         "twoFactorEnabled": bool(user.get("two_factor_enabled")),
         "createdAt":        user.get("created_at"),
         "sessionId":        user.get("session_id"),  # embedded for single-session enforcement
@@ -607,12 +732,11 @@ def _resolve_user(require_full: bool = True) -> tuple[dict | None, dict | None]:
         return None, payload
     conn = get_auth_db()
     try:
-        row = conn.execute("SELECT * FROM users WHERE id = ?", (payload["id"],)).fetchone()
+        user = _fetch_user_by_id(conn, payload["id"])
     finally:
         conn.close()
-    if not row:
+    if not user:
         return None, payload
-    user = dict(row)
     # For full tokens: enforce single active session
     if not payload.get("partial") and user.get("session_id"):
         if payload.get("sessionId") != user["session_id"]:
@@ -620,17 +744,54 @@ def _resolve_user(require_full: bool = True) -> tuple[dict | None, dict | None]:
     return user, payload
 
 
-def _user_public(user: dict) -> dict:
-    return {
+def _user_public(user: dict, conn=None) -> dict:
+    """Return safe public fields for the authenticated user.
+    Pass an open *conn* to also include the compact progress summary.
+    """
+    data = {
         "id":               user["id"],
         "email":            user["email"],
         "name":             user.get("name"),
         "username":         user.get("username"),
         "avatar":           user.get("avatar"),
         "role":             user.get("role", "user"),
+        "theme":            user.get("theme", "light"),
         "twoFactorEnabled": bool(user.get("two_factor_enabled")),
         "createdAt":        user.get("created_at"),
     }
+    if conn is not None:
+        data["progress"] = _get_compact_progress(conn, user["id"])
+    return data
+
+
+def _get_compact_progress(conn, user_id: int) -> dict:
+    """Return {course_order: [id,...], completed: {"course_id": [topic_idx,...]}}.
+    course_order is sorted by most-recently-visited course first.
+    Only completed topics are included in the completed map.
+    """
+    rows = conn.execute(
+        """
+        SELECT course_id, topic_index, completed, last_visited_course_at
+        FROM user_progress
+        WHERE user_id = ?
+        ORDER BY last_visited_course_at DESC, course_id
+        """,
+        (user_id,),
+    ).fetchall()
+
+    course_order = []
+    seen_courses = set()
+    completed: dict = {}
+
+    for r in rows:
+        cid = r["course_id"]
+        if cid not in seen_courses:
+            seen_courses.add(cid)
+            course_order.append(cid)
+        if r["completed"]:
+            completed.setdefault(str(cid), []).append(r["topic_index"])
+
+    return {"course_order": course_order, "completed": completed}
 
 
 # ── Error handler (JSON for all HTTP errors) ─────────────────────────────── #
@@ -671,18 +832,22 @@ def auth_signup():
     conn = get_auth_db()
     try:
         try:
+            # role_id=1 is 'user' (seeded in init_auth_db)
             conn.execute(
-                "INSERT INTO users (email, name, password_hash, two_factor_secret) "
-                "VALUES (?, ?, ?, ?)",
-                (email, name, pw_hash, totp_secret),
+                "INSERT INTO users (email, name, role_id) VALUES (?, ?, 1)",
+                (email, name),
+            )
+            user_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+            conn.execute(
+                "INSERT INTO users_sensitive (user_id, password_hash, two_factor_secret) "
+                "VALUES (?, ?, ?)",
+                (user_id, pw_hash, totp_secret),
             )
             conn.commit()
         except sqlite3.IntegrityError:
             abort(409, description="An account with that email already exists")
 
-        user = dict(conn.execute(
-            "SELECT * FROM users WHERE email = ?", (email,)
-        ).fetchone())
+        user = _fetch_user_by_id(conn, user_id)
     finally:
         conn.close()
 
@@ -707,21 +872,17 @@ def auth_login():
 
     conn = get_auth_db()
     try:
-        row = conn.execute(
-            "SELECT * FROM users WHERE email = ?", (email,)
-        ).fetchone()
+        user = _fetch_user_by_email(conn, email)
     finally:
         conn.close()
 
     # Use constant-time comparison even when user is missing (prevents timing attacks)
     dummy_hash = b"$2b$12$" + b"x" * 53
-    stored_hash = row["password_hash"].encode() if row else dummy_hash
+    stored_hash = user["password_hash"].encode() if user else dummy_hash
     password_ok = bcrypt.checkpw(password.encode(), stored_hash)
 
-    if not row or not password_ok:
+    if not user or not password_ok:
         abort(401, description="Invalid email or password")
-
-    user = dict(row)
 
     if user["two_factor_enabled"] and user["two_factor_confirmed"]:
         return jsonify({
@@ -730,16 +891,22 @@ def auth_login():
         }), 200
 
     new_session_id = str(uuid.uuid4())
+    client_ip = _get_client_ip()
     conn2 = get_auth_db()
     try:
-        conn2.execute("UPDATE users SET session_id = ? WHERE id = ?", (new_session_id, user["id"]))
-        conn2.commit()
+        _check_ip_restriction(conn2, user, client_ip)
         user["session_id"] = new_session_id
+        token = _make_full_token(user)
+        conn2.execute(
+            "UPDATE users_sensitive SET session_id = ?, last_login_ip = ?, last_login_at = ?, current_token = ? WHERE user_id = ?",
+            (new_session_id, client_ip, time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), token, user["id"]),
+        )
+        conn2.commit()
     finally:
         conn2.close()
 
     return jsonify({
-        "token": _make_full_token(user),
+        "token": token,
         "user":  _user_public(user),
     }), 200
 
@@ -751,7 +918,11 @@ def auth_me():
     user, _ = _resolve_user(require_full=True)
     if not user:
         abort(401, description="Not authenticated")
-    return jsonify(_user_public(user)), 200
+    conn = get_auth_db()
+    try:
+        return jsonify(_user_public(user, conn=conn)), 200
+    finally:
+        conn.close()
 
 
 # ── GET /auth/2fa/setup ─────────────────────────────────────────────────── #
@@ -768,7 +939,7 @@ def auth_2fa_setup():
         conn = get_auth_db()
         try:
             conn.execute(
-                "UPDATE users SET two_factor_secret = ? WHERE id = ?",
+                "UPDATE users_sensitive SET two_factor_secret = ? WHERE user_id = ?",
                 (totp_secret, user["id"]),
             )
             conn.commit()
@@ -779,10 +950,147 @@ def auth_2fa_setup():
         name=user["email"], issuer_name=TOTP_ISSUER
     )
     buf = io.BytesIO()
-    segno.make_qr(uri).save(buf, kind="svg", scale=5, dark="#000")
+    # dark=#1e1b4b contrasts well in both light/dark UI; white background for
+    # scanner readability regardless of the host page's colour scheme.
+    segno.make_qr(uri).save(buf, kind="svg", scale=5, dark="#1e1b4b", light="#ffffff")
     qr_data_url = "data:image/svg+xml;base64," + base64.b64encode(buf.getvalue()).decode()
 
     return jsonify({"qrCodeUrl": qr_data_url, "secret": totp_secret}), 200
+
+
+# ── PUT /auth/theme ────────────────────────────────────────────────────────── #
+
+@app.route("/auth/theme", methods=["PUT"])
+def auth_set_theme():
+    """Persist the user's preferred theme ('light' | 'dark') server-side."""
+    user, _ = _resolve_user(require_full=True)
+    if not user:
+        abort(401, description="Not authenticated")
+
+    body  = request.get_json(force=True, silent=True) or {}
+    theme = str(body.get("theme", "")).strip()
+    if theme not in ("light", "dark"):
+        abort(400, description="theme must be 'light' or 'dark'")
+
+    conn = get_auth_db()
+    try:
+        conn.execute("UPDATE users SET theme = ? WHERE id = ?", (theme, user["id"]))
+        conn.commit()
+    finally:
+        conn.close()
+
+    return jsonify({"theme": theme}), 200
+
+
+# ── POST /auth/progress/topic ────────────────────────────────────────────── #
+
+@app.route("/auth/progress/topic", methods=["POST"])
+def auth_progress_topic():
+    """Record that a user visited (and optionally completed) a topic.
+
+    Body: {"course_id": <int>, "topic_index": <int>, "completed": <bool>}
+
+    Idempotent: UPSERT — calling it again with completed=true is safe.
+    completed can only progress forward (false → true), never regress.
+    """
+    user, _ = _resolve_user(require_full=True)
+    if not user:
+        abort(401, description="Not authenticated")
+
+    body        = request.get_json(force=True, silent=True) or {}
+    course_id   = body.get("course_id")
+    topic_index = body.get("topic_index")
+    completed   = bool(body.get("completed", False))
+
+    if course_id is None or topic_index is None:
+        abort(400, description="course_id and topic_index are required")
+
+    now = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+    conn = get_auth_db()
+    try:
+        conn.execute(
+            """
+            INSERT INTO user_progress
+                (user_id, course_id, topic_index, completed, last_visited_at, last_visited_course_at)
+            VALUES (?, ?, ?, ?, ?, ?)
+            ON CONFLICT(user_id, course_id, topic_index) DO UPDATE SET
+                completed              = MAX(completed, excluded.completed),
+                last_visited_at        = excluded.last_visited_at,
+                last_visited_course_at = excluded.last_visited_course_at
+            """,
+            (user["id"], int(course_id), int(topic_index), int(completed), now, now),
+        )
+        # Also keep the course-level timestamp current for all rows in this course
+        conn.execute(
+            """
+            UPDATE user_progress SET last_visited_course_at = ?
+            WHERE user_id = ? AND course_id = ?
+            """,
+            (now, user["id"], int(course_id)),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+    return jsonify({"ok": True}), 200
+
+
+# ── GET /auth/progress ───────────────────────────────────────────────────── #
+
+@app.route("/auth/progress", methods=["GET"])
+def auth_get_progress():
+    """Return compact progress for the authenticated user.
+    Shape: {course_order: [id,...], completed: {"course_id": [topic_idx,...]}}
+    """
+    user, _ = _resolve_user(require_full=True)
+    if not user:
+        abort(401, description="Not authenticated")
+
+    conn = get_auth_db()
+    try:
+        return jsonify(_get_compact_progress(conn, user["id"])), 200
+    finally:
+        conn.close()
+
+
+# ── POST /auth/signup/rollback ───────────────────────────────────────────── #
+
+@app.route("/auth/signup/rollback", methods=["POST"])
+def auth_signup_rollback():
+    """Delete an account created during signup if 2FA setup was never completed.
+    Only deletes the account when two_factor_confirmed = 0 (i.e. partial signup).
+    Clears the auth cookie so the browser is fully reset."""
+    user, _ = _resolve_user(require_full=False)
+    if not user:
+        # Nothing to roll back — clear cookie and return OK
+        resp = jsonify({"message": "No partial session found"})
+        resp.delete_cookie("ev_token", path="/", samesite="Lax")
+        resp.delete_cookie("ev_session", path="/", samesite="Lax")
+        return resp, 200
+
+    if user.get("two_factor_confirmed"):
+        abort(403, description="Account is already fully set up — rollback not allowed")
+
+    conn = get_auth_db()
+    try:
+        # ON DELETE CASCADE removes the users_sensitive row automatically.
+        # Subquery guard prevents accidental deletion of fully confirmed accounts
+        # even in the event of a race condition.
+        conn.execute("""
+            DELETE FROM users WHERE id = ?
+              AND NOT EXISTS (
+                SELECT 1 FROM users_sensitive
+                WHERE user_id = ? AND two_factor_confirmed = 1
+              )
+        """, (user["id"], user["id"]))
+        conn.commit()
+    finally:
+        conn.close()
+
+    resp = jsonify({"message": "Partial signup rolled back successfully"})
+    resp.delete_cookie("ev_token", path="/", samesite="Lax")
+    resp.delete_cookie("ev_session", path="/", samesite="Lax")
+    return resp, 200
 
 
 # ── POST /auth/2fa/enable ───────────────────────────────────────────────── #
@@ -804,21 +1112,30 @@ def auth_2fa_enable():
         abort(400, description="Invalid authenticator code")
 
     new_session_id = str(uuid.uuid4())
+    client_ip = _get_client_ip()
     conn = get_auth_db()
     try:
         conn.execute(
-            "UPDATE users SET two_factor_enabled = 1, two_factor_confirmed = 1, session_id = ? WHERE id = ?",
-            (new_session_id, user["id"]),
+            "UPDATE users SET two_factor_enabled = 1 WHERE id = ?",
+            (user["id"],),
+        )
+        # Refresh so login_ip_log reflects the latest DB state before restriction check
+        user = _fetch_user_by_id(conn, user["id"])
+        _check_ip_restriction(conn, user, client_ip)
+        user["session_id"] = new_session_id
+        token = _make_full_token(user)
+        conn.execute(
+            "UPDATE users_sensitive SET two_factor_confirmed = 1, session_id = ?, "
+            "last_login_ip = ?, last_login_at = ?, current_token = ? WHERE user_id = ?",
+            (new_session_id, client_ip, time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), token, user["id"]),
         )
         conn.commit()
-        user = dict(conn.execute(
-            "SELECT * FROM users WHERE id = ?", (user["id"],)
-        ).fetchone())
+        user = _fetch_user_by_id(conn, user["id"])
     finally:
         conn.close()
 
     return jsonify({
-        "token": _make_full_token(user),
+        "token": token,
         "user":  _user_public(user),
     }), 200
 
@@ -842,16 +1159,22 @@ def auth_2fa_verify():
         abort(401, description="Invalid authenticator code")
 
     new_session_id = str(uuid.uuid4())
+    client_ip = _get_client_ip()
     conn2 = get_auth_db()
     try:
-        conn2.execute("UPDATE users SET session_id = ? WHERE id = ?", (new_session_id, user["id"]))
-        conn2.commit()
+        _check_ip_restriction(conn2, user, client_ip)
         user["session_id"] = new_session_id
+        token = _make_full_token(user)
+        conn2.execute(
+            "UPDATE users_sensitive SET session_id = ?, last_login_ip = ?, last_login_at = ?, current_token = ? WHERE user_id = ?",
+            (new_session_id, client_ip, time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), token, user["id"]),
+        )
+        conn2.commit()
     finally:
         conn2.close()
 
     return jsonify({
-        "token": _make_full_token(user),
+        "token": token,
         "user":  _user_public(user),
     }), 200
 

@@ -60,7 +60,7 @@ export default async function ProfilePage() {
       <AppNavbar
         crumbs={[{ label: "Courses", href: "/edu-viewer/courses" }, { label: "Profile" }]}
         backHref="/edu-viewer/courses"
-        backLabel="All Courses"
+        backLabel="Courses"
         actions={<UserMenu />}
       />
 

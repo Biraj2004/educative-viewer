@@ -67,18 +67,28 @@ function CourseAvatar({ title, index }: { title: string; index: number }) {
 
 interface Props {
   courses: Course[];
+  /** Course IDs sorted by most-recently-visited first (from backend) */
+  courseOrder?: number[];
   error?: string;
 }
 
-export default function CoursesListClient({ courses, error }: Props) {
+export default function CoursesListClient({ courses, courseOrder = [], error }: Props) {
   const searchParams = useSearchParams();
-  // Initialise from URL so shared ?q= links still work on first load
   const [q, setQ] = useState(() => searchParams.get("q") ?? "");
   const normalised = q.toLowerCase().trim();
 
+  // Build a position map for O(1) lookup — courses not in the list sort to the end
+  const orderMap = new Map(courseOrder.map((id, i) => [id, i]));
+
+  const sorted = [...courses].sort((a, b) => {
+    const ia = orderMap.get(Number(a.id)) ?? Infinity;
+    const ib = orderMap.get(Number(b.id)) ?? Infinity;
+    return ia - ib;
+  });
+
   const filtered = normalised
-    ? courses.filter((c) => c.title.toLowerCase().includes(normalised))
-    : courses;
+    ? sorted.filter((c) => c.title.toLowerCase().includes(normalised))
+    : sorted;
 
   return (
     <>
@@ -120,6 +130,7 @@ export default function CoursesListClient({ courses, error }: Props) {
           <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 overflow-hidden divide-y divide-gray-100 dark:divide-gray-800">
             {filtered.map((course, i) => {
               const href = `/edu-viewer/courses/${course.id}/${course.slug ?? course.id}`;
+              const inProgress = orderMap.has(Number(course.id));
               return (
                 <Link
                   key={course.id}
@@ -141,6 +152,12 @@ export default function CoursesListClient({ courses, error }: Props) {
                         {course.title}
                       </h2>
                       {levelBadge(course.level)}
+                      {inProgress && (
+                        <span className="inline-flex items-center gap-1 text-[10px] font-medium text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/30 px-1.5 py-0.5 rounded-full">
+                          <svg className="w-2.5 h-2.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9" /><path d="M12 6v6l3 3" /></svg>
+                          In progress
+                        </span>
+                      )}
                     </div>
                     {course.description && (
                       <p className="text-xs text-gray-500 dark:text-gray-400 leading-relaxed line-clamp-1">

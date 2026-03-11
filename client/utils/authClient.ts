@@ -8,6 +8,13 @@ const API = "/api/auth";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
+export interface ProgressData {
+  /** Course IDs sorted by most-recently-visited first */
+  course_order: number[];
+  /** Completed topic indices per course: { "course_id": [topic_idx, ...] } */
+  completed: Record<string, number[]>;
+}
+
 export interface AuthUser {
   id: string | number;
   email: string;
@@ -15,8 +22,10 @@ export interface AuthUser {
   username?: string;
   avatar?: string;
   role?: string;
+  theme?: "light" | "dark";
   twoFactorEnabled?: boolean;
   createdAt?: string;
+  progress?: ProgressData;
 }
 
 export interface AuthResponse {
@@ -90,4 +99,44 @@ export async function get2FASetup(): Promise<TwoFASetup> {
 
 export async function enable2FA(code: string): Promise<AuthResponse> {
   return apiPost<AuthResponse>(`${API}/2fa/enable`, { code });
+}
+
+export async function rollbackSignup(): Promise<void> {
+  await apiPost<unknown>(`${API}/signup/rollback`, {});
+}
+
+export async function setTheme(theme: "light" | "dark"): Promise<void> {
+  await apiFetch(`${API}/theme`, { method: "PUT", body: JSON.stringify({ theme }) });
+}
+
+export async function getProgress(): Promise<ProgressData> {
+  const res = await fetch(`${API}/progress`, { credentials: "include" });
+  const data = await res.json().catch(() => ({}));
+  return {
+    course_order: Array.isArray(data?.course_order) ? data.course_order : [],
+    completed: (data?.completed && typeof data.completed === "object") ? data.completed : {},
+  };
+}
+
+export async function recordTopicVisit(
+  courseId: number,
+  topicIndex: number,
+  completed = false
+): Promise<void> {
+  await apiPost<unknown>(`${API}/progress/topic`, {
+    course_id: courseId,
+    topic_index: topicIndex,
+    completed,
+  });
+}
+
+// ─── Internal helper ──────────────────────────────────────────────────────────
+
+async function apiFetch(path: string, init: RequestInit): Promise<void> {
+  const headers = { "Content-Type": "application/json", ...(init.headers as Record<string, string> | undefined) };
+  const res = await fetch(path, { ...init, headers, credentials: "include" });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data?.error ?? `Request failed (${res.status})`);
+  }
 }

@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useAuth } from "@/components/AuthProvider";
+import { setTheme as syncThemeToBackend } from "@/utils/authClient";
 
 function saveTheme(theme: "dark" | "light") {
   try { localStorage.setItem("theme", theme); } catch {}
@@ -19,22 +21,37 @@ function readSavedTheme(): "dark" | "light" | null {
 }
 
 export default function DarkModeToggle() {
+  const { user } = useAuth();
   const [isDark, setIsDark] = useState(false);
 
+  // Hydrate from localStorage/cookie on first render
   useEffect(() => {
     const saved = readSavedTheme();
     const useDark = saved === "dark";
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     setIsDark(useDark);
     document.documentElement.classList.toggle("dark", useDark);
     if (!saved) saveTheme("light");
   }, []);
 
+  // When user data arrives (or changes), apply the stored theme from the DB.
+  // This overrides the local cookie/localStorage value so the DB is the source
+  // of truth for logged-in users.
+  useEffect(() => {
+    if (!user?.theme) return;
+    const useDark = user.theme === "dark";
+    setIsDark(useDark);
+    document.documentElement.classList.toggle("dark", useDark);
+    saveTheme(user.theme);
+  }, [user?.theme]);
+
   const toggle = () => {
     const next = !isDark;
     setIsDark(next);
     document.documentElement.classList.toggle("dark", next);
-    saveTheme(next ? "dark" : "light");
+    const theme = next ? "dark" : "light";
+    saveTheme(theme);
+    // Persist to database (fire-and-forget — don't block the toggle)
+    syncThemeToBackend(theme).catch(() => {});
   };
 
   return (

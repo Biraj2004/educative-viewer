@@ -1,6 +1,8 @@
+import { cookies } from "next/headers";
 import { notFound } from "next/navigation";
 import TopicLayoutClient from "@/components/TopicLayoutClient";
 import { makeServiceToken } from "@/utils/serviceToken";
+import { AUTH_COOKIE } from "@/utils/auth";
 
 interface Component {
   type: string;
@@ -42,6 +44,11 @@ interface CourseDetail {
   type: string;
 }
 
+interface ProgressData {
+  course_order: number[];
+  completed: Record<string, number[]>;
+}
+
 async function fetchTopicDetail(
   courseId: number,
   topicIndex: number
@@ -81,6 +88,26 @@ async function fetchCourseDetail(courseId: number): Promise<CourseDetail | null>
   }
 }
 
+async function fetchProgress(token: string | undefined): Promise<ProgressData> {
+  const empty: ProgressData = { course_order: [], completed: {} };
+  if (!token) return empty;
+  try {
+    const base = process.env.BACKEND_API_BASE ?? "";
+    const res = await fetch(`${base}/auth/progress`, {
+      headers: { Authorization: `Bearer ${token}` },
+      cache: "no-store",
+    });
+    if (!res.ok) return empty;
+    const data = await res.json();
+    return {
+      course_order: Array.isArray(data?.course_order) ? data.course_order : [],
+      completed: (data?.completed && typeof data.completed === "object") ? data.completed : {},
+    };
+  } catch {
+    return empty;
+  }
+}
+
 export default async function TopicDetailPage({
   params,
 }: {
@@ -92,13 +119,19 @@ export default async function TopicDetailPage({
 
   if (isNaN(courseId) || isNaN(topicIdx)) notFound();
 
-  // Fetch topic data and course TOC in parallel
-  const [topic, course] = await Promise.all([
+  const cookieStore = await cookies();
+  const token = cookieStore.get(AUTH_COOKIE)?.value;
+
+  // Fetch topic data, course TOC, and user progress in parallel
+  const [topic, course, progress] = await Promise.all([
     fetchTopicDetail(courseId, topicIdx),
     fetchCourseDetail(courseId),
+    fetchProgress(token),
   ]);
 
   if (!topic) notFound();
+
+  const initialCompleted: number[] = progress.completed[String(courseId)] ?? [];
 
   return (
     <TopicLayoutClient
@@ -106,6 +139,7 @@ export default async function TopicDetailPage({
       slug={slug}
       course={course}
       topic={topic}
+      initialCompleted={initialCompleted}
     />
   );
 }

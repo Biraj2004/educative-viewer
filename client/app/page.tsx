@@ -117,13 +117,15 @@ export default async function LandingPage() {
       {/* ── Nav ─────────────────────────────────────────────────────────── */}
       <AppNavbar
         actions={
-          <Link
-            href={primaryHref}
-            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-md bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium transition-colors"
-          >
-            {primaryLabel}
-            <IconArrow />
-          </Link>
+          !isAuthed ? (
+            <Link
+              href={signInHref}
+              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-md bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium transition-colors"
+            >
+              Sign In
+              <IconArrow />
+            </Link>
+          ) : undefined
         }
       />
 
