@@ -2,6 +2,12 @@ import Link from "next/link";
 import { cookies } from "next/headers";
 import AppNavbar from "@/components/AppNavbar";
 import { getServerUser } from "@/utils/auth";
+import {
+  HomeAuthProvider,
+  HomeNavSignIn,
+  HomeHeroCTA,
+  HomeBottomCTA,
+} from "@/components/HomeAuthSection";
 
 // ─── Icons ────────────────────────────────────────────────────────────────────
 
@@ -30,14 +36,6 @@ function IconLayers() {
       <polygon points="12 2 2 7 12 12 22 7 12 2" />
       <polyline points="2 17 12 22 22 17" />
       <polyline points="2 12 12 17 22 12" />
-    </svg>
-  );
-}
-
-function IconArrow() {
-  return (
-    <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">
-      <path d="M5 12h14M12 5l7 7-7 7" />
     </svg>
   );
 }
@@ -106,28 +104,13 @@ export default async function LandingPage() {
   const cookieStore = await cookies();
   const user = await getServerUser(cookieStore);
   const isAuthed = Boolean(user);
-  const appHref = "/edu-viewer";
-  const signInHref = "/auth?next=/edu-viewer";
-  const primaryHref = isAuthed ? appHref : signInHref;
-  const primaryLabel = isAuthed ? "Launch App" : "Sign In";
 
   return (
+    <HomeAuthProvider initialIsAuthed={isAuthed}>
     <div className="h-screen overflow-y-auto bg-white dark:bg-gray-950 text-gray-900 dark:text-gray-100 no-scrollbar">
 
       {/* ── Nav ─────────────────────────────────────────────────────────── */}
-      <AppNavbar
-        actions={
-          !isAuthed ? (
-            <Link
-              href={signInHref}
-              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-md bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium transition-colors"
-            >
-              Sign In
-              <IconArrow />
-            </Link>
-          ) : undefined
-        }
-      />
+      <AppNavbar actions={<HomeNavSignIn />} />
 
       {/* ── Hero ────────────────────────────────────────────────────────── */}
       <section className="relative overflow-hidden border-b border-gray-200 dark:border-gray-800">
@@ -176,13 +159,7 @@ export default async function LandingPage() {
 
           {/* CTAs */}
           <div className="flex items-center justify-center gap-3 flex-wrap">
-            <Link
-              href={primaryHref}
-              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold shadow-md shadow-indigo-500/20 hover:shadow-lg hover:shadow-indigo-500/30 hover:-translate-y-px transition-all"
-            >
-              {primaryLabel}
-              <IconArrow />
-            </Link>
+            <HomeHeroCTA />
             <a
               href="#components"
               className="inline-flex items-center gap-1.5 px-5 py-2.5 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 text-sm font-medium transition-colors"
@@ -257,23 +234,7 @@ export default async function LandingPage() {
       {/* ── CTA ─────────────────────────────────────────────────────────── */}
       <section className="border-b border-gray-200 dark:border-gray-800">
         <div className="max-w-5xl mx-auto px-6 py-20 text-center">
-          <div className="max-w-sm mx-auto">
-            <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-3">
-              Ready to explore?
-            </h2>
-            <p className="text-sm text-gray-600 dark:text-gray-400 mb-8">
-              {isAuthed
-                ? "Welcome back. Jump straight into your courses."
-                : "Sign in to access your courses and start learning."}
-            </p>
-            <Link
-              href={primaryHref}
-              className="inline-flex items-center gap-2 px-6 py-3 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold shadow-md shadow-indigo-500/20 hover:shadow-lg hover:shadow-indigo-500/30 hover:-translate-y-px transition-all"
-            >
-              {isAuthed ? "Launch Edu-Viewer PRO" : "Sign In to Get Started"}
-              <IconArrow />
-            </Link>
-          </div>
+          <HomeBottomCTA />
         </div>
       </section>
 
@@ -298,5 +259,6 @@ export default async function LandingPage() {
       </footer>
 
     </div>
+    </HomeAuthProvider>
   );
 }

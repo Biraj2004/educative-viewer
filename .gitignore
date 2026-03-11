@@ -5,4 +5,4 @@ env
 server/__pycache__/app.cpython-310.pyc
 server/users.db
 .vscode/settings.json
-Wallet_personal-windows
+Wallet_personal*
