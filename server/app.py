@@ -91,6 +91,7 @@ except ImportError:
                     os.environ.setdefault(_k.strip(), _v)
 
 # ── Configuration ─────────────────────────────────────────────────────────── #
+FLASK_PORT     = int(os.environ.get("FLASK_PORT", "5000"))
 
 DB_PATH            = os.environ.get("DB_PATH", r"/path/to/educative_scraper.db")
 NEXTJS_WEBHOOK_URL = os.environ.get("NEXTJS_WEBHOOK_URL", "http://localhost:3000/webhook")
@@ -1354,5 +1355,5 @@ if __name__ == "__main__":
         app.run(host="0.0.0.0", port=5000, debug=True)
     else:
         
-        log.info("Starting production server via waitress on 0.0.0.0:5000")
-        serve(app, host="0.0.0.0", port=5000, threads=4)
+        log.info("Starting production server via waitress on 0.0.0.0:" + str(FLASK_PORT))
+        serve(app, host="0.0.0.0", port=FLASK_PORT, threads=4)
