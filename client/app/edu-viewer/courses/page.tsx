@@ -1,6 +1,8 @@
 import { Suspense } from "react";
 import AppNavbar from "@/components/AppNavbar";
 import CoursesListClient from "@/components/CoursesListClient";
+import UserMenu from "@/components/UserMenu";
+import { makeServiceToken } from "@/utils/serviceToken";
 
 // ─── Data Fetching ────────────────────────────────────────────────────────────
 
@@ -21,7 +23,9 @@ interface Course {
 async function fetchCourses(): Promise<Course[]> {
   const base = process.env.BACKEND_API_BASE ?? "";
   const isProd = process.env.VERCEL_ENV === "production";
-  const res = await fetch(`${base}/backend/courses`, {
+  const serviceToken = await makeServiceToken();
+  const res = await fetch(`${base}/courses`, {
+    headers: { Authorization: `Bearer ${serviceToken}` },
     ...(isProd ? { next: { revalidate: 3600, tags: ["courses"] } } : { cache: "no-store" }),
   } as RequestInit);
   if (!res.ok) throw new Error(`Failed to fetch courses: ${res.status}`);
@@ -52,6 +56,7 @@ export default async function CoursesPage() {
         crumbs={[{ label: "Courses" }]}
         backHref="/edu-viewer"
         backLabel="Back to Home"
+        actions={<UserMenu />}
       />
 
       {/* Sub-header */}

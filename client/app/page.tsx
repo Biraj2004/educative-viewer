@@ -1,5 +1,7 @@
 import Link from "next/link";
+import { cookies } from "next/headers";
 import AppNavbar from "@/components/AppNavbar";
+import { getServerUser } from "@/utils/auth";
 
 // ─── Icons ────────────────────────────────────────────────────────────────────
 
@@ -100,7 +102,15 @@ const stats = [
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
-export default function LandingPage() {
+export default async function LandingPage() {
+  const cookieStore = await cookies();
+  const user = await getServerUser(cookieStore);
+  const isAuthed = Boolean(user);
+  const appHref = "/edu-viewer";
+  const signInHref = "/auth?next=/edu-viewer";
+  const primaryHref = isAuthed ? appHref : signInHref;
+  const primaryLabel = isAuthed ? "Launch App" : "Sign In";
+
   return (
     <div className="h-screen overflow-y-auto bg-white dark:bg-gray-950 text-gray-900 dark:text-gray-100 no-scrollbar">
 
@@ -108,10 +118,10 @@ export default function LandingPage() {
       <AppNavbar
         actions={
           <Link
-            href="/edu-viewer"
+            href={primaryHref}
             className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-md bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium transition-colors"
           >
-            Launch App
+            {primaryLabel}
             <IconArrow />
           </Link>
         }
@@ -165,10 +175,10 @@ export default function LandingPage() {
           {/* CTAs */}
           <div className="flex items-center justify-center gap-3 flex-wrap">
             <Link
-              href="/edu-viewer"
+              href={primaryHref}
               className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold shadow-md shadow-indigo-500/20 hover:shadow-lg hover:shadow-indigo-500/30 hover:-translate-y-px transition-all"
             >
-              Launch Viewer
+              {primaryLabel}
               <IconArrow />
             </Link>
             <a
@@ -250,13 +260,15 @@ export default function LandingPage() {
               Ready to explore?
             </h2>
             <p className="text-sm text-gray-600 dark:text-gray-400 mb-8">
-              No account. No setup. Just open and start learning.
+              {isAuthed
+                ? "Welcome back. Jump straight into your courses."
+                : "Sign in to access your courses and start learning."}
             </p>
             <Link
-              href="/edu-viewer"
+              href={primaryHref}
               className="inline-flex items-center gap-2 px-6 py-3 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold shadow-md shadow-indigo-500/20 hover:shadow-lg hover:shadow-indigo-500/30 hover:-translate-y-px transition-all"
             >
-              Launch Edu-Viewer PRO
+              {isAuthed ? "Launch Edu-Viewer PRO" : "Sign In to Get Started"}
               <IconArrow />
             </Link>
           </div>

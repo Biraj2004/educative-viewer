@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import TopicLayoutClient from "@/components/TopicLayoutClient";
+import { makeServiceToken } from "@/utils/serviceToken";
 
 interface Component {
   type: string;
@@ -48,9 +49,10 @@ async function fetchTopicDetail(
   try {
     const base = process.env.BACKEND_API_BASE ?? "";
     const isProd = process.env.VERCEL_ENV === "production";
-    const res = await fetch(`${base}/backend/topic-details`, {
+    const serviceToken = await makeServiceToken();
+    const res = await fetch(`${base}/topic-details`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${serviceToken}` },
       body: JSON.stringify({ course_id: courseId, topic_index: topicIndex }),
       ...(isProd ? { next: { revalidate: 3600, tags: ["topic-details", `course-${courseId}`, `topic-${courseId}-${topicIndex}`] } } : { cache: "no-store" }),
     } as RequestInit);
@@ -65,9 +67,10 @@ async function fetchCourseDetail(courseId: number): Promise<CourseDetail | null>
   try {
     const base = process.env.BACKEND_API_BASE ?? "";
     const isProd = process.env.NODE_ENV === "production";
-    const res = await fetch(`${base}/backend/course-details`, {
+    const serviceToken = await makeServiceToken();
+    const res = await fetch(`${base}/course-details`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${serviceToken}` },
       body: JSON.stringify({ course_id: courseId }),
       ...(isProd ? { next: { revalidate: 3600, tags: ["course-details", `course-${courseId}`] } } : { cache: "no-store" }),
     } as RequestInit);

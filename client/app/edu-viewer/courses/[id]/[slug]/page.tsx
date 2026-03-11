@@ -1,6 +1,8 @@
 import { notFound } from "next/navigation";
 import AppNavbar from "@/components/AppNavbar";
 import CourseDetailToc from "@/components/CourseDetailToc";
+import UserMenu from "@/components/UserMenu";
+import { makeServiceToken } from "@/utils/serviceToken";
 
 interface Topic {
   api_url: string;
@@ -30,9 +32,10 @@ async function fetchCourseDetail(courseId: number): Promise<CourseDetail | null>
   try {
     const base = process.env.BACKEND_API_BASE ?? "";
     const isProd = process.env.VERCEL_ENV === "production";
-    const res = await fetch(`${base}/backend/course-details`, {
+    const serviceToken = await makeServiceToken();
+    const res = await fetch(`${base}/course-details`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${serviceToken}` },
       body: JSON.stringify({ course_id: courseId }),
       ...(isProd ? { next: { revalidate: 3600, tags: ["course-details", `course-${courseId}`] } } : { cache: "no-store" }),
     } as RequestInit);
@@ -69,6 +72,7 @@ export default async function CourseDetailPage({
         ]}
         backHref="/edu-viewer/courses"
         backLabel="All Courses"
+        actions={<UserMenu />}
       />
 
       {/* Course info sub-header */}

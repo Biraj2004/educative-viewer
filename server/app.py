@@ -5,12 +5,12 @@ Simple Flask API server for the Educative scraper database.
 
 Endpoints  (all POST, params via JSON body)
 ---------
-POST /backend/courses                   → list of all courses  body: {}
-POST /backend/course                    → toc for a course     body: {"course_id": 1}
-POST /backend/topic                     → topic components     body: {"course_id": 1, "topic_index": 3}
-POST /backend/notify                    → trigger Next.js cache revalidation
-                                          body: {"tag": "courses"} or {"course_id": 1} or {"course_id": 1, "topic_index": 3}
-                                          optional: {"secret": "..."}  (falls back to NOTIFY_SECRET env var)
+POST /courses                   → list of all courses  body: {}
+POST /course                    → toc for a course     body: {"course_id": 1}
+POST /topic                     → topic components     body: {"course_id": 1, "topic_index": 3}
+POST /notify                    → trigger Next.js cache revalidation
+                                  body: {"tag": "courses"} or {"course_id": 1} or {"course_id": 1, "topic_index": 3}
+                                  optional: {"secret": "..."}  (falls back to NOTIFY_SECRET env var)
 
 Webhook / cache-busting
 -----------------------
@@ -18,7 +18,7 @@ Set these env vars (or a .env file) before running:
 
     NEXTJS_WEBHOOK_URL  = http://localhost:3000/api/revalidate
     REVALIDATE_SECRET   = some-shared-secret   (must match Next.js REVALIDATE_SECRET)
-    NOTIFY_SECRET       = secret that callers must send to /backend/notify
+    NOTIFY_SECRET       = secret that callers must send to /notify
     WATCH_DB_CHANGES    = 1   (enable background DB change watcher, default off)
     WATCH_INTERVAL      = 10  (seconds between DB polls, default 10)
 
@@ -34,14 +34,22 @@ import json
 import logging
 import hashlib
 import os
+import re
 import sqlite3
+import base64
+import io
 import threading
 import time
+import uuid
 import urllib.request
 import urllib.error
 from pathlib import Path
 from waitress import serve
 
+import bcrypt
+import jwt as pyjwt
+import pyotp
+import segno
 from flask import Flask, jsonify, request, abort
 
 # ── Load .env file if present (python-dotenv optional) ───────────────────── #
@@ -58,17 +66,32 @@ except ImportError:
                 _line = _line.strip()
                 if _line and not _line.startswith("#") and "=" in _line:
                     _k, _, _v = _line.partition("=")
-                    os.environ.setdefault(_k.strip(), _v.strip())
+                    _v = _v.strip()
+                    if len(_v) >= 2 and _v[0] == _v[-1] and _v[0] in ('"', "'"):
+                        _v = _v[1:-1]
+                    os.environ.setdefault(_k.strip(), _v)
 
 # ── Configuration ─────────────────────────────────────────────────────────── #
 
 DB_PATH            = os.environ.get("DB_PATH", r"/path/to/educative_scraper.db")
 NEXTJS_WEBHOOK_URL = os.environ.get("NEXTJS_WEBHOOK_URL", "http://localhost:3000/webhook")
 REVALIDATE_SECRET  = os.environ.get("REVALIDATE_SECRET", "")   # shared with Next.js
-NOTIFY_SECRET      = os.environ.get("NOTIFY_SECRET", "")       # protects /backend/notify
+NOTIFY_SECRET      = os.environ.get("NOTIFY_SECRET", "")       # protects /notify
 WATCH_DB_CHANGES   = os.environ.get("WATCH_DB_CHANGES", "0") == "1"
 WATCH_INTERVAL     = int(os.environ.get("WATCH_INTERVAL", "10"))
 DEBOUNCE_DELAY     = int(os.environ.get("DEBOUNCE_DELAY", "15"))  # seconds of quiet before flushing
+
+# ── Auth configuration ────────────────────────────────────────────────────── #
+
+_auth_db_env = os.environ.get("AUTH_DB_PATH", "").strip()
+AUTH_DB_PATH          = _auth_db_env if _auth_db_env else str(Path(__file__).parent / "users.db")
+JWT_SECRET            = os.environ.get("JWT_SECRET", "changeme-dev-secret")
+JWT_EXPIRES_DAYS      = int(os.environ.get("JWT_EXPIRES_DAYS", "7"))
+TOTP_ISSUER           = os.environ.get("TOTP_ISSUER", "EduViewer")
+CLIENT_SERVER_SECRET  = os.environ.get("CLIENT_SERVER_SECRET", "cs-internal-dev-secret-change-in-prod")
+# Comma-separated list of valid invite codes; empty = accept any non-empty code (dev mode)
+_raw_codes       = os.environ.get("INVITE_CODES", "")
+INVITE_CODES: set = {c.strip() for c in _raw_codes.split(",") if c.strip()}
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 log = logging.getLogger(__name__)
@@ -106,11 +129,32 @@ def _require(payload, *keys):
         abort(400, description=f"Missing required field(s): {', '.join(missing)}")
 
 
-# ── API 1: POST /backend/courses ─────────────────────────────────────────── #
+def _require_service_token():
+    """Validate the internal client-server JWT on data API routes.
+    The Next.js server generates a short-lived (60 s) JWT signed with
+    CLIENT_SERVER_SECRET for every server-side fetch of course/topic data.
+    This prevents arbitrary public clients from hitting the data endpoints.
+    """
+    auth = request.headers.get("Authorization", "")
+    token = auth[7:] if auth.startswith("Bearer ") else None
+    if not token:
+        abort(401, description="Service token required")
+    try:
+        payload = pyjwt.decode(token, CLIENT_SERVER_SECRET, algorithms=["HS256"])
+        if payload.get("role") != "service":
+            abort(403, description="Invalid service token role")
+    except pyjwt.ExpiredSignatureError:
+        abort(401, description="Service token expired")
+    except pyjwt.PyJWTError:
+        abort(401, description="Invalid service token")
 
-@app.route("/backend/courses", methods=["GET"])
+
+# ── API 1: GET /courses ──────────────────────────────────────────────────── #
+
+@app.route("/courses", methods=["GET"])
 def get_all_courses():
     """Return all courses: id, slug, title, type.  Body: {} (no fields required)"""
+    _require_service_token()
     conn = get_db()
     try:
         rows = conn.execute(
@@ -121,11 +165,12 @@ def get_all_courses():
         conn.close()
 
 
-# ── API 2: POST /backend/course ──────────────────────────────────────────── #
+# ── API 2: POST /course-details ─────────────────────────────────────────── #
 
-@app.route("/backend/course-details", methods=["POST"])
+@app.route("/course-details", methods=["POST"])
 def get_course_data():
     """Return toc_json for a course.  Body: {"course_id": <int>}"""
+    _require_service_token()
     payload = request.get_json(force=True, silent=True) or {}
     _require(payload, "course_id")
     course_id = int(payload["course_id"])
@@ -147,13 +192,14 @@ def get_course_data():
         conn.close()
 
 
-# ── API 3: POST /backend/topic ───────────────────────────────────────────── #
+# ── API 3: POST /topic-details ──────────────────────────────────────────── #
 
-@app.route("/backend/topic-details", methods=["POST"])
+@app.route("/topic-details", methods=["POST"])
 def get_topic_data():
     """Return all components for a topic, combined in order.
     Body: {"course_id": <int>, "topic_index": <int>}
     """
+    _require_service_token()
     payload = request.get_json(force=True, silent=True) or {}
     _require(payload, "course_id", "topic_index")
     course_id   = int(payload["course_id"])
@@ -247,9 +293,9 @@ def notify_courses_list():
     _call_revalidate("courses")
 
 
-# ── POST /backend/notify ──────────────────────────────────────────────────── #
+# ── POST /notify ────────────────────────────────────────────────────────── #
 
-@app.route("/backend/notify", methods=["POST"])
+@app.route("/notify", methods=["POST"])
 def notify():
     """
     Trigger Next.js cache revalidation.
@@ -451,8 +497,371 @@ def _db_watcher():
 
 # ── Entry point ───────────────────────────────────────────────────────────── #
 
+# ── Auth DB ───────────────────────────────────────────────────────────────── #
+
+def get_auth_db():
+    """Open a short-lived connection to the auth (users) SQLite DB."""
+    conn = sqlite3.connect(AUTH_DB_PATH)
+    conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA journal_mode=WAL;")
+    conn.execute("PRAGMA foreign_keys=ON;")
+    return conn
+
+
+def init_auth_db():
+    """Create users table if it doesn't exist."""
+    os.makedirs(os.path.dirname(os.path.abspath(AUTH_DB_PATH)), exist_ok=True)
+    conn = get_auth_db()
+    conn.executescript("""
+        CREATE TABLE IF NOT EXISTS users (
+            id                   INTEGER PRIMARY KEY AUTOINCREMENT,
+            email                TEXT    NOT NULL UNIQUE COLLATE NOCASE,
+            name                 TEXT,
+            username             TEXT,
+            avatar               TEXT,
+            role                 TEXT    NOT NULL DEFAULT 'user',
+            password_hash        TEXT    NOT NULL,
+            two_factor_enabled   INTEGER NOT NULL DEFAULT 0,
+            two_factor_secret    TEXT,
+            two_factor_confirmed INTEGER NOT NULL DEFAULT 0,
+            session_id           TEXT,
+            created_at           TEXT    NOT NULL
+                DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+        );
+    """)
+    # Migrate existing DB: add session_id column if missing
+    try:
+        conn.execute("ALTER TABLE users ADD COLUMN session_id TEXT")
+        conn.commit()
+        log.info("Auth DB: added session_id column")
+    except Exception:
+        pass  # column already exists
+    conn.commit()
+    conn.close()
+    log.info("Auth DB ready at %s", AUTH_DB_PATH)
+
+
+# ── JWT helpers ───────────────────────────────────────────────────────────── #
+
+def _make_full_token(user: dict) -> str:
+    now = int(time.time())
+    payload = {
+        "id":               user["id"],
+        "email":            user["email"],
+        "name":             user.get("name"),
+        "username":         user.get("username"),
+        "avatar":           user.get("avatar"),
+        "role":             user.get("role", "user"),
+        "twoFactorEnabled": bool(user.get("two_factor_enabled")),
+        "createdAt":        user.get("created_at"),
+        "sessionId":        user.get("session_id"),  # embedded for single-session enforcement
+        "iat":              now,
+        "exp":              now + JWT_EXPIRES_DAYS * 86400,
+    }
+    return pyjwt.encode(payload, JWT_SECRET, algorithm="HS256")
+
+
+def _make_partial_token(user_id: int) -> str:
+    """Short-lived token (10 min) issued when 2FA is required before full auth."""
+    now = int(time.time())
+    return pyjwt.encode(
+        {"id": user_id, "partial": True, "iat": now, "exp": now + 600},
+        JWT_SECRET,
+        algorithm="HS256",
+    )
+
+
+def _decode_token(token: str) -> dict | None:
+    try:
+        return pyjwt.decode(token, JWT_SECRET, algorithms=["HS256"])
+    except pyjwt.PyJWTError:
+        return None
+
+
+def _bearer_token() -> str | None:
+    """Extract the raw token from the Authorization: Bearer <token> header."""
+    auth = request.headers.get("Authorization", "")
+    if auth.startswith("Bearer "):
+        return auth[7:]
+    return None
+
+
+def _resolve_user(require_full: bool = True) -> tuple[dict | None, dict | None]:
+    """
+    Decode the Bearer token and fetch the matching user from the auth DB.
+
+    If require_full=True  → returns (None, None) for partial tokens.
+    If require_full=False → accepts both partial and full tokens.
+    For full tokens, validates that the JWT session_id matches the DB session_id
+    (single active session enforcement).
+
+    Returns (user_dict, payload_dict) or (None, payload) on failure.
+    """
+    token = _bearer_token()
+    if not token:
+        return None, None
+    payload = _decode_token(token)
+    if not payload:
+        return None, None
+    if require_full and payload.get("partial"):
+        return None, payload
+    conn = get_auth_db()
+    try:
+        row = conn.execute("SELECT * FROM users WHERE id = ?", (payload["id"],)).fetchone()
+    finally:
+        conn.close()
+    if not row:
+        return None, payload
+    user = dict(row)
+    # For full tokens: enforce single active session
+    if not payload.get("partial") and user.get("session_id"):
+        if payload.get("sessionId") != user["session_id"]:
+            abort(401, description="Session superseded by a newer login. Please sign in again.")
+    return user, payload
+
+
+def _user_public(user: dict) -> dict:
+    return {
+        "id":               user["id"],
+        "email":            user["email"],
+        "name":             user.get("name"),
+        "username":         user.get("username"),
+        "avatar":           user.get("avatar"),
+        "role":             user.get("role", "user"),
+        "twoFactorEnabled": bool(user.get("two_factor_enabled")),
+        "createdAt":        user.get("created_at"),
+    }
+
+
+# ── Error handler (JSON for all HTTP errors) ─────────────────────────────── #
+
+@app.errorhandler(400)
+@app.errorhandler(401)
+@app.errorhandler(403)
+@app.errorhandler(404)
+@app.errorhandler(409)
+@app.errorhandler(500)
+def _json_error(e):
+    return jsonify({"error": getattr(e, "description", str(e))}), e.code
+
+
+# ── POST /auth/signup ───────────────────────────────────────────────────── #
+
+@app.route("/auth/signup", methods=["POST"])
+def auth_signup():
+    data     = request.get_json(force=True, silent=True) or {}
+    email    = str(data.get("email", "")).strip().lower()
+    password = str(data.get("password", ""))
+    invite   = str(data.get("inviteCode", "")).strip()
+    name     = str(data.get("name", "")).strip() or None
+
+    if not email or not re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", email):
+        abort(400, description="Invalid email address")
+    if len(password) < 8 or len(password) > 72:
+        abort(400, description="Password must be 8–72 characters")
+    # Validate invite code: if INVITE_CODES list is configured, enforce it
+    if INVITE_CODES and invite not in INVITE_CODES:
+        abort(403, description="Invalid invite code")
+    if not invite:
+        abort(400, description="Invite code is required")
+
+    pw_hash = bcrypt.hashpw(password.encode(), bcrypt.gensalt(rounds=12)).decode()
+    totp_secret = pyotp.random_base32()
+
+    conn = get_auth_db()
+    try:
+        try:
+            conn.execute(
+                "INSERT INTO users (email, name, password_hash, two_factor_secret) "
+                "VALUES (?, ?, ?, ?)",
+                (email, name, pw_hash, totp_secret),
+            )
+            conn.commit()
+        except sqlite3.IntegrityError:
+            abort(409, description="An account with that email already exists")
+
+        user = dict(conn.execute(
+            "SELECT * FROM users WHERE email = ?", (email,)
+        ).fetchone())
+    finally:
+        conn.close()
+
+    partial = _make_partial_token(user["id"])
+    return jsonify({
+        "token":            partial,
+        "requiresTwoFactor": True,
+        "message":          "Account created. Set up two-factor authentication to continue.",
+    }), 201
+
+
+# ── POST /auth/login ────────────────────────────────────────────────────── #
+
+@app.route("/auth/login", methods=["POST"])
+def auth_login():
+    data     = request.get_json(force=True, silent=True) or {}
+    email    = str(data.get("email", "")).strip().lower()
+    password = str(data.get("password", ""))
+
+    if not email or not password:
+        abort(400, description="Email and password are required")
+
+    conn = get_auth_db()
+    try:
+        row = conn.execute(
+            "SELECT * FROM users WHERE email = ?", (email,)
+        ).fetchone()
+    finally:
+        conn.close()
+
+    # Use constant-time comparison even when user is missing (prevents timing attacks)
+    dummy_hash = b"$2b$12$" + b"x" * 53
+    stored_hash = row["password_hash"].encode() if row else dummy_hash
+    password_ok = bcrypt.checkpw(password.encode(), stored_hash)
+
+    if not row or not password_ok:
+        abort(401, description="Invalid email or password")
+
+    user = dict(row)
+
+    if user["two_factor_enabled"] and user["two_factor_confirmed"]:
+        return jsonify({
+            "token":            _make_partial_token(user["id"]),
+            "requiresTwoFactor": True,
+        }), 200
+
+    new_session_id = str(uuid.uuid4())
+    conn2 = get_auth_db()
+    try:
+        conn2.execute("UPDATE users SET session_id = ? WHERE id = ?", (new_session_id, user["id"]))
+        conn2.commit()
+        user["session_id"] = new_session_id
+    finally:
+        conn2.close()
+
+    return jsonify({
+        "token": _make_full_token(user),
+        "user":  _user_public(user),
+    }), 200
+
+
+# ── GET /auth/me ────────────────────────────────────────────────────────── #
+
+@app.route("/auth/me", methods=["GET"])
+def auth_me():
+    user, _ = _resolve_user(require_full=True)
+    if not user:
+        abort(401, description="Not authenticated")
+    return jsonify(_user_public(user)), 200
+
+
+# ── GET /auth/2fa/setup ─────────────────────────────────────────────────── #
+
+@app.route("/auth/2fa/setup", methods=["GET"])
+def auth_2fa_setup():
+    user, _ = _resolve_user(require_full=False)
+    if not user:
+        abort(401, description="Not authenticated")
+
+    totp_secret = user.get("two_factor_secret")
+    if not totp_secret:
+        totp_secret = pyotp.random_base32()
+        conn = get_auth_db()
+        try:
+            conn.execute(
+                "UPDATE users SET two_factor_secret = ? WHERE id = ?",
+                (totp_secret, user["id"]),
+            )
+            conn.commit()
+        finally:
+            conn.close()
+
+    uri = pyotp.totp.TOTP(totp_secret).provisioning_uri(
+        name=user["email"], issuer_name=TOTP_ISSUER
+    )
+    buf = io.BytesIO()
+    segno.make_qr(uri).save(buf, kind="svg", scale=5, dark="#000")
+    qr_data_url = "data:image/svg+xml;base64," + base64.b64encode(buf.getvalue()).decode()
+
+    return jsonify({"qrCodeUrl": qr_data_url, "secret": totp_secret}), 200
+
+
+# ── POST /auth/2fa/enable ───────────────────────────────────────────────── #
+
+@app.route("/auth/2fa/enable", methods=["POST"])
+def auth_2fa_enable():
+    """Verify TOTP code and mark 2FA as active. Called after scanning QR during signup."""
+    user, _ = _resolve_user(require_full=False)
+    if not user:
+        abort(401, description="Not authenticated")
+
+    body = request.get_json(force=True, silent=True) or {}
+    code = str(body.get("code", "")).strip()
+
+    if not user.get("two_factor_secret"):
+        abort(400, description="2FA setup not started. Call GET /auth/2fa/setup first.")
+
+    if not pyotp.TOTP(user["two_factor_secret"]).verify(code, valid_window=1):
+        abort(400, description="Invalid authenticator code")
+
+    new_session_id = str(uuid.uuid4())
+    conn = get_auth_db()
+    try:
+        conn.execute(
+            "UPDATE users SET two_factor_enabled = 1, two_factor_confirmed = 1, session_id = ? WHERE id = ?",
+            (new_session_id, user["id"]),
+        )
+        conn.commit()
+        user = dict(conn.execute(
+            "SELECT * FROM users WHERE id = ?", (user["id"],)
+        ).fetchone())
+    finally:
+        conn.close()
+
+    return jsonify({
+        "token": _make_full_token(user),
+        "user":  _user_public(user),
+    }), 200
+
+
+# ── POST /auth/2fa/verify ──────────────────────────────────────────────────── #
+
+@app.route("/auth/2fa/verify", methods=["POST"])
+def auth_2fa_verify():
+    """Verify TOTP code during login when 2FA is already configured."""
+    user, _ = _resolve_user(require_full=False)
+    if not user:
+        abort(401, description="Not authenticated")
+
+    body = request.get_json(force=True, silent=True) or {}
+    code = str(body.get("code", "")).strip()
+
+    if not user.get("two_factor_secret") or not user.get("two_factor_confirmed"):
+        abort(400, description="2FA is not configured for this account")
+
+    if not pyotp.TOTP(user["two_factor_secret"]).verify(code, valid_window=1):
+        abort(401, description="Invalid authenticator code")
+
+    new_session_id = str(uuid.uuid4())
+    conn2 = get_auth_db()
+    try:
+        conn2.execute("UPDATE users SET session_id = ? WHERE id = ?", (new_session_id, user["id"]))
+        conn2.commit()
+        user["session_id"] = new_session_id
+    finally:
+        conn2.close()
+
+    return jsonify({
+        "token": _make_full_token(user),
+        "user":  _user_public(user),
+    }), 200
+
+
+# ── Entry point ───────────────────────────────────────────────────────────── #
+
 if __name__ == "__main__":
     debug_mode = os.environ.get("FLASK_DEBUG", "0") == "1"
+
+    init_auth_db()
 
     # When debug=True, Werkzeug launches two processes (monitor + worker).
     # Only start the watcher in the worker child to avoid duplicate webhooks.

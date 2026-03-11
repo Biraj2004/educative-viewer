@@ -1,5 +1,6 @@
 import Link from "next/link";
 import AppNavbar from "@/components/AppNavbar";
+import UserMenu from "@/components/UserMenu";
 
 // ─── Section data ─────────────────────────────────────────────────────────────
 
@@ -100,7 +101,7 @@ function IconArrow() {
 export default function EduViewerHome() {
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
-      <AppNavbar backHref="/" backLabel="Home" />
+      <AppNavbar backHref="/" backLabel="Home" actions={<UserMenu />} />
 
       {/* Page header */}
       <div className="border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900">
