@@ -25,6 +25,24 @@ Set these env vars (or a .env file) before running:
     The watcher queries the DB directly — it detects exactly which courses/topics
     changed and fires only the relevant Next.js cache tags instead of blasting all.
 
+Auth / Oracle DB
+----------------
+    ORACLE_USER            = EDU                          (Oracle DB username)
+    ORACLE_PASSWORD        = <password>                   (Oracle DB password)
+    ORACLE_DSN             = personal_high                (TNS entry from tnsnames.ora)
+    ORACLE_WALLET_DIR      = /path/to/Wallet_personal     (Oracle Wallet directory)
+    ORACLE_WALLET_PASSWORD = <wallet-password>            (optional, if wallet uses a password)
+    ORACLE_POOL_MIN        = 1                            (min pool connections, default 1)
+    ORACLE_POOL_MAX        = 5                            (max pool connections, default 5)
+    ORACLE_THICK_MODE      = 1                            (set to 1 for Oracle Instant Client / thick mode)
+    ORACLE_LIB_DIR         = /opt/oracle/instantclient    (Instant Client lib dir, thick mode only)
+
+    JWT_SECRET             = some-secret                  (signs auth JWTs)
+    JWT_EXPIRES_DAYS       = 7
+    TOTP_ISSUER            = EduViewer
+    CLIENT_SERVER_SECRET   = cs-internal-secret
+    INVITE_CODES           = code1,code2                  (comma-separated; leave empty for dev)
+
 Run
 ---
     python backend/app.py
@@ -48,6 +66,7 @@ from waitress import serve
 
 import bcrypt
 import jwt as pyjwt
+import oracledb
 import pyotp
 import segno
 from flask import Flask, jsonify, request, abort
@@ -83,8 +102,22 @@ DEBOUNCE_DELAY     = int(os.environ.get("DEBOUNCE_DELAY", "15"))  # seconds of q
 
 # ── Auth configuration ────────────────────────────────────────────────────── #
 
-_auth_db_env = os.environ.get("AUTH_DB_PATH", "").strip()
-AUTH_DB_PATH          = _auth_db_env if _auth_db_env else str(Path(__file__).parent / "users.db")
+# Oracle ADW connection settings for the auth (users) database.
+# Required: ORACLE_USER, ORACLE_PASSWORD, ORACLE_DSN
+# Optional: ORACLE_WALLET_DIR, ORACLE_WALLET_PASSWORD,
+#           ORACLE_POOL_MIN, ORACLE_POOL_MAX,
+#           ORACLE_THICK_MODE (set to "1" when using Oracle Instant Client),
+#           ORACLE_LIB_DIR   (path to Instant Client libs, thick mode only)
+ORACLE_USER            = os.environ.get("ORACLE_USER", "")
+ORACLE_PASSWORD        = os.environ.get("ORACLE_PASSWORD", "")
+ORACLE_DSN             = os.environ.get("ORACLE_DSN", "")
+ORACLE_WALLET_DIR      = os.environ.get("ORACLE_WALLET_DIR", "").strip()
+ORACLE_WALLET_PASSWORD = os.environ.get("ORACLE_WALLET_PASSWORD", "").strip()
+ORACLE_POOL_MIN        = int(os.environ.get("ORACLE_POOL_MIN", "1"))
+ORACLE_POOL_MAX        = int(os.environ.get("ORACLE_POOL_MAX", "5"))
+ORACLE_THICK_MODE      = os.environ.get("ORACLE_THICK_MODE", "0") == "1"
+ORACLE_LIB_DIR         = os.environ.get("ORACLE_LIB_DIR", "").strip()
+
 JWT_SECRET            = os.environ.get("JWT_SECRET", "changeme-dev-secret")
 JWT_EXPIRES_DAYS      = int(os.environ.get("JWT_EXPIRES_DAYS", "7"))
 TOTP_ISSUER           = os.environ.get("TOTP_ISSUER", "EduViewer")
@@ -497,19 +530,56 @@ def _db_watcher():
 
 # ── Entry point ───────────────────────────────────────────────────────────── #
 
-# ── Auth DB ───────────────────────────────────────────────────────────────── #
+# ── Oracle Auth DB pool ───────────────────────────────────────────────────── #
+
+# Fetch CLOBs (login_ip_log, current_token) as plain Python strings.
+oracledb.defaults.fetch_lobs = False
+
+_oracle_pool = None
+
+
+def _get_oracle_pool():
+    """Lazily initialise the Oracle connection pool on first call."""
+    global _oracle_pool
+    if _oracle_pool is not None:
+        return _oracle_pool
+    if ORACLE_THICK_MODE:
+        # Thick mode requires Oracle Instant Client; lib_dir is optional when
+        # the client libraries are already on PATH / LD_LIBRARY_PATH.
+        oracledb.init_oracle_client(lib_dir=ORACLE_LIB_DIR or None)
+    kwargs: dict = {
+        "user":      ORACLE_USER,
+        "password":  ORACLE_PASSWORD,
+        "dsn":       ORACLE_DSN,
+        "min":       ORACLE_POOL_MIN,
+        "max":       ORACLE_POOL_MAX,
+        "increment": 1,
+    }
+    if ORACLE_WALLET_DIR:
+        if ORACLE_THICK_MODE:
+            kwargs["config_dir"] = ORACLE_WALLET_DIR
+        else:
+            kwargs["wallet_location"] = ORACLE_WALLET_DIR
+    if ORACLE_WALLET_PASSWORD:
+        kwargs["wallet_password"] = ORACLE_WALLET_PASSWORD
+    _oracle_pool = oracledb.create_pool(**kwargs)
+    return _oracle_pool
+
+
+def _row_to_dict(cursor, row) -> dict | None:
+    """Convert an Oracle cursor row tuple to a lowercase-keyed dict."""
+    if row is None:
+        return None
+    return {d[0].lower(): v for d, v in zip(cursor.description, row)}
+
 
 def get_auth_db():
-    """Open a short-lived connection to the auth (users) SQLite DB."""
-    conn = sqlite3.connect(AUTH_DB_PATH)
-    conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA journal_mode=WAL;")
-    conn.execute("PRAGMA foreign_keys=ON;")
-    return conn
+    """Acquire a connection from the Oracle auth connection pool."""
+    return _get_oracle_pool().acquire()
 
 
 def init_auth_db():
-    """Create all auth tables if they don't exist.
+    """Create all auth tables if they don't exist (Oracle DDL, idempotent).
 
     Tables
     ------
@@ -518,77 +588,111 @@ def init_auth_db():
     users_sensitive — credentials, 2FA secrets, session token, IP log
     user_progress   — per-user topic visit / completion tracking
     """
-    os.makedirs(os.path.dirname(os.path.abspath(AUTH_DB_PATH)), exist_ok=True)
     conn = get_auth_db()
     try:
-        conn.executescript("""
-            PRAGMA foreign_keys = OFF;
+        cur = conn.cursor()
 
-            -- ── roles ───────────────────────────────────────────────────── --
-            CREATE TABLE IF NOT EXISTS roles (
-                id          INTEGER PRIMARY KEY AUTOINCREMENT,
-                name        TEXT    NOT NULL UNIQUE COLLATE NOCASE,
-                description TEXT
-            );
+        def _exec_ddl(sql: str) -> None:
+            """Execute DDL; silently ignore ORA-00955 (object already exists)."""
+            try:
+                cur.execute(sql)
+            except oracledb.DatabaseError as exc:
+                (err,) = exc.args
+                if err.code != 955:  # ORA-00955: name already used by an existing object
+                    raise
 
-            -- Seed default roles (ignore if already present)
-            INSERT OR IGNORE INTO roles (id, name, description) VALUES
-                (1, 'user',  'Regular authenticated user'),
-                (2, 'admin', 'Administrator with no restrictions');
-
-            -- ── users ───────────────────────────────────────────────────── --
-            CREATE TABLE IF NOT EXISTS users (
-                id                 INTEGER PRIMARY KEY AUTOINCREMENT,
-                email              TEXT    NOT NULL UNIQUE COLLATE NOCASE,
-                name               TEXT,
-                username           TEXT,
-                avatar             TEXT,
-                role_id            INTEGER NOT NULL DEFAULT 1
-                                       REFERENCES roles(id),
-                two_factor_enabled INTEGER NOT NULL DEFAULT 0,
-                login_ip_log       TEXT,
-                theme              TEXT    NOT NULL DEFAULT 'light',
-                created_at         TEXT    NOT NULL
-                    DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
-            );
-
-            -- ── users_sensitive ──────────────────────────────────────────── --
-            CREATE TABLE IF NOT EXISTS users_sensitive (
-                user_id              INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
-                password_hash        TEXT    NOT NULL DEFAULT '',
-                two_factor_secret    TEXT,
-                two_factor_confirmed INTEGER NOT NULL DEFAULT 0,
-                session_id           TEXT,
-                last_login_ip        TEXT,
-                last_login_at        TEXT,
-                current_token        TEXT
-            );
-
-            -- ── user_progress ────────────────────────────────────────────── --
-            -- One row per (user, course, topic).
-            -- last_visited_at  — when this specific topic was last opened.
-            -- last_visited_course_at — when ANY topic in this course was opened;
-            --                          denormalised here for efficient course sorting.
-            -- completed        — 1 when user ticked "Mark complete" or navigated away
-            --                    via prev/next.
-            CREATE TABLE IF NOT EXISTS user_progress (
-                id                     INTEGER PRIMARY KEY AUTOINCREMENT,
-                user_id                INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-                course_id              INTEGER NOT NULL,
-                topic_index            INTEGER NOT NULL,
-                completed              INTEGER NOT NULL DEFAULT 0,
-                last_visited_at        TEXT    NOT NULL
-                    DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
-                last_visited_course_at TEXT    NOT NULL
-                    DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
-                UNIQUE (user_id, course_id, topic_index)
-            );
-
-            PRAGMA foreign_keys = ON;
+        # ── roles ─────────────────────────────────────────────────────────── #
+        # Plain NUMBER PK (not identity) so we can seed specific IDs 1 & 2
+        # and hard-code role_id = 1 ('user') in users INSERT.
+        _exec_ddl("""
+            CREATE TABLE roles (
+                id          NUMBER            PRIMARY KEY,
+                name        VARCHAR2(100 CHAR) NOT NULL,
+                description VARCHAR2(500 CHAR)
+            )
         """)
+        _exec_ddl("CREATE UNIQUE INDEX uq_roles_name ON roles (UPPER(name))")
+
+        # Seed default roles (skip if already present)
+        for role_id, role_name, role_desc in [
+            (1, "user",  "Regular authenticated user"),
+            (2, "admin", "Administrator with no restrictions"),
+        ]:
+            try:
+                cur.execute(
+                    "INSERT INTO roles (id, name, description) VALUES (:1, :2, :3)",
+                    (role_id, role_name, role_desc),
+                )
+            except oracledb.IntegrityError:
+                pass  # already seeded
+
+        # ── users ─────────────────────────────────────────────────────────── #
+        _exec_ddl("""
+            CREATE TABLE users (
+                id                 NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+                email              VARCHAR2(255 CHAR) NOT NULL,
+                name               VARCHAR2(255 CHAR),
+                username           VARCHAR2(255 CHAR),
+                avatar             VARCHAR2(1000 CHAR),
+                role_id            NUMBER DEFAULT 1 NOT NULL
+                                       REFERENCES roles(id),
+                two_factor_enabled NUMBER(1,0) DEFAULT 0 NOT NULL,
+                login_ip_log       CLOB,
+                theme              VARCHAR2(20 CHAR) DEFAULT 'light' NOT NULL,
+                created_at         VARCHAR2(30 CHAR) DEFAULT
+                    TO_CHAR(SYSTIMESTAMP AT TIME ZONE 'UTC',
+                            'YYYY-MM-DD"T"HH24:MI:SS"Z"') NOT NULL
+            )
+        """)
+        _exec_ddl("CREATE UNIQUE INDEX uq_users_email ON users (UPPER(email))")
+
+        # ── users_sensitive ───────────────────────────────────────────────── #
+        _exec_ddl("""
+            CREATE TABLE users_sensitive (
+                user_id              NUMBER PRIMARY KEY
+                                         REFERENCES users(id) ON DELETE CASCADE,
+                password_hash        VARCHAR2(200 CHAR) DEFAULT '' NOT NULL,
+                two_factor_secret    VARCHAR2(64 CHAR),
+                two_factor_confirmed NUMBER(1,0) DEFAULT 0 NOT NULL,
+                session_id           VARCHAR2(64 CHAR),
+                last_login_ip        VARCHAR2(50 CHAR),
+                last_login_at        VARCHAR2(30 CHAR),
+                current_token        CLOB
+            )
+        """)
+
+        # ── user_progress ─────────────────────────────────────────────────── #
+        # One row per (user, course, topic).
+        # last_visited_at        — when this specific topic was last opened.
+        # last_visited_course_at — when ANY topic in this course was opened
+        #                          (denormalised for efficient course ordering).
+        # completed              — 1 when user completed the topic.
+        _exec_ddl("""
+            CREATE TABLE user_progress (
+                id                     NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+                user_id                NUMBER NOT NULL
+                                           REFERENCES users(id) ON DELETE CASCADE,
+                course_id              NUMBER NOT NULL,
+                topic_index            NUMBER NOT NULL,
+                completed              NUMBER(1,0) DEFAULT 0 NOT NULL,
+                last_visited_at        VARCHAR2(30 CHAR) DEFAULT
+                    TO_CHAR(SYSTIMESTAMP AT TIME ZONE 'UTC',
+                            'YYYY-MM-DD"T"HH24:MI:SS"Z"') NOT NULL,
+                last_visited_course_at VARCHAR2(30 CHAR) DEFAULT
+                    TO_CHAR(SYSTIMESTAMP AT TIME ZONE 'UTC',
+                            'YYYY-MM-DD"T"HH24:MI:SS"Z"') NOT NULL
+            )
+        """)
+        _exec_ddl(
+            "CREATE UNIQUE INDEX uq_user_progress "
+            "ON user_progress (user_id, course_id, topic_index)"
+        )
+
+        conn.commit()
+        cur.close()
     finally:
         conn.close()
-    log.info("Auth DB ready at %s", AUTH_DB_PATH)
+    log.info("Oracle auth DB ready (dsn=%s)", ORACLE_DSN)
 
 
 # ── Auth DB query helpers ─────────────────────────────────────────────────── #
@@ -606,13 +710,18 @@ _USER_JOIN = """
 
 
 def _fetch_user_by_id(conn, user_id: int) -> dict | None:
-    row = conn.execute(_USER_JOIN + "WHERE u.id = ?", (user_id,)).fetchone()
-    return dict(row) if row else None
+    with conn.cursor() as cur:
+        cur.execute(_USER_JOIN + "WHERE u.id = :user_id", {"user_id": user_id})
+        return _row_to_dict(cur, cur.fetchone())
 
 
 def _fetch_user_by_email(conn, email: str) -> dict | None:
-    row = conn.execute(_USER_JOIN + "WHERE u.email = ? COLLATE NOCASE", (email,)).fetchone()
-    return dict(row) if row else None
+    with conn.cursor() as cur:
+        cur.execute(
+            _USER_JOIN + "WHERE UPPER(u.email) = UPPER(:email)",
+            {"email": email},
+        )
+        return _row_to_dict(cur, cur.fetchone())
 
 
 def _get_client_ip() -> str | None:
@@ -659,10 +768,11 @@ def _check_ip_restriction(conn, user: dict, client_ip: str) -> None:
         ips.append(client_ip)
 
     ip_log["ips"] = ips
-    conn.execute(
-        "UPDATE users SET login_ip_log = ? WHERE id = ?",
-        (json.dumps(ip_log), user["id"]),
-    )
+    with conn.cursor() as cur:
+        cur.execute(
+            "UPDATE users SET login_ip_log = :ip_log WHERE id = :user_id",
+            {"ip_log": json.dumps(ip_log), "user_id": user["id"]},
+        )
 
 
 # ── JWT helpers ───────────────────────────────────────────────────────────── #
@@ -769,15 +879,18 @@ def _get_compact_progress(conn, user_id: int) -> dict:
     course_order is sorted by most-recently-visited course first.
     Only completed topics are included in the completed map.
     """
-    rows = conn.execute(
-        """
-        SELECT course_id, topic_index, completed, last_visited_course_at
-        FROM user_progress
-        WHERE user_id = ?
-        ORDER BY last_visited_course_at DESC, course_id
-        """,
-        (user_id,),
-    ).fetchall()
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT course_id, topic_index, completed, last_visited_course_at
+            FROM user_progress
+            WHERE user_id = :user_id
+            ORDER BY last_visited_course_at DESC, course_id
+            """,
+            {"user_id": user_id},
+        )
+        cols = [d[0].lower() for d in cur.description]
+        rows = [dict(zip(cols, row)) for row in cur.fetchall()]
 
     course_order = []
     seen_courses = set()
@@ -833,18 +946,22 @@ def auth_signup():
     try:
         try:
             # role_id=1 is 'user' (seeded in init_auth_db)
-            conn.execute(
-                "INSERT INTO users (email, name, role_id) VALUES (?, ?, 1)",
-                (email, name),
-            )
-            user_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
-            conn.execute(
-                "INSERT INTO users_sensitive (user_id, password_hash, two_factor_secret) "
-                "VALUES (?, ?, ?)",
-                (user_id, pw_hash, totp_secret),
-            )
+            with conn.cursor() as cur:
+                var_id = cur.var(oracledb.NUMBER)
+                cur.execute(
+                    "INSERT INTO users (email, name, role_id) "
+                    "VALUES (:email, :name, 1) RETURNING id INTO :out_id",
+                    {"email": email, "name": name, "out_id": var_id},
+                )
+                user_id = int(var_id.getvalue()[0])
+            with conn.cursor() as cur:
+                cur.execute(
+                    "INSERT INTO users_sensitive (user_id, password_hash, two_factor_secret) "
+                    "VALUES (:user_id, :pw_hash, :totp_secret)",
+                    {"user_id": user_id, "pw_hash": pw_hash, "totp_secret": totp_secret},
+                )
             conn.commit()
-        except sqlite3.IntegrityError:
+        except oracledb.IntegrityError:
             abort(409, description="An account with that email already exists")
 
         user = _fetch_user_by_id(conn, user_id)
@@ -897,10 +1014,18 @@ def auth_login():
         _check_ip_restriction(conn2, user, client_ip)
         user["session_id"] = new_session_id
         token = _make_full_token(user)
-        conn2.execute(
-            "UPDATE users_sensitive SET session_id = ?, last_login_ip = ?, last_login_at = ?, current_token = ? WHERE user_id = ?",
-            (new_session_id, client_ip, time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), token, user["id"]),
-        )
+        with conn2.cursor() as cur:
+            cur.execute(
+                "UPDATE users_sensitive SET session_id = :session_id, last_login_ip = :ip, "
+                "last_login_at = :login_at, current_token = :token WHERE user_id = :user_id",
+                {
+                    "session_id": new_session_id,
+                    "ip":         client_ip,
+                    "login_at":   time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+                    "token":      token,
+                    "user_id":    user["id"],
+                },
+            )
         conn2.commit()
     finally:
         conn2.close()
@@ -938,10 +1063,11 @@ def auth_2fa_setup():
         totp_secret = pyotp.random_base32()
         conn = get_auth_db()
         try:
-            conn.execute(
-                "UPDATE users_sensitive SET two_factor_secret = ? WHERE user_id = ?",
-                (totp_secret, user["id"]),
-            )
+            with conn.cursor() as cur:
+                cur.execute(
+                    "UPDATE users_sensitive SET two_factor_secret = :secret WHERE user_id = :user_id",
+                    {"secret": totp_secret, "user_id": user["id"]},
+                )
             conn.commit()
         finally:
             conn.close()
@@ -974,7 +1100,11 @@ def auth_set_theme():
 
     conn = get_auth_db()
     try:
-        conn.execute("UPDATE users SET theme = ? WHERE id = ?", (theme, user["id"]))
+        with conn.cursor() as cur:
+            cur.execute(
+                "UPDATE users SET theme = :theme WHERE id = :user_id",
+                {"theme": theme, "user_id": user["id"]},
+            )
         conn.commit()
     finally:
         conn.close()
@@ -1008,26 +1138,40 @@ def auth_progress_topic():
     now = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
     conn = get_auth_db()
     try:
-        conn.execute(
-            """
-            INSERT INTO user_progress
-                (user_id, course_id, topic_index, completed, last_visited_at, last_visited_course_at)
-            VALUES (?, ?, ?, ?, ?, ?)
-            ON CONFLICT(user_id, course_id, topic_index) DO UPDATE SET
-                completed              = MAX(completed, excluded.completed),
-                last_visited_at        = excluded.last_visited_at,
-                last_visited_course_at = excluded.last_visited_course_at
-            """,
-            (user["id"], int(course_id), int(topic_index), int(completed), now, now),
-        )
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                MERGE INTO user_progress p
+                USING DUAL
+                ON (p.user_id = :user_id AND p.course_id = :course_id
+                    AND p.topic_index = :topic_index)
+                WHEN MATCHED THEN
+                    UPDATE SET
+                        completed              = GREATEST(p.completed, :completed),
+                        last_visited_at        = :now,
+                        last_visited_course_at = :now
+                WHEN NOT MATCHED THEN
+                    INSERT (user_id, course_id, topic_index, completed,
+                            last_visited_at, last_visited_course_at)
+                    VALUES (:user_id, :course_id, :topic_index, :completed, :now, :now)
+                """,
+                {
+                    "user_id":     user["id"],
+                    "course_id":   int(course_id),
+                    "topic_index": int(topic_index),
+                    "completed":   int(completed),
+                    "now":         now,
+                },
+            )
         # Also keep the course-level timestamp current for all rows in this course
-        conn.execute(
-            """
-            UPDATE user_progress SET last_visited_course_at = ?
-            WHERE user_id = ? AND course_id = ?
-            """,
-            (now, user["id"], int(course_id)),
-        )
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                UPDATE user_progress SET last_visited_course_at = :now
+                WHERE user_id = :user_id AND course_id = :course_id
+                """,
+                {"now": now, "user_id": user["id"], "course_id": int(course_id)},
+            )
         conn.commit()
     finally:
         conn.close()
@@ -1076,13 +1220,17 @@ def auth_signup_rollback():
         # ON DELETE CASCADE removes the users_sensitive row automatically.
         # Subquery guard prevents accidental deletion of fully confirmed accounts
         # even in the event of a race condition.
-        conn.execute("""
-            DELETE FROM users WHERE id = ?
-              AND NOT EXISTS (
-                SELECT 1 FROM users_sensitive
-                WHERE user_id = ? AND two_factor_confirmed = 1
-              )
-        """, (user["id"], user["id"]))
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                DELETE FROM users WHERE id = :user_id
+                  AND NOT EXISTS (
+                    SELECT 1 FROM users_sensitive
+                    WHERE user_id = :user_id AND two_factor_confirmed = 1
+                  )
+                """,
+                {"user_id": user["id"]},
+            )
         conn.commit()
     finally:
         conn.close()
@@ -1115,20 +1263,30 @@ def auth_2fa_enable():
     client_ip = _get_client_ip()
     conn = get_auth_db()
     try:
-        conn.execute(
-            "UPDATE users SET two_factor_enabled = 1 WHERE id = ?",
-            (user["id"],),
-        )
+        with conn.cursor() as cur:
+            cur.execute(
+                "UPDATE users SET two_factor_enabled = 1 WHERE id = :user_id",
+                {"user_id": user["id"]},
+            )
         # Refresh so login_ip_log reflects the latest DB state before restriction check
         user = _fetch_user_by_id(conn, user["id"])
         _check_ip_restriction(conn, user, client_ip)
         user["session_id"] = new_session_id
         token = _make_full_token(user)
-        conn.execute(
-            "UPDATE users_sensitive SET two_factor_confirmed = 1, session_id = ?, "
-            "last_login_ip = ?, last_login_at = ?, current_token = ? WHERE user_id = ?",
-            (new_session_id, client_ip, time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), token, user["id"]),
-        )
+        with conn.cursor() as cur:
+            cur.execute(
+                "UPDATE users_sensitive SET two_factor_confirmed = 1, "
+                "session_id = :session_id, last_login_ip = :ip, "
+                "last_login_at = :login_at, current_token = :token "
+                "WHERE user_id = :user_id",
+                {
+                    "session_id": new_session_id,
+                    "ip":         client_ip,
+                    "login_at":   time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+                    "token":      token,
+                    "user_id":    user["id"],
+                },
+            )
         conn.commit()
         user = _fetch_user_by_id(conn, user["id"])
     finally:
@@ -1165,10 +1323,18 @@ def auth_2fa_verify():
         _check_ip_restriction(conn2, user, client_ip)
         user["session_id"] = new_session_id
         token = _make_full_token(user)
-        conn2.execute(
-            "UPDATE users_sensitive SET session_id = ?, last_login_ip = ?, last_login_at = ?, current_token = ? WHERE user_id = ?",
-            (new_session_id, client_ip, time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), token, user["id"]),
-        )
+        with conn2.cursor() as cur:
+            cur.execute(
+                "UPDATE users_sensitive SET session_id = :session_id, last_login_ip = :ip, "
+                "last_login_at = :login_at, current_token = :token WHERE user_id = :user_id",
+                {
+                    "session_id": new_session_id,
+                    "ip":         client_ip,
+                    "login_at":   time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+                    "token":      token,
+                    "user_id":    user["id"],
+                },
+            )
         conn2.commit()
     finally:
         conn2.close()
