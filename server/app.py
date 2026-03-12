@@ -54,6 +54,7 @@ import hashlib
 import os
 import re
 import sqlite3
+import atexit
 import base64
 import io
 import threading
@@ -63,6 +64,7 @@ import urllib.request
 import urllib.error
 from pathlib import Path
 from waitress import serve
+from apscheduler.schedulers.background import BackgroundScheduler
 
 import bcrypt
 import jwt as pyjwt
@@ -100,6 +102,8 @@ NOTIFY_SECRET      = os.environ.get("NOTIFY_SECRET", "")       # protects /notif
 WATCH_DB_CHANGES   = os.environ.get("WATCH_DB_CHANGES", "0") == "1"
 WATCH_INTERVAL     = int(os.environ.get("WATCH_INTERVAL", "10"))
 DEBOUNCE_DELAY     = int(os.environ.get("DEBOUNCE_DELAY", "15"))  # seconds of quiet before flushing
+DB_KEEPALIVE_ENABLED = os.environ.get("DB_KEEPALIVE_ENABLED", "1") == "1"
+DB_KEEPALIVE_INTERVAL_MINUTES = max(1, int(os.environ.get("DB_KEEPALIVE_INTERVAL_MINUTES", "10")))
 
 # ── Auth configuration ────────────────────────────────────────────────────── #
 
@@ -532,6 +536,7 @@ def _db_watcher():
 oracledb.defaults.fetch_lobs = False
 
 _oracle_pool = None
+_scheduler: BackgroundScheduler | None = None
 
 
 def _get_oracle_pool():
@@ -572,6 +577,55 @@ def _row_to_dict(cursor, row) -> dict | None:
 def get_auth_db():
     """Acquire a connection from the Oracle auth connection pool."""
     return _get_oracle_pool().acquire()
+
+
+def keep_db_alive(flask_app: Flask) -> None:
+    """Ping the Oracle auth DB so the connection pool does not sit idle too long."""
+    if not ORACLE_USER or not ORACLE_PASSWORD or not ORACLE_DSN:
+        return
+
+    try:
+        with flask_app.app_context():
+            conn = get_auth_db()
+            try:
+                with conn.cursor() as cur:
+                    cur.execute("SELECT 1 FROM DUAL")
+                    cur.fetchone()
+            finally:
+                conn.close()
+        log.debug("Oracle auth DB keep-alive ping succeeded")
+    except Exception as exc:
+        log.warning("Oracle auth DB keep-alive ping failed: %s", exc)
+
+
+def _start_keep_db_alive_scheduler(flask_app: Flask) -> None:
+    """Start the periodic Oracle keep-alive job once per server process."""
+    global _scheduler
+
+    if _scheduler is not None:
+        return
+    if not DB_KEEPALIVE_ENABLED:
+        log.info("Oracle auth DB keep-alive scheduler is disabled")
+        return
+    if not ORACLE_USER or not ORACLE_PASSWORD or not ORACLE_DSN:
+        log.info("Oracle auth DB keep-alive scheduler skipped: Oracle auth DB is not configured")
+        return
+
+    _scheduler = BackgroundScheduler(daemon=True)
+    _scheduler.add_job(
+        func=lambda: keep_db_alive(flask_app),
+        trigger="interval",
+        minutes=DB_KEEPALIVE_INTERVAL_MINUTES,
+        id="keep_db_alive_job",
+        name=f"Keep DB connection alive every {DB_KEEPALIVE_INTERVAL_MINUTES} minutes",
+        replace_existing=True,
+    )
+    _scheduler.start()
+    atexit.register(lambda: _scheduler.shutdown(wait=False) if _scheduler and _scheduler.running else None)
+    log.info(
+        "Oracle auth DB keep-alive scheduler started (every %d minute(s))",
+        DB_KEEPALIVE_INTERVAL_MINUTES,
+    )
 
 
 def init_auth_db():
@@ -1565,13 +1619,16 @@ def auth_forgot_password_reset():
 
 if __name__ == "__main__":
     debug_mode = os.environ.get("FLASK_DEBUG", "0") == "1"
+    should_start_background_jobs = (not debug_mode or os.environ.get("WERKZEUG_RUN_MAIN") == "true")
 
     init_auth_db()
+    if should_start_background_jobs:
+        _start_keep_db_alive_scheduler(app)
 
     # When debug=True, Werkzeug launches two processes (monitor + worker).
     # Only start the watcher in the worker child to avoid duplicate webhooks.
     # In non-debug mode (no reloader) the check is always True.
-    if WATCH_DB_CHANGES and (not debug_mode or os.environ.get("WERKZEUG_RUN_MAIN") == "true"):
+    if WATCH_DB_CHANGES and should_start_background_jobs:
         t = threading.Thread(target=_db_watcher, daemon=True)
         t.start()
 
