@@ -1069,6 +1069,67 @@ def auth_logout():
     return jsonify({"message": "Logged out"}), 200
 
 
+# ── POST /auth/change-password ────────────────────────────────────────────── #
+
+@app.route("/api/auth/change-password", methods=["POST"])
+def auth_change_password():
+    """Change the authenticated user's password.
+
+    Requires a valid full-auth Bearer token.
+    Body: {"current_password": "...", "new_password": "..."}
+    Verifies the current password, then updates the hash. The active session
+    is intentionally kept alive so the user does not need to re-login.
+    """
+    user, _ = _resolve_user(require_full=True)
+    if not user:
+        abort(401, description="Not authenticated")
+
+    body             = request.get_json(force=True, silent=True) or {}
+    current_password = str(body.get("current_password", "")).strip()
+    new_password     = str(body.get("new_password", ""))
+
+    if not current_password or not new_password:
+        abort(400, description="current_password and new_password are required")
+
+    if len(new_password) < 8 or len(new_password) > 72:
+        abort(400, description="New password must be 8–72 characters")
+
+    # Fetch stored hash
+    conn = get_auth_db()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT password_hash FROM users_sensitive WHERE user_id = :user_id",
+                {"user_id": user["id"]},
+            )
+            row = cur.fetchone()
+    finally:
+        conn.close()
+
+    if not row or not row[0]:
+        abort(400, description="No password set for this account")
+
+    stored_hash = row[0].encode() if isinstance(row[0], str) else row[0]
+
+    if not bcrypt.checkpw(current_password.encode(), stored_hash):
+        abort(400, description="Current password is incorrect")
+
+    pw_hash = bcrypt.hashpw(new_password.encode(), bcrypt.gensalt(rounds=12)).decode()
+
+    conn = get_auth_db()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                "UPDATE users_sensitive SET password_hash = :pw_hash WHERE user_id = :user_id",
+                {"pw_hash": pw_hash, "user_id": user["id"]},
+            )
+        conn.commit()
+    finally:
+        conn.close()
+
+    return jsonify({"message": "Password updated successfully"}), 200
+
+
 # ── GET /auth/2fa/setup ─────────────────────────────────────────────────── #
 
 @app.route("/api/auth/2fa/setup", methods=["GET"])

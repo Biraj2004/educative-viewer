@@ -1,13 +1,14 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import { useRouter } from "next/navigation";
 import TopicSidebar from "@/components/TopicSidebar";
 import AppNavbar from "@/components/AppNavbar";
 import UserMenu from "@/components/UserMenu";
 import { getRenderer, UnknownRenderer } from "@/utils/component-registry";
 import ComponentBadge from "@/components/ComponentBadge";
-import { recordTopicVisit, getProgress } from "@/utils/authClient";
+import { recordTopicVisit, getProgress, getAuthToken, clearAuthToken } from "@/utils/authClient";
+
+const BACKEND = (process.env.NEXT_PUBLIC_BACKEND_API_BASE ?? "").replace(/\/$/, "");
 
 interface Component {
   type: string;
@@ -61,52 +62,108 @@ interface Props {
 }
 
 export default function TopicLayoutClient({ courseId, slug, course, topic, initialCompleted = [] }: Props) {
-  const router = useRouter();
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [currentTopic, setCurrentTopic] = useState<TopicDetail>(topic);
+  const [topicChanging, setTopicChanging] = useState(false);
   const [completed, setCompleted] = useState<Set<number>>(() => new Set(initialCompleted));
   const [isCompleted, setIsCompleted] = useState(() => new Set(initialCompleted).has(topic.topic_index));
   const navigatingRef = useRef(false);
+  const completedRef = useRef<Set<number>>(new Set(initialCompleted));
+
+  // Keep completedRef current so handleTopicNav can read it without a stale closure
+  useEffect(() => { completedRef.current = completed; }, [completed]);
+
+  // Signal the global NavProgressBar for in-page topic fetches
+  const topicChangingRef = useRef(false);
+  useEffect(() => {
+    if (topicChanging) {
+      topicChangingRef.current = true;
+      window.dispatchEvent(new Event("navprogress:start"));
+    } else if (topicChangingRef.current) {
+      topicChangingRef.current = false;
+      window.dispatchEvent(new Event("navprogress:done"));
+    }
+  }, [topicChanging]);
 
   const allTopics = course ? course.toc.flatMap((entry) =>
     'topics' in entry ? entry.topics : [entry as Topic]
   ) : [];
-  const currentPos = allTopics.findIndex((t) => t.index === topic.topic_index);
+  const currentPos = allTopics.findIndex((t) => t.index === currentTopic.topic_index);
   const prev = currentPos > 0 ? allTopics[currentPos - 1] : null;
   const next = currentPos < allTopics.length - 1 ? allTopics[currentPos + 1] : null;
 
-  // Mark this topic as visited on mount (best-effort, don't block UI)
+  // Mark this topic as visited on every topic change (best-effort, don't block UI)
   useEffect(() => {
-    recordTopicVisit(courseId, topic.topic_index, isCompleted).catch(() => {});
-  }, [courseId, topic.topic_index]); // eslint-disable-line react-hooks/exhaustive-deps
+    recordTopicVisit(courseId, currentTopic.topic_index, isCompleted).catch(() => {});
+  }, [courseId, currentTopic.topic_index]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Fetch fresh progress so sidebar stays in sync after navigation
   useEffect(() => {
     getProgress().then((data) => {
       const ids = new Set<number>(data.completed[String(courseId)] ?? []);
       setCompleted(ids);
-      setIsCompleted(ids.has(topic.topic_index));
+      setIsCompleted(ids.has(currentTopic.topic_index));
     }).catch(() => {});
-  }, [courseId, topic.topic_index]);
+  }, [courseId, currentTopic.topic_index]);
 
   const handleToggleComplete = useCallback(async () => {
     const next = !isCompleted;
     setIsCompleted(next);
     setCompleted((prev) => {
       const s = new Set(prev);
-      if (next) s.add(topic.topic_index); else s.delete(topic.topic_index);
+      if (next) s.add(currentTopic.topic_index); else s.delete(currentTopic.topic_index);
       return s;
     });
-    recordTopicVisit(courseId, topic.topic_index, next).catch(() => {});
-  }, [isCompleted, courseId, topic.topic_index]);
+    recordTopicVisit(courseId, currentTopic.topic_index, next).catch(() => {});
+  }, [isCompleted, courseId, currentTopic.topic_index]);
 
-  // On prev/next click: mark current topic completed, then navigate
-  const handleNavClick = useCallback((href: string) => {
+  // In-page topic navigation: fetch new topic, update state + URL (no page remount)
+  const handleTopicNav = useCallback(async (href: string, destIdx: number) => {
     if (navigatingRef.current) return;
     navigatingRef.current = true;
-    // Mark current topic as completed when navigating away
-    recordTopicVisit(courseId, topic.topic_index, true).catch(() => {});
-    router.push(href);
-  }, [courseId, topic.topic_index, router]);
+    recordTopicVisit(courseId, currentTopic.topic_index, isCompleted).catch(() => {});
+    setTopicChanging(true);
+    window.history.pushState({}, "", href);
+    window.scrollTo(0, 0);
+    try {
+      const token = getAuthToken();
+      const res = await fetch(`${BACKEND}/api/topic-details`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ course_id: courseId, topic_index: destIdx }),
+      });
+      if (res.status === 401) {
+        clearAuthToken();
+        window.location.replace("/auth?reason=session_expired");
+        return;
+      }
+      if (!res.ok) throw new Error("Failed to load topic");
+      const data: TopicDetail = await res.json();
+      setCurrentTopic(data);
+      setIsCompleted(completedRef.current.has(data.topic_index));
+    } catch {
+      // On unrecoverable error fall back to a hard navigation
+      window.location.href = href;
+    } finally {
+      setTopicChanging(false);
+      navigatingRef.current = false;
+    }
+  }, [courseId, currentTopic.topic_index, isCompleted]);
+
+  // Keep in sync when user presses browser back/forward
+  useEffect(() => {
+    const onPop = () => {
+      const m = window.location.pathname.match(/\/topics\/(\d+)\//);
+      if (m) {
+        const idx = Number(m[1]);
+        if (idx !== currentTopic.topic_index) {
+          handleTopicNav(window.location.pathname, idx);
+        }
+      }
+    };
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, [currentTopic.topic_index, handleTopicNav]);
 
   return (
     <div className="min-h-screen flex flex-col bg-gray-50 dark:bg-gray-950">
@@ -118,7 +175,7 @@ export default function TopicLayoutClient({ courseId, slug, course, topic, initi
           ...(course
             ? [{ label: course.title, href: `/edu-viewer/courses/${courseId}/${slug}` }]
             : []),
-          { label: topic.topic_name },
+          { label: currentTopic.topic_name },
         ]}
         backHref={`/edu-viewer/courses/${courseId}/${slug}`}
         backLabel="Topics"
@@ -153,10 +210,11 @@ export default function TopicLayoutClient({ courseId, slug, course, topic, initi
               courseSlug={slug}
               courseTitle={course.title}
               toc={course.toc}
-              currentTopicIndex={topic.topic_index}
+              currentTopicIndex={currentTopic.topic_index}
               completedTopicIndices={completed}
               asideClassName="w-72 shrink-0 flex flex-col h-full"
               onClose={() => setDrawerOpen(false)}
+              onTopicClick={(href, destIdx) => { setDrawerOpen(false); handleTopicNav(href, destIdx); }}
             />
           </div>
         </>
@@ -172,8 +230,9 @@ export default function TopicLayoutClient({ courseId, slug, course, topic, initi
             courseSlug={slug}
             courseTitle={course.title}
             toc={course.toc}
-            currentTopicIndex={topic.topic_index}
+            currentTopicIndex={currentTopic.topic_index}
             completedTopicIndices={completed}
+            onTopicClick={(href, destIdx) => handleTopicNav(href, destIdx)}
           />
         )}
 
@@ -182,7 +241,7 @@ export default function TopicLayoutClient({ courseId, slug, course, topic, initi
 
           {/* Components */}
         <div className="max-w-6xl mx-auto px-6 py-8 space-y-6">
-          {topic.components.map((comp, i) => {
+          {currentTopic.components.map((comp, i) => {
             const renderer = getRenderer(comp.type);
             const subType =
               typeof comp.content?.type === "string" ? comp.content.type : undefined;
@@ -225,7 +284,7 @@ export default function TopicLayoutClient({ courseId, slug, course, topic, initi
           <div className="flex items-center justify-between gap-4">
             {prev ? (
               <button
-                onClick={() => handleNavClick(`/edu-viewer/courses/${courseId}/${slug}/topics/${prev.index}/${prev.slug}`)}
+                onClick={() => handleTopicNav(`/edu-viewer/courses/${courseId}/${slug}/topics/${prev.index}/${prev.slug}`, prev.index)}
                 className="flex items-center gap-2 px-4 py-2.5 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-sm text-gray-700 dark:text-gray-300 hover:border-indigo-400 dark:hover:border-indigo-600 hover:text-indigo-700 dark:hover:text-indigo-400 transition-colors max-w-xs cursor-pointer"
               >
                 <svg className="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -236,7 +295,7 @@ export default function TopicLayoutClient({ courseId, slug, course, topic, initi
             ) : <div />}
             {next ? (
               <button
-                onClick={() => handleNavClick(`/edu-viewer/courses/${courseId}/${slug}/topics/${next.index}/${next.slug}`)}
+                onClick={() => handleTopicNav(`/edu-viewer/courses/${courseId}/${slug}/topics/${next.index}/${next.slug}`, next.index)}
                 className="flex items-center gap-2 px-4 py-2.5 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-sm text-gray-700 dark:text-gray-300 hover:border-indigo-400 dark:hover:border-indigo-600 hover:text-indigo-700 dark:hover:text-indigo-400 transition-colors max-w-xs cursor-pointer"
               >
                 <span className="truncate">{next.title}</span>

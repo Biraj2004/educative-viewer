@@ -56,3 +56,26 @@ body {
 .dark .katex {
   color: #e2e8f0;
 }
+
+/* ─── Browser autofill override ─────────────────────────────────────────── */
+/* Browsers apply a light background to autofilled / user-modified inputs
+   that cannot be removed via background-color. The only reliable fix is
+   an inset box-shadow that covers the UA-injected colour. */
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus,
+input:-webkit-autofill:active {
+  -webkit-box-shadow: 0 0 0 1000px #ffffff inset !important;
+  -webkit-text-fill-color: #111827 !important;
+  caret-color: #111827;
+  transition: background-color 9999s ease-in-out 0s;
+}
+.dark input:-webkit-autofill,
+.dark input:-webkit-autofill:hover,
+.dark input:-webkit-autofill:focus,
+.dark input:-webkit-autofill:active {
+  -webkit-box-shadow: 0 0 0 1000px #030712 inset !important;
+  -webkit-text-fill-color: #f3f4f6 !important;
+  caret-color: #f3f4f6;
+  transition: background-color 9999s ease-in-out 0s;
+}

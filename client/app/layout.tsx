@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./edu-viewer/globals.css";
 import { getTheme } from "@/utils/theme";
+import NavigationEvents from "@/components/NavigationEvents";
+import NavProgressBar from "@/components/NavProgressBar";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -32,6 +34,8 @@ export default async function RootLayout({
       suppressHydrationWarning
     >
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
+        <NavigationEvents />
+        <NavProgressBar />
         {children}
       </body>
     </html>

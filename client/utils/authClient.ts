@@ -166,6 +166,14 @@ export async function forgotPasswordReset(password: string): Promise<{ message: 
   return apiPost<{ message: string }>(`${API}/forgot-password/reset`, { password });
 }
 
+/** Change password for the currently authenticated user. */
+export async function changePassword(currentPassword: string, newPassword: string): Promise<{ message: string }> {
+  return apiPost<{ message: string }>(`${API}/change-password`, {
+    current_password: currentPassword,
+    new_password: newPassword,
+  });
+}
+
 export async function setTheme(theme: "light" | "dark"): Promise<void> {
   await apiFetch(`${API}/theme`, { method: "PUT", body: JSON.stringify({ theme }) });
 }

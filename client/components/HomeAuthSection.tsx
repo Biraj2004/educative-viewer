@@ -16,11 +16,20 @@
 
 import { createContext, useContext, useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { getUser, clearAuthToken } from "@/utils/authClient";
 
 // ─── Auth context shared across all auth-sensitive spots on the page ──────────
 
-const HomeAuthCtx = createContext<boolean | null>(null); // null = still loading
+interface HomeAuthCtxValue {
+  isAuthed: boolean | null; // null = still loading
+  setIsAuthed: (v: boolean) => void;
+}
+
+const HomeAuthCtx = createContext<HomeAuthCtxValue>({
+  isAuthed: null,
+  setIsAuthed: () => {},
+});
 
 export function HomeAuthProvider({
   children,
@@ -42,7 +51,9 @@ export function HomeAuthProvider({
   }, []);
 
   return (
-    <HomeAuthCtx.Provider value={isAuthed}>{children}</HomeAuthCtx.Provider>
+    <HomeAuthCtx.Provider value={{ isAuthed, setIsAuthed }}>
+      {children}
+    </HomeAuthCtx.Provider>
   );
 }
 
@@ -68,7 +79,7 @@ function IconArrow() {
 // Shown in the navbar only when the user is NOT authenticated.
 
 export function HomeNavSignIn() {
-  const isAuthed = useContext(HomeAuthCtx);
+  const { isAuthed } = useContext(HomeAuthCtx);
   // While loading keep whatever was SSR'd (null treated as true so we don't
   // flash an extra button while the fetch is in flight).
   if (isAuthed !== false) return null;
@@ -86,16 +97,48 @@ export function HomeNavSignIn() {
 // ─── Hero primary CTA ─────────────────────────────────────────────────────────
 
 export function HomeHeroCTA() {
-  const isAuthed = useContext(HomeAuthCtx);
+  const { isAuthed, setIsAuthed } = useContext(HomeAuthCtx);
+  const router = useRouter();
   const appHref = "/edu-viewer";
   const signInHref = "/auth?next=/edu-viewer";
 
+  const handleLaunch = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    window.dispatchEvent(new Event("navprogress:start"));
+    try {
+      await getUser();
+      router.push(appHref);
+    } catch (err: unknown) {
+      const status = (err as { status?: number })?.status;
+      if (status === 401) {
+        clearAuthToken();
+        setIsAuthed(false);
+        window.dispatchEvent(new Event("navprogress:done")); // not navigating — cancel bar
+      } else {
+        // Non-401 (network glitch etc.) — navigate anyway
+        router.push(appHref);
+      }
+    }
+  };
+
+  if (isAuthed) {
+    return (
+      <button
+        onClick={handleLaunch}
+        className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold shadow-md shadow-indigo-500/20 hover:shadow-lg hover:shadow-indigo-500/30 hover:-translate-y-px transition-all cursor-pointer"
+      >
+        Launch App
+        <IconArrow />
+      </button>
+    );
+  }
+
   return (
     <Link
-      href={isAuthed ? appHref : signInHref}
+      href={signInHref}
       className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold shadow-md shadow-indigo-500/20 hover:shadow-lg hover:shadow-indigo-500/30 hover:-translate-y-px transition-all"
     >
-      {isAuthed ? "Launch App" : "Sign In"}
+      Sign In
       <IconArrow />
     </Link>
   );
@@ -104,9 +147,28 @@ export function HomeHeroCTA() {
 // ─── Bottom CTA section (text + button) ──────────────────────────────────────
 
 export function HomeBottomCTA() {
-  const isAuthed = useContext(HomeAuthCtx);
+  const { isAuthed, setIsAuthed } = useContext(HomeAuthCtx);
+  const router = useRouter();
   const appHref = "/edu-viewer";
   const signInHref = "/auth?next=/edu-viewer";
+
+  const handleLaunch = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    window.dispatchEvent(new Event("navprogress:start"));
+    try {
+      await getUser();
+      router.push(appHref);
+    } catch (err: unknown) {
+      const status = (err as { status?: number })?.status;
+      if (status === 401) {
+        clearAuthToken();
+        setIsAuthed(false);
+        window.dispatchEvent(new Event("navprogress:done")); // not navigating — cancel bar
+      } else {
+        router.push(appHref);
+      }
+    }
+  };
 
   return (
     <div className="max-w-sm mx-auto">
@@ -118,13 +180,23 @@ export function HomeBottomCTA() {
           ? "Welcome back. Jump straight into your courses."
           : "Sign in to access your courses and start learning."}
       </p>
-      <Link
-        href={isAuthed ? appHref : signInHref}
-        className="inline-flex items-center gap-2 px-6 py-3 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold shadow-md shadow-indigo-500/20 hover:shadow-lg hover:shadow-indigo-500/30 hover:-translate-y-px transition-all"
-      >
-        {isAuthed ? "Launch Edu-Viewer PRO" : "Sign In to Get Started"}
-        <IconArrow />
-      </Link>
+      {isAuthed ? (
+        <button
+          onClick={handleLaunch}
+          className="inline-flex items-center gap-2 px-6 py-3 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold shadow-md shadow-indigo-500/20 hover:shadow-lg hover:shadow-indigo-500/30 hover:-translate-y-px transition-all cursor-pointer"
+        >
+          Launch Edu-Viewer PRO
+          <IconArrow />
+        </button>
+      ) : (
+        <Link
+          href={signInHref}
+          className="inline-flex items-center gap-2 px-6 py-3 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold shadow-md shadow-indigo-500/20 hover:shadow-lg hover:shadow-indigo-500/30 hover:-translate-y-px transition-all"
+        >
+          Sign In to Get Started
+          <IconArrow />
+        </Link>
+      )}
     </div>
   );
 }

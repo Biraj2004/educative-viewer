@@ -29,6 +29,8 @@ interface TopicSidebarProps {
     completedTopicIndices?: Set<number>;
     asideClassName?: string;
     onClose?: () => void;
+    /** When provided, clicks on topic links are intercepted for in-page navigation */
+    onTopicClick?: (href: string, topicIndex: number) => void;
 }
 
 export default function TopicSidebar({
@@ -39,6 +41,7 @@ export default function TopicSidebar({
     completedTopicIndices,
     asideClassName,
     onClose,
+    onTopicClick,
 }: TopicSidebarProps) {
     const activeRef = useRef<HTMLAnchorElement>(null);
 
@@ -79,7 +82,13 @@ export default function TopicSidebar({
                                                         <Link
                                                             ref={isActive ? activeRef : null}
                                                             href={`/edu-viewer/courses/${courseId}/${courseSlug}/topics/${topic.index}/${topic.slug}`}
-                                                            onClick={onClose}
+                                                            onClick={(e) => {
+                                                                if (onTopicClick) {
+                                                                    e.preventDefault();
+                                                                    onTopicClick(`/edu-viewer/courses/${courseId}/${courseSlug}/topics/${topic.index}/${topic.slug}`, topic.index);
+                                                                }
+                                                                onClose?.();
+                                                            }}
                                                             className={[
                                                                 "flex items-start gap-3 px-4 py-2.5 text-sm transition-colors border-b border-gray-50 dark:border-gray-800",
                                                                 isActive
@@ -120,7 +129,13 @@ export default function TopicSidebar({
                                             <Link
                                                 ref={isActive ? activeRef : null}
                                                 href={`/edu-viewer/courses/${courseId}/${courseSlug}/topics/${entry.index}/${entry.slug}`}
-                                                onClick={onClose}
+                                                onClick={(e) => {
+                                                    if (onTopicClick) {
+                                                        e.preventDefault();
+                                                        onTopicClick(`/edu-viewer/courses/${courseId}/${courseSlug}/topics/${entry.index}/${entry.slug}`, entry.index);
+                                                    }
+                                                    onClose?.();
+                                                }}
                                                 className={[
                                                     "flex items-start gap-3 px-4 py-2.5 text-sm transition-colors border-b border-gray-50 dark:border-gray-800",
                                                     isActive
