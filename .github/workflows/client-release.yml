@@ -158,13 +158,16 @@ jobs:
         run: |
           printf '1\n%s\n\n\n' "${{ steps.tag.outputs.next_tag }}" | node build-and-run.js
       
-      - name: Find .next.zip path
-        run: find . -name ".next.zip"
+      - name: Debug Path
+        run: |
+            echo "Current Dir: $(pwd)"
+            echo "Workspace: ${{ github.workspace }}"
+            ls -la .next.zip
       
       - name: Upload generated archive as workflow artifact
         uses: actions/upload-artifact@v4
         if: always()
         with:
           name: client-next-zip-${{ steps.tag.outputs.next_tag }}
-          path: "**/.next.zip"
+          path: ${{ github.workspace }}/.next.zip
           if-no-files-found: ignore
