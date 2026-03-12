@@ -10,8 +10,10 @@
  *   node build.js build      — build + obfuscate + zip only (no upload)
  *   node build.js local      — build + obfuscate + start local server
  *   node build.js serve      — start local server using existing .next folder
+ *   node build.js download   — download .next.zip from an existing release
  *   node build.js upload     — zip + upload to existing GitHub release
  *   node build.js release    — zip + create new GitHub release
+ *   node build.js public:sync — download and refresh JSON files in public/
  */
 
 'use strict';
@@ -23,10 +25,16 @@ const readline = require('readline');
 
 const ROOT        = __dirname;
 const NEXT_DIR    = path.join(ROOT, '.next');
+const NEXT_CACHE  = path.join(NEXT_DIR, 'cache');
 const CHUNKS_DIR  = path.join(NEXT_DIR, 'static', 'chunks');
 const ZIP_PATH    = path.join(ROOT, '.next.zip');
 const ENV_PATH    = path.join(ROOT, '.env.local');
 const REPOS_PATH  = path.join(ROOT, '.gh-repos.json');
+const PUBLIC_DIR  = path.join(ROOT, 'public');
+const PUBLIC_ZIP_REPO  = process.env.PUBLIC_ZIP_REPO  || 'Biraj2004/educative-viewer';
+const PUBLIC_ZIP_TAG   = process.env.PUBLIC_ZIP_TAG   || 'public-files';
+const PUBLIC_ZIP_ASSET = process.env.PUBLIC_ZIP_ASSET || 'public.zip';
+const PUBLIC_ZIP_PATH  = path.join(ROOT, '.public.zip');
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -76,6 +84,23 @@ function header(title) {
   console.log(`└${line}┘`);
 }
 
+function downloadReleaseAsset(repo, tag, pattern, outputPath, directAssetName) {
+  const ghResult = spawnSync(
+    `gh release download "${tag}" --repo "${repo}" --pattern "${pattern}" --output "${outputPath}" --clobber`,
+    { shell: true, stdio: ['ignore', 'pipe', 'pipe'], cwd: ROOT }
+  );
+
+  if (ghResult.status !== 0) {
+    console.log('[!] gh download failed, falling back to direct URL download...');
+    const url = `https://github.com/${repo}/releases/download/${tag}/${directAssetName}`;
+    if (process.platform === 'win32') {
+      run(`powershell -Command "Invoke-WebRequest -Uri '${url}' -OutFile '${outputPath}'"`);
+    } else {
+      run(`curl -fL "${url}" -o "${outputPath}"`);
+    }
+  }
+}
+
 // ─── Steps ───────────────────────────────────────────────────────────────────
 
 function stepInstallObfuscator() {
@@ -90,12 +115,87 @@ function stepInstallObfuscator() {
 
 function stepClean() {
   header('Clean .next');
+
+  const preserveCache = process.env.PRESERVE_NEXT_CACHE === '1';
+  const tmpCachePath = path.join(ROOT, '.next-cache-tmp');
+
   if (fs.existsSync(NEXT_DIR)) {
+    if (preserveCache && fs.existsSync(NEXT_CACHE)) {
+      if (fs.existsSync(tmpCachePath)) {
+        fs.rmSync(tmpCachePath, { recursive: true, force: true });
+      }
+      fs.renameSync(NEXT_CACHE, tmpCachePath);
+      fs.rmSync(NEXT_DIR, { recursive: true, force: true });
+      fs.mkdirSync(NEXT_DIR, { recursive: true });
+      fs.renameSync(tmpCachePath, NEXT_CACHE);
+      console.log('[+] Deleted .next (preserved .next/cache)');
+      return;
+    }
+
     fs.rmSync(NEXT_DIR, { recursive: true, force: true });
     console.log('[+] Deleted .next');
   } else {
     console.log('[+] .next not present, nothing to clean.');
   }
+}
+
+async function stepSyncPublicJson() {
+  header('Sync Public JSON Files');
+
+  const JSZip = require('jszip');
+  console.log(`[*] Downloading ${PUBLIC_ZIP_ASSET} from ${PUBLIC_ZIP_REPO}@${PUBLIC_ZIP_TAG} ...`);
+
+  if (fs.existsSync(PUBLIC_ZIP_PATH)) fs.unlinkSync(PUBLIC_ZIP_PATH);
+  downloadReleaseAsset(PUBLIC_ZIP_REPO, PUBLIC_ZIP_TAG, PUBLIC_ZIP_ASSET, PUBLIC_ZIP_PATH, PUBLIC_ZIP_ASSET);
+
+  if (!fs.existsSync(PUBLIC_ZIP_PATH)) {
+    throw new Error(`Could not download ${PUBLIC_ZIP_ASSET}`);
+  }
+
+  const zipBuffer = fs.readFileSync(PUBLIC_ZIP_PATH);
+  const zip = await JSZip.loadAsync(zipBuffer);
+
+  fs.mkdirSync(PUBLIC_DIR, { recursive: true });
+  const publicRoot = path.resolve(PUBLIC_DIR) + path.sep;
+  let updated = 0;
+  let skipped = 0;
+
+  for (const [entryName, entry] of Object.entries(zip.files)) {
+    if (entry.dir) continue;
+
+    let relPath = entryName.replace(/\\/g, '/').replace(/^\/+/, '');
+    if (relPath.toLowerCase().startsWith('public/')) {
+      relPath = relPath.slice('public/'.length);
+    }
+
+    if (!relPath || !relPath.toLowerCase().endsWith('.json')) {
+      skipped += 1;
+      continue;
+    }
+
+    const targetPath = path.resolve(PUBLIC_DIR, relPath);
+    if (targetPath !== path.resolve(PUBLIC_DIR) && !targetPath.startsWith(publicRoot)) {
+      skipped += 1;
+      console.log(`[!] Skipping unsafe zip entry: ${entryName}`);
+      continue;
+    }
+
+    fs.mkdirSync(path.dirname(targetPath), { recursive: true });
+    const data = await entry.async('nodebuffer');
+    fs.writeFileSync(targetPath, data);
+    updated += 1;
+  }
+
+  if (updated === 0) {
+    throw new Error('public.zip was downloaded but no JSON files were extracted.');
+  }
+
+  console.log(`[+] Updated ${updated} JSON file(s) in public/.`);
+  if (skipped > 0) {
+    console.log(`[i] Skipped ${skipped} non-JSON or invalid zip entr${skipped === 1 ? 'y' : 'ies'}.`);
+  }
+
+  if (fs.existsSync(PUBLIC_ZIP_PATH)) fs.unlinkSync(PUBLIC_ZIP_PATH);
 }
 
 function stepBuild() {
@@ -331,6 +431,88 @@ async function ensureRepos(rl) {
   return repos;
 }
 
+async function resolveRepo(rl) {
+  const repos = await ensureRepos(rl);
+  if (repos.length === 1) return repos[0];
+
+  console.log('\nSaved repos:\n');
+  repos.forEach((repo, i) => console.log(`  ${i + 1}) ${repo}`));
+  const idxRaw = (await ask(rl, `\nChoose repo [1-${repos.length}] (default 1): `)).trim();
+
+  if (!idxRaw) return repos[0];
+  const idx = Number.parseInt(idxRaw, 10);
+  if (Number.isNaN(idx) || idx < 1 || idx > repos.length) {
+    console.log('[!] Invalid selection, using repo 1.');
+    return repos[0];
+  }
+  return repos[idx - 1];
+}
+
+async function downloadZip(rl) {
+  header('Download .next.zip from GitHub Releases');
+
+  const repo = await resolveRepo(rl);
+
+  // List ALL releases — works unauthenticated for public repos
+  let releases = runCapture(`gh release list --repo "${repo}" --limit 100`);
+  let latestTag = null;
+  if (!releases) {
+    // Fallback: GitHub REST API (no auth needed for public repos)
+    console.log('[!] gh CLI unavailable or not authenticated, fetching via GitHub API...');
+    const apiUrl = `https://api.github.com/repos/${repo}/releases?per_page=100`;
+    const raw = process.platform === 'win32'
+      ? runCapture(`powershell -Command "(Invoke-WebRequest -Uri '${apiUrl}' -UseBasicParsing).Content"`)
+      : runCapture(`curl -sf "${apiUrl}"`);
+    if (raw) {
+      try {
+        const parsed = JSON.parse(raw);
+        if (parsed.length) latestTag = parsed[0].tag_name;
+        releases = parsed.map(r => `${r.tag_name.padEnd(20)} ${r.name || ''}`).join('\n');
+      } catch { /* ignore parse error */ }
+    }
+  } else {
+    // gh release list output: first token of the first line is the latest tag
+    const firstLine = releases.split('\n').find(l => l.trim());
+    if (firstLine) latestTag = firstLine.trim().split(/\s+/)[0];
+  }
+  if (!releases) {
+    console.error('[ERROR] Could not fetch releases. Check repo name and network connection.');
+    process.exit(1);
+  }
+
+  console.log('\nAvailable releases:\n');
+  console.log(releases);
+
+  const prompt = latestTag
+    ? `\nEnter release tag to download (default: ${latestTag}): `
+    : '\nEnter release tag to download from (e.g. v1.0.0): ';
+  const tagInput = (await ask(rl, prompt)).trim();
+  const tagClean = tagInput || latestTag;
+  if (!tagClean) {
+    console.error('[ERROR] No tag provided and no latest release found.');
+    process.exit(1);
+  }
+  console.log(`\n[*] Downloading .next.zip from release ${tagClean} ...`);
+
+  // Try gh first (works without auth for public repos), fall back to direct URL
+  const ghResult = spawnSync(
+    `gh release download "${tagClean}" --repo "${repo}" --pattern "*.zip" --output "${ZIP_PATH}" --clobber`,
+    { shell: true, stdio: ['ignore', 'pipe', 'pipe'], cwd: ROOT }
+  );
+  if (ghResult.status !== 0) {
+    console.log('[!] gh download failed, falling back to direct URL download...');
+    const url = `https://github.com/${repo}/releases/download/${tagClean}/.next.zip`;
+    if (process.platform === 'win32') {
+      run(`powershell -Command "Invoke-WebRequest -Uri '${url}' -OutFile '${ZIP_PATH}'"`);
+    } else {
+      run(`curl -fL "${url}" -o "${ZIP_PATH}"`);
+    }
+  }
+
+  console.log(`[+] Saved to ${ZIP_PATH}`);
+  return tagClean;
+}
+
 async function stepUploadToRelease(rl, tagArg) {
   header('Upload to GitHub Release');
 
@@ -436,10 +618,12 @@ async function interactiveMenu(rl) {
   console.log('  7) Upload existing .next.zip to existing release');
   console.log('  8) Upload existing .next.zip as new release');
   console.log('  9) Manage saved GitHub repos');
+  console.log('  10) Download and refresh public JSON files');
+  console.log('  11) Download .next.zip from existing release');
   console.log('  0) Exit');
   console.log('');
 
-  const choice = (await ask(rl, 'Choose [0-9]: ')).trim();
+  const choice = (await ask(rl, 'Choose [0-11]: ')).trim();
 
   switch (choice) {
     case '1':
@@ -479,6 +663,12 @@ async function interactiveMenu(rl) {
     case '9':
       await stepManageRepos(rl);
       break;
+    case '10':
+      await stepSyncPublicJson();
+      break;
+    case '11':
+      await downloadZip(rl);
+      break;
     case '0':
       console.log('Bye.');
       break;
@@ -499,12 +689,14 @@ async function main() {
     else if (cmd === 'build')      await flowBuildOnly();
     else if (cmd === 'build:only') await flowBuildNoObfuscate();
     else if (cmd === 'local')      await flowLocal(rl);
+    else if (cmd === 'download')   await downloadZip(rl);
+    else if (cmd === 'public:sync' || cmd === 'public') await stepSyncPublicJson();
     else if (cmd === 'serve')      await stepStartLocal(rl);
     else if (cmd === 'upload')     await flowUpload(rl, arg);
     else if (cmd === 'release')    await flowRelease(rl, arg);
     else {
       console.error(`Unknown command: ${cmd}`);
-      console.error('Usage: node build.js [build|build:only|local|serve|upload [tag]|release [tag]]');
+      console.error('Usage: node build.js [build|build:only|local|serve|download|public:sync|upload [tag]|release [tag]]');
       process.exit(1);
     }
   } finally {

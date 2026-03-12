@@ -25,6 +25,7 @@ jobs:
       NEXT_PUBLIC_BACKEND_API_BASE: ${{ vars.NEXT_PUBLIC_BACKEND_API_BASE }}
       NEXT_PUBLIC_STATIC_FILES_BASE: ${{ vars.NEXT_PUBLIC_STATIC_FILES_BASE }}
       REVALIDATE_SECRET: ${{ secrets.REVALIDATE_SECRET }}
+      PRESERVE_NEXT_CACHE: "1"
 
     steps:
       - name: Checkout repository
@@ -77,6 +78,22 @@ jobs:
           console.log(`Wrote .gh-repos.json with ${repos.length} repo(s).`);
           EOF
 
+      - name: Restore npm package cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.npm
+          key: ${{ runner.os }}-npm-${{ hashFiles('client/package.json') }}
+          restore-keys: |
+            ${{ runner.os }}-npm-
+
+      - name: Restore Next.js build cache
+        uses: actions/cache@v4
+        with:
+          path: client/.next/cache
+          key: ${{ runner.os }}-next-cache-${{ hashFiles('client/package.json', 'client/next.config.ts', 'client/tsconfig.json') }}
+          restore-keys: |
+            ${{ runner.os }}-next-cache-
+
       - name: Install client dependencies
         run: npm install
 
@@ -92,6 +109,9 @@ jobs:
           VERCEL_ENV=production
           REVALIDATE_SECRET=${REVALIDATE_SECRET}
           EOF
+
+      - name: Download and refresh public JSON files
+        run: node build-and-run.js public:sync
 
       - name: Resolve next release tag
         id: tag
