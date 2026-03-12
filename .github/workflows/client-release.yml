@@ -1,0 +1,147 @@
+name: Client Release
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: client-release
+  cancel-in-progress: false
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: write
+    defaults:
+      run:
+        shell: bash
+        working-directory: client
+    env:
+      GH_TOKEN: ${{ secrets.GH_RELEASE_TOKEN }}
+      GH_REPOS_JSON: ${{ vars.GH_REPOS_JSON }}
+      PROXY_SECRET: ${{ secrets.PROXY_SECRET }}
+      BACKEND_API_BASE: ${{ vars.BACKEND_API_BASE }}
+      NEXT_PUBLIC_BACKEND_API_BASE: ${{ vars.NEXT_PUBLIC_BACKEND_API_BASE }}
+      NEXT_PUBLIC_STATIC_FILES_BASE: ${{ vars.NEXT_PUBLIC_STATIC_FILES_BASE }}
+      REVALIDATE_SECRET: ${{ secrets.REVALIDATE_SECRET }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Validate workflow configuration inputs
+        run: |
+          required=(GH_TOKEN GH_REPOS_JSON PROXY_SECRET BACKEND_API_BASE NEXT_PUBLIC_STATIC_FILES_BASE REVALIDATE_SECRET)
+          for key in "${required[@]}"; do
+            if [ -z "${!key}" ]; then
+              echo "::error::Missing required GitHub secret/variable: ${key}"
+              exit 1
+            fi
+          done
+
+      - name: Materialize release repo list from variable
+        run: |
+          node - <<'EOF'
+          const fs = require("fs");
+
+          const raw = process.env.GH_REPOS_JSON || "";
+          let repos;
+
+          try {
+            repos = JSON.parse(raw);
+          } catch {
+            console.error("GH_REPOS_JSON must be valid JSON (example: [\"owner/repo\",\"owner2/repo2\"])");
+            process.exit(1);
+          }
+
+          if (!Array.isArray(repos) || repos.length === 0) {
+            console.error("GH_REPOS_JSON must be a non-empty JSON array of repositories");
+            process.exit(1);
+          }
+
+          const repoPattern = /^[\w.-]+\/[\w.-]+$/;
+          for (const repo of repos) {
+            if (typeof repo !== "string" || !repoPattern.test(repo)) {
+              console.error(`Invalid repo entry in GH_REPOS_JSON: ${String(repo)}`);
+              process.exit(1);
+            }
+          }
+
+          fs.writeFileSync(".gh-repos.json", JSON.stringify(repos, null, 2) + "\n", "utf8");
+          console.log(`Wrote .gh-repos.json with ${repos.length} repo(s).`);
+          EOF
+
+      - name: Install client dependencies
+        run: npm install
+
+      - name: Create .env.local for CI build
+        run: |
+          public_backend="${NEXT_PUBLIC_BACKEND_API_BASE:-$BACKEND_API_BASE}"
+
+          cat > .env.local <<EOF
+          PROXY_SECRET=${PROXY_SECRET}
+          BACKEND_API_BASE=${BACKEND_API_BASE}
+          NEXT_PUBLIC_BACKEND_API_BASE=${public_backend}
+          NEXT_PUBLIC_STATIC_FILES_BASE=${NEXT_PUBLIC_STATIC_FILES_BASE}
+          VERCEL_ENV=production
+          REVALIDATE_SECRET=${REVALIDATE_SECRET}
+          EOF
+
+      - name: Resolve next release tag
+        id: tag
+        run: |
+          primary_repo=$(node -e "const repos = require('./.gh-repos.json'); if (!Array.isArray(repos) || repos.length === 0) { process.exit(1); } process.stdout.write(String(repos[0]));")
+          latest_tag=$(gh release list --limit 1 --repo "$primary_repo" --json tagName --jq '.[0].tagName' 2>/dev/null || true)
+          next_tag=$(node - "$latest_tag" <<'EOF'
+          const latest = process.argv[2] || "";
+
+          if (!latest) {
+            process.stdout.write("v1.0.0");
+            process.exit(0);
+          }
+
+          const match = latest.match(/^([^0-9]*)(\d+(?:\.\d+)*)$/);
+          if (!match) {
+            console.error(`Cannot increment non-numeric tag: ${latest}`);
+            process.exit(1);
+          }
+
+          const prefix = match[1];
+          const parts = match[2].split('.').map((part) => Number(part));
+          parts[parts.length - 1] += 1;
+          process.stdout.write(prefix + parts.join('.'));
+          EOF
+          )
+
+          echo "primary_repo=$primary_repo" >> "$GITHUB_OUTPUT"
+          echo "latest_tag=$latest_tag" >> "$GITHUB_OUTPUT"
+          echo "next_tag=$next_tag" >> "$GITHUB_OUTPUT"
+
+          echo "Primary release repo: $primary_repo"
+          if [ -n "$latest_tag" ]; then
+            echo "Latest tag: $latest_tag"
+          else
+            echo "No previous release tag found; starting at $next_tag"
+          fi
+          echo "Next tag: $next_tag"
+
+      - name: Show GitHub CLI version
+        run: gh --version
+
+      - name: Build, zip, and publish releases through build-and-run.js
+        run: |
+          printf '1\n%s\n\n\n' "${{ steps.tag.outputs.next_tag }}" | node build-and-run.js
+
+      - name: Upload generated archive as workflow artifact
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: client-next-zip-${{ steps.tag.outputs.next_tag }}
+          path: client/.next.zip
+          if-no-files-found: ignore
