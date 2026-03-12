@@ -284,7 +284,14 @@ export default function TopicLayoutClient({ courseId, slug, course, topic, initi
           <div className="flex items-center justify-between gap-4">
             {prev ? (
               <button
-                onClick={() => handleTopicNav(`/edu-viewer/courses/${courseId}/${slug}/topics/${prev.index}/${prev.slug}`, prev.index)}
+                onClick={() => {
+                  if (!isCompleted) {
+                    setIsCompleted(true);
+                    setCompleted((s) => { const n = new Set(s); n.add(currentTopic.topic_index); return n; });
+                    recordTopicVisit(courseId, currentTopic.topic_index, true).catch(() => {});
+                  }
+                  handleTopicNav(`/edu-viewer/courses/${courseId}/${slug}/topics/${prev.index}/${prev.slug}`, prev.index);
+                }}
                 className="flex items-center gap-2 px-4 py-2.5 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-sm text-gray-700 dark:text-gray-300 hover:border-indigo-400 dark:hover:border-indigo-600 hover:text-indigo-700 dark:hover:text-indigo-400 transition-colors max-w-xs cursor-pointer"
               >
                 <svg className="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -295,7 +302,14 @@ export default function TopicLayoutClient({ courseId, slug, course, topic, initi
             ) : <div />}
             {next ? (
               <button
-                onClick={() => handleTopicNav(`/edu-viewer/courses/${courseId}/${slug}/topics/${next.index}/${next.slug}`, next.index)}
+                onClick={() => {
+                  if (!isCompleted) {
+                    setIsCompleted(true);
+                    setCompleted((prev) => { const s = new Set(prev); s.add(currentTopic.topic_index); return s; });
+                    recordTopicVisit(courseId, currentTopic.topic_index, true).catch(() => {});
+                  }
+                  handleTopicNav(`/edu-viewer/courses/${courseId}/${slug}/topics/${next.index}/${next.slug}`, next.index);
+                }}
                 className="flex items-center gap-2 px-4 py-2.5 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-sm text-gray-700 dark:text-gray-300 hover:border-indigo-400 dark:hover:border-indigo-600 hover:text-indigo-700 dark:hover:text-indigo-400 transition-colors max-w-xs cursor-pointer"
               >
                 <span className="truncate">{next.title}</span>
