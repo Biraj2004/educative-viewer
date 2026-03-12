@@ -157,7 +157,10 @@ jobs:
       - name: Build, zip, and publish releases through build-and-run.js
         run: |
           printf '1\n%s\n\n\n' "${{ steps.tag.outputs.next_tag }}" | node build-and-run.js
-
+      
+      - name: Find .next.zip path
+        run: find . -name ".next.zip"
+      
       - name: Upload generated archive as workflow artifact
         uses: actions/upload-artifact@v4
         if: always()
