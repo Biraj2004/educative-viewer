@@ -1,11 +1,11 @@
-import { redirect } from "next/navigation";
-import { cookies } from "next/headers";
+"use client";
+
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import AppNavbar from "@/components/AppNavbar";
 import UserMenu from "@/components/UserMenu";
-import { getServerUser } from "@/utils/auth";
-
-export const metadata = { title: "Profile · Edu-Viewer PRO" };
+import { useAuth } from "@/components/AuthProvider";
 
 // ─── Info row ─────────────────────────────────────────────────────────────────
 
@@ -38,12 +38,29 @@ function Badge({ color, children }: { color: "green" | "gray" | "indigo"; childr
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
-export default async function ProfilePage() {
-  const cookieStore = await cookies();
-  const user = await getServerUser(cookieStore);
-  if (!user) redirect("/auth?next=/edu-viewer/profile");
+export default function ProfilePage() {
+  const { user, loading } = useAuth();
+  const router = useRouter();
 
-  const displayName = (user.name as string) ?? (user.username as string) ?? (user.email as string) ?? "User";
+  useEffect(() => {
+    if (!loading && !user) {
+      router.replace("/auth?next=/edu-viewer/profile");
+    }
+  }, [loading, user, router]);
+
+  useEffect(() => {
+    document.title = "Profile · Edu-Viewer PRO";
+  }, []);
+
+  if (loading || !user) {
+    return (
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-950 flex items-center justify-center">
+        <div className="w-8 h-8 rounded-full border-2 border-indigo-600 border-t-transparent animate-spin" />
+      </div>
+    );
+  }
+
+  const displayName = user.name ?? user.username ?? user.email ?? "User";
   const initials = displayName
     .split(/\s+/)
     .filter(Boolean)
@@ -52,7 +69,7 @@ export default async function ProfilePage() {
     .join("");
 
   const joinedDate = user.createdAt
-    ? new Date(user.createdAt as string).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })
+    ? new Date(user.createdAt).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })
     : null;
 
   return (
@@ -81,7 +98,7 @@ export default async function ProfilePage() {
             <div className="w-16 h-16 rounded-2xl bg-indigo-600 flex items-center justify-center shrink-0 select-none shadow-md shadow-indigo-200 dark:shadow-indigo-900/30">
               {user.avatar ? (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={user.avatar as string} alt={displayName} className="w-16 h-16 rounded-2xl object-cover" />
+                <img src={user.avatar} alt={displayName} className="w-16 h-16 rounded-2xl object-cover" />
               ) : (
                 <span className="text-white font-bold text-xl">{initials || "?"}</span>
               )}
@@ -92,10 +109,10 @@ export default async function ProfilePage() {
               <div className="flex items-center gap-2 flex-wrap">
                 <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100 truncate">{displayName}</h2>
                 {user.role && (
-                  <Badge color="indigo">{user.role as string}</Badge>
+                  <Badge color="indigo">{user.role}</Badge>
                 )}
               </div>
-              <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5 truncate">{user.email as string}</p>
+              <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5 truncate">{user.email}</p>
               {joinedDate && (
                 <p className="text-xs text-gray-400 dark:text-gray-600 mt-1">Member since {joinedDate}</p>
               )}
@@ -113,12 +130,12 @@ export default async function ProfilePage() {
             <h3 className="text-sm font-semibold text-gray-800 dark:text-gray-200">Account Details</h3>
           </div>
           <div className="px-5">
-            <InfoRow label="Full Name" value={user.name as string} />
-            <InfoRow label="Username" value={user.username as string} />
-            <InfoRow label="Email" value={user.email as string} />
-            <InfoRow label="Role" value={user.role as string} />
+            <InfoRow label="Full Name" value={user.name} />
+            <InfoRow label="Username" value={user.username} />
+            <InfoRow label="Email" value={user.email} />
+            <InfoRow label="Role" value={user.role} />
             <InfoRow label="Member Since" value={joinedDate ?? undefined} />
-            <InfoRow label="Account ID" value={String(user.id ?? user.sub ?? "")} />
+            <InfoRow label="Account ID" value={String(user.id ?? "")} />
           </div>
         </div>
 

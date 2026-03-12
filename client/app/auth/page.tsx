@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, Suspense } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { login, signup, verify2FA, get2FASetup, enable2FA, rollbackSignup } from "@/utils/authClient";
+import { login, signup, verify2FA, get2FASetup, enable2FA, rollbackSignup, forgotPasswordRequest, forgotPasswordVerify, forgotPasswordReset } from "@/utils/authClient";
 
 // ─── Open-redirect guard ──────────────────────────────────────────────────────
 // Only allow same-origin relative paths (starts with "/", not "//").
@@ -158,9 +158,241 @@ function TwoFAStep({
   );
 }
 
+// ─── Forgot Password — Email Step ───────────────────────────────────────────
+
+function ForgotEmailForm({ onSuccess, onBack }: { onSuccess: () => void; onBack: () => void }) {
+  const [email, setEmail] = useState("");
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setError("");
+    setLoading(true);
+    try {
+      await forgotPasswordRequest(email.trim().toLowerCase());
+      onSuccess();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Request failed");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div className="flex flex-col gap-6">
+      <p className="text-sm text-gray-600 dark:text-gray-400 text-center">
+        Enter your account email. You&apos;ll then verify your identity with your authenticator app.
+      </p>
+      <form onSubmit={handleSubmit} autoComplete="off" className="flex flex-col gap-4">
+        <div>
+          <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1.5">Email</label>
+          <input
+            type="email"
+            required
+            autoComplete="email"
+            value={email}
+            onChange={(e) => { setEmail(e.target.value); setError(""); }}
+            placeholder="you@example.com"
+            className={inputCls}
+          />
+        </div>
+        {error && (
+          <div className="rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 px-3 py-2.5 text-xs text-red-700 dark:text-red-400">
+            {error}
+          </div>
+        )}
+        <button type="submit" disabled={loading} className={btnPrimary}>
+          {loading ? "Checking…" : "Continue"}
+        </button>
+      </form>
+      <button
+        type="button"
+        onClick={onBack}
+        className="inline-flex items-center justify-center gap-1.5 w-full py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 hover:border-indigo-300 dark:hover:border-indigo-700 hover:text-indigo-700 dark:hover:text-indigo-400 text-xs font-medium transition-all cursor-pointer"
+      >
+        <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">
+          <path d="m15 18-6-6 6-6" />
+        </svg>
+        Back to sign in
+      </button>
+    </div>
+  );
+}
+
+// ─── Forgot Password — TOTP Step ─────────────────────────────────────────────
+
+function ForgotTOTPStep({ onSuccess, onBack }: { onSuccess: () => void; onBack: () => void }) {
+  const [code, setCode] = useState("");
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => { inputRef.current?.focus(); }, []);
+
+  async function handleVerify(digits: string) {
+    if (digits.length !== 6) return;
+    setLoading(true);
+    setError("");
+    try {
+      await forgotPasswordVerify(digits);
+      onSuccess();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Invalid code");
+      setCode("");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    if (code.length === 6) handleVerify(code);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [code]);
+
+  return (
+    <div className="flex flex-col gap-6">
+      <p className="text-sm text-gray-600 dark:text-gray-400 text-center">
+        Enter the 6-digit code from your authenticator app to confirm your identity.
+      </p>
+      <form onSubmit={(e) => { e.preventDefault(); handleVerify(code); }} autoComplete="off" className="flex flex-col gap-4">
+        <div>
+          <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1.5">Authenticator Code</label>
+          <input
+            ref={inputRef}
+            type="text"
+            inputMode="numeric"
+            pattern="[0-9]*"
+            maxLength={6}
+            value={code}
+            onChange={(e) => { setCode(e.target.value.replace(/\D/g, "").slice(0, 6)); setError(""); }}
+            placeholder="000000"
+            className={`${inputCls} text-center text-xl tracking-[0.5em] font-mono`}
+          />
+        </div>
+        {error && <p className="text-xs text-red-600 dark:text-red-400 text-center">{error}</p>}
+        <button type="submit" disabled={loading || code.length !== 6} className={btnPrimary}>
+          {loading ? "Verifying…" : "Verify"}
+        </button>
+      </form>
+      <button
+        type="button"
+        onClick={onBack}
+        className="inline-flex items-center justify-center gap-1.5 w-full py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 hover:border-indigo-300 dark:hover:border-indigo-700 hover:text-indigo-700 dark:hover:text-indigo-400 text-xs font-medium transition-all cursor-pointer"
+      >
+        <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">
+          <path d="m15 18-6-6 6-6" />
+        </svg>
+        Go back
+      </button>
+    </div>
+  );
+}
+
+// ─── Forgot Password — New Password Step ─────────────────────────────────────
+
+function ForgotResetForm({ onSuccess, onBack }: { onSuccess: () => void; onBack: () => void }) {
+  const [password, setPassword] = useState("");
+  const [confirm, setConfirm]   = useState("");
+  const [showPass, setShowPass] = useState(false);
+  const [error, setError]       = useState("");
+  const [loading, setLoading]   = useState(false);
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setError("");
+    if (password !== confirm) { setError("Passwords do not match"); return; }
+    if (password.length < 8)  { setError("Password must be at least 8 characters"); return; }
+    setLoading(true);
+    try {
+      await forgotPasswordReset(password);
+      onSuccess();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Reset failed");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div className="flex flex-col gap-6">
+      <p className="text-sm text-gray-600 dark:text-gray-400 text-center">
+        Choose a new password for your account.
+      </p>
+      <form onSubmit={handleSubmit} autoComplete="off" className="flex flex-col gap-4">
+        <div>
+          <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1.5">New Password</label>
+          <div className="relative">
+            <input
+              type={showPass ? "text" : "password"}
+              required
+              autoComplete="new-password"
+              autoCorrect="off"
+              autoCapitalize="off"
+              spellCheck={false}
+              minLength={8}
+              maxLength={16}
+              data-lpignore="true"
+              data-form-type="other"
+              value={password}
+              onChange={(e) => { setPassword(e.target.value.slice(0, 16)); setError(""); }}
+              placeholder="8–16 characters"
+              className={`${inputCls} pr-10`}
+            />
+            <button
+              type="button"
+              onClick={() => setShowPass((p) => !p)}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors cursor-pointer"
+            >
+              <EyeIcon open={showPass} />
+            </button>
+          </div>
+        </div>
+        <div>
+          <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1.5">Confirm Password</label>
+          <input
+            type={showPass ? "text" : "password"}
+            required
+            autoComplete="new-password"
+            autoCorrect="off"
+            autoCapitalize="off"
+            spellCheck={false}
+            minLength={8}
+            maxLength={16}
+            data-lpignore="true"
+            data-form-type="other"
+            value={confirm}
+            onChange={(e) => { setConfirm(e.target.value.slice(0, 16)); setError(""); }}
+            placeholder="Re-enter your password"
+            className={inputCls}
+          />
+        </div>
+        {error && (
+          <div className="rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 px-3 py-2.5 text-xs text-red-700 dark:text-red-400">
+            {error}
+          </div>
+        )}
+        <button type="submit" disabled={loading} className={btnPrimary}>
+          {loading ? "Saving…" : "Set New Password"}
+        </button>
+      </form>
+      <button
+        type="button"
+        onClick={onBack}
+        className="inline-flex items-center justify-center gap-1.5 w-full py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 hover:border-indigo-300 dark:hover:border-indigo-700 hover:text-indigo-700 dark:hover:text-indigo-400 text-xs font-medium transition-all cursor-pointer"
+      >
+        <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">
+          <path d="m15 18-6-6 6-6" />
+        </svg>
+        Go back
+      </button>
+    </div>
+  );
+}
+
 // ─── Login Form ───────────────────────────────────────────────────────────────
 
-function LoginForm({ onSuccess2FA }: { onSuccess2FA: () => void }) {
+function LoginForm({ onSuccess2FA, onForgotPassword }: { onSuccess2FA: () => void; onForgotPassword: () => void }) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [email, setEmail] = useState("");
@@ -206,6 +438,13 @@ function LoginForm({ onSuccess2FA }: { onSuccess2FA: () => void }) {
       <div>
         <div className="flex items-center justify-between mb-1.5">
           <label className="block text-xs font-medium text-gray-600 dark:text-gray-400">Password</label>
+          <button
+            type="button"
+            onClick={onForgotPassword}
+            className="text-[11px] text-indigo-600 dark:text-indigo-400 hover:underline cursor-pointer"
+          >
+            Forgot password?
+          </button>
         </div>
         <div className="relative">
           <input
@@ -390,7 +629,7 @@ function SignupForm({ onShow2FASetup }: { onShow2FASetup: (qrUrl: string) => voi
 
 // ─── Main Auth Page ───────────────────────────────────────────────────────────
 
-type Step = "login" | "signup" | "2fa-verify" | "2fa-setup";
+type Step = "login" | "signup" | "2fa-verify" | "2fa-setup" | "forgot-email" | "forgot-2fa" | "forgot-reset";
 
 function AuthPageInner() {
   const router = useRouter();
@@ -427,7 +666,19 @@ function AuthPageInner() {
     }
   }
 
-  const showTwoFA = step === "2fa-verify" || step === "2fa-setup";
+  // ── Forgot-password handlers ──────────────────────────────────────────────
+  function handleForgotStart()  { setStep("forgot-email"); }
+  function handleForgotEmail()  { setStep("forgot-2fa"); }
+  function handleForgotTOTP()   { setStep("forgot-reset"); }
+  function handleForgotReset()  { setTab("login"); setStep("login"); }
+  function handleForgotBack() {
+    if (step === "forgot-2fa")   setStep("forgot-email");
+    else if (step === "forgot-reset") setStep("forgot-2fa");
+    else { setTab("login"); setStep("login"); }
+  }
+
+  const showTwoFA   = step === "2fa-verify" || step === "2fa-setup";
+  const showForgot  = step === "forgot-email" || step === "forgot-2fa" || step === "forgot-reset";
 
   return (
     <div className="flex-1 flex flex-col items-center justify-center px-4 py-12">
@@ -436,7 +687,7 @@ function AuthPageInner() {
 
         <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 shadow-lg shadow-gray-100/50 dark:shadow-black/30 overflow-hidden">
         {/* Session expired notice */}
-          {sessionExpired && (
+          {sessionExpired && !showForgot && (
             <div className="mx-8 mt-5 mb-0 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 px-3 py-2.5 text-xs text-amber-700 dark:text-amber-400 flex items-center gap-2">
               <svg className="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
                 <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
@@ -445,8 +696,8 @@ function AuthPageInner() {
             </div>
           )}
 
-          {/* Tab bar (hidden during 2FA) */}
-          {!showTwoFA && (
+          {/* Tab bar (hidden during 2FA / forgot-password) */}
+          {!showTwoFA && !showForgot && (
             <div className="flex border-b border-gray-100 dark:border-gray-800">
               {(["login", "signup"] as const).map((t) => (
                 <button
@@ -484,9 +735,36 @@ function AuthPageInner() {
             </div>
           )}
 
+          {/* Forgot-password heading */}
+          {showForgot && (
+            <div className="px-8 pt-7 pb-1">
+              <div className="flex items-center gap-3 mb-1">
+                <div className="w-8 h-8 rounded-lg bg-amber-50 dark:bg-amber-950/60 flex items-center justify-center">
+                  <svg className="w-4 h-4 text-amber-600 dark:text-amber-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="12" cy="12" r="10" />
+                    <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
+                    <line x1="12" y1="17" x2="12.01" y2="17" />
+                  </svg>
+                </div>
+                <div>
+                  <h2 className="text-base font-bold text-gray-900 dark:text-gray-100">
+                    {step === "forgot-email" && "Reset Password"}
+                    {step === "forgot-2fa"   && "Verify Identity"}
+                    {step === "forgot-reset" && "Set New Password"}
+                  </h2>
+                  <p className="text-xs text-gray-400 dark:text-gray-600">
+                    {step === "forgot-email" && "Step 1 of 3 — enter your email"}
+                    {step === "forgot-2fa"   && "Step 2 of 3 — authenticator code"}
+                    {step === "forgot-reset" && "Step 3 of 3 — choose a new password"}
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Body */}
           <div className="px-8 py-7">
-            {step === "login" && <LoginForm onSuccess2FA={handleLoginSuccess2FA} />}
+            {step === "login" && <LoginForm onSuccess2FA={handleLoginSuccess2FA} onForgotPassword={handleForgotStart} />}
             {step === "signup" && <SignupForm onShow2FASetup={handleSignupSuccess2FA} />}
             {(step === "2fa-verify" || step === "2fa-setup") && (
               <TwoFAStep
@@ -496,10 +774,13 @@ function AuthPageInner() {
                 onBack={handleBack}
               />
             )}
+            {step === "forgot-email" && <ForgotEmailForm onSuccess={handleForgotEmail} onBack={handleForgotBack} />}
+            {step === "forgot-2fa"   && <ForgotTOTPStep  onSuccess={handleForgotTOTP}  onBack={handleForgotBack} />}
+            {step === "forgot-reset" && <ForgotResetForm onSuccess={handleForgotReset} onBack={handleForgotBack} />}
           </div>
 
           {/* Footer link */}
-          {!showTwoFA && (
+          {!showTwoFA && !showForgot && (
             <div className="px-8 pb-6 text-center">
               <p className="text-xs text-gray-400 dark:text-gray-600">
                 {tab === "login" ? (
@@ -528,8 +809,8 @@ function AuthPageInner() {
           )}
         </div>
 
-        {/* Back to home — hidden during 2FA (go-back inside card replaces it) */}
-        {!showTwoFA && (
+        {/* Back to home — hidden during 2FA / forgot-password (go-back inside card replaces it) */}
+        {!showTwoFA && !showForgot && (
         <div className="mt-6 flex justify-center">
           <Link
             href="/"

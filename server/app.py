@@ -122,7 +122,6 @@ ORACLE_LIB_DIR         = os.environ.get("ORACLE_LIB_DIR", "").strip()
 JWT_SECRET            = os.environ.get("JWT_SECRET", "changeme-dev-secret")
 JWT_EXPIRES_DAYS      = int(os.environ.get("JWT_EXPIRES_DAYS", "7"))
 TOTP_ISSUER           = os.environ.get("TOTP_ISSUER", "EduViewer")
-CLIENT_SERVER_SECRET  = os.environ.get("CLIENT_SERVER_SECRET", "cs-internal-dev-secret-change-in-prod")
 
 # Comma-separated list of valid invite codes; empty = accept any non-empty code (dev mode)
 _raw_codes       = os.environ.get("INVITE_CODES", "")
@@ -137,9 +136,18 @@ app = Flask(__name__)
 
 
 @app.after_request
-def _log_request(response):
+def _add_cors_headers(response):
+    response.headers["Access-Control-Allow-Origin"]  = "*"
+    response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
+    response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, PATCH, DELETE, OPTIONS"
     log.info("%s %s → %s", request.method, request.full_path.rstrip("?"), response.status_code)
     return response
+
+
+@app.route("/api/<path:_path>", methods=["OPTIONS"])
+def _handle_preflight(_path):
+    """Return 204 for all CORS preflight OPTIONS requests."""
+    return "", 204
 
 
 def get_db():
@@ -162,26 +170,6 @@ def _require(payload, *keys):
     missing = [k for k in keys if k not in payload]
     if missing:
         abort(400, description=f"Missing required field(s): {', '.join(missing)}")
-
-
-def _require_service_token():
-    """Validate the internal client-server JWT on data API routes.
-    The Next.js server generates a short-lived (60 s) JWT signed with
-    CLIENT_SERVER_SECRET for every server-side fetch of course/topic data.
-    This prevents arbitrary public clients from hitting the data endpoints.
-    """
-    auth = request.headers.get("Authorization", "")
-    token = auth[7:] if auth.startswith("Bearer ") else None
-    if not token:
-        abort(401, description="Service token required")
-    try:
-        payload = pyjwt.decode(token, CLIENT_SERVER_SECRET, algorithms=["HS256"])
-        if payload.get("role") != "service":
-            abort(403, description="Invalid service token role")
-    except pyjwt.ExpiredSignatureError:
-        abort(401, description="Service token expired")
-    except pyjwt.PyJWTError:
-        abort(401, description="Invalid service token")
 
 
 # ── API 1: GET /courses ──────────────────────────────────────────────────── #
@@ -1365,6 +1353,136 @@ def auth_2fa_verify():
         "token": token,
         "user":  _user_public(user),
     }), 200
+
+
+# ── POST /auth/forgot-password/request ─────────────────────────────────── #
+
+@app.route("/api/auth/forgot-password/request", methods=["POST"])
+def auth_forgot_password_request():
+    """Step 1 of forgot-password: verify the email has a confirmed 2FA account.
+
+    Issues a short-lived (10 min) JWT with scope='pw_reset_pending'.
+    The same 400 message is returned whether the email exists or not,
+    to prevent account enumeration.
+
+    Body: {"email": "..."}
+    """
+    data  = request.get_json(force=True, silent=True) or {}
+    email = str(data.get("email", "")).strip().lower()
+
+    if not email or not re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", email):
+        abort(400, description="Invalid email address")
+
+    conn = get_auth_db()
+    try:
+        user = _fetch_user_by_email(conn, email)
+    finally:
+        conn.close()
+
+    # Require a fully confirmed 2FA account — otherwise there is no second
+    # factor available to verify ownership of the account.
+    if not user or not user.get("two_factor_confirmed") or not user.get("two_factor_secret"):
+        abort(400, description=(
+            "No account with a verified authenticator was found for that email. "
+            "If you set up 2FA during sign-up, try again or contact support."
+        ))
+
+    now = int(time.time())
+    token = pyjwt.encode(
+        {"id": user["id"], "scope": "pw_reset_pending", "iat": now, "exp": now + 600},
+        JWT_SECRET,
+        algorithm="HS256",
+    )
+    return jsonify({"token": token, "requiresTwoFactor": True}), 200
+
+
+# ── POST /auth/forgot-password/verify ──────────────────────────────────── #
+
+@app.route("/api/auth/forgot-password/verify", methods=["POST"])
+def auth_forgot_password_verify():
+    """Step 2 of forgot-password: confirm TOTP code, issue a reset-confirmed token.
+
+    Consumes the pw_reset_pending token (Bearer header) and — on success —
+    returns a short-lived (5 min) JWT with scope='pw_reset_confirmed'.
+
+    Body: {"code": "<6-digit TOTP>"}
+    """
+    token_raw = _bearer_token()
+    if not token_raw:
+        abort(401, description="Reset session token required")
+
+    payload = _decode_token(token_raw)
+    if not payload or payload.get("scope") != "pw_reset_pending":
+        abort(401, description="Invalid or expired password-reset session")
+
+    body = request.get_json(force=True, silent=True) or {}
+    code = str(body.get("code", "")).strip()
+
+    if len(code) != 6 or not code.isdigit():
+        abort(400, description="Enter the 6-digit code from your authenticator app")
+
+    conn = get_auth_db()
+    try:
+        user = _fetch_user_by_id(conn, payload["id"])
+    finally:
+        conn.close()
+
+    if not user or not user.get("two_factor_secret"):
+        abort(401, description="Invalid reset session")
+
+    if not pyotp.TOTP(user["two_factor_secret"]).verify(code, valid_window=1):
+        abort(400, description="Invalid authenticator code")
+
+    now = int(time.time())
+    confirmed_token = pyjwt.encode(
+        {"id": user["id"], "scope": "pw_reset_confirmed", "iat": now, "exp": now + 300},
+        JWT_SECRET,
+        algorithm="HS256",
+    )
+    return jsonify({"token": confirmed_token}), 200
+
+
+# ── POST /auth/forgot-password/reset ───────────────────────────────────── #
+
+@app.route("/api/auth/forgot-password/reset", methods=["POST"])
+def auth_forgot_password_reset():
+    """Step 3 of forgot-password: set a new password using the confirmed token.
+
+    Hashes the new password with bcrypt, persists it, and invalidates all
+    existing sessions so any stolen JWTs can no longer be used.
+
+    Body: {"password": "..."} + Bearer pw_reset_confirmed token.
+    """
+    token_raw = _bearer_token()
+    if not token_raw:
+        abort(401, description="Reset session token required")
+
+    payload = _decode_token(token_raw)
+    if not payload or payload.get("scope") != "pw_reset_confirmed":
+        abort(401, description="Invalid or expired password-reset session")
+
+    body     = request.get_json(force=True, silent=True) or {}
+    password = str(body.get("password", ""))
+
+    if len(password) < 8 or len(password) > 72:
+        abort(400, description="Password must be 8–72 characters")
+
+    pw_hash = bcrypt.hashpw(password.encode(), bcrypt.gensalt(rounds=12)).decode()
+
+    conn = get_auth_db()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                "UPDATE users_sensitive "
+                "SET password_hash = :pw_hash, session_id = NULL, current_token = NULL "
+                "WHERE user_id = :user_id",
+                {"pw_hash": pw_hash, "user_id": payload["id"]},
+            )
+        conn.commit()
+    finally:
+        conn.close()
+
+    return jsonify({"message": "Password updated. Please sign in with your new password."}), 200
 
 
 # ── Entry point ───────────────────────────────────────────────────────────── #

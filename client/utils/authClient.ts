@@ -145,6 +145,27 @@ export async function rollbackSignup(): Promise<void> {
   await apiPost<unknown>(`${API}/signup/rollback`, {});
 }
 
+// ─── Forgot password ──────────────────────────────────────────────────────────
+
+/** Step 1 — verify email; stores the pw_reset_pending token. */
+export async function forgotPasswordRequest(email: string): Promise<AuthResponse> {
+  const result = await apiPost<AuthResponse>(`${API}/forgot-password/request`, { email });
+  if (result.token) storeAuthToken(result.token);
+  return result;
+}
+
+/** Step 2 — verify TOTP code; stores the pw_reset_confirmed token. */
+export async function forgotPasswordVerify(code: string): Promise<AuthResponse> {
+  const result = await apiPost<AuthResponse>(`${API}/forgot-password/verify`, { code });
+  if (result.token) storeAuthToken(result.token);
+  return result;
+}
+
+/** Step 3 — set new password using the confirmed token. */
+export async function forgotPasswordReset(password: string): Promise<{ message: string }> {
+  return apiPost<{ message: string }>(`${API}/forgot-password/reset`, { password });
+}
+
 export async function setTheme(theme: "light" | "dark"): Promise<void> {
   await apiFetch(`${API}/theme`, { method: "PUT", body: JSON.stringify({ theme }) });
 }
