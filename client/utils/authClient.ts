@@ -62,6 +62,7 @@ export interface AuthResponse {
   token?: string;
   user?: AuthUser;
   requiresTwoFactor?: boolean;
+  requiresTwoFactorSetup?: boolean;
   message?: string;
   error?: string;
 }
@@ -143,6 +144,7 @@ export async function enable2FA(code: string): Promise<AuthResponse> {
 
 export async function rollbackSignup(): Promise<void> {
   await apiPost<unknown>(`${API}/signup/rollback`, {});
+  clearAuthToken();
 }
 
 // ─── Forgot password ──────────────────────────────────────────────────────────

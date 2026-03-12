@@ -2,8 +2,8 @@
 
 import { useState, useEffect, useRef, Suspense } from "react";
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
-import { login, signup, verify2FA, get2FASetup, enable2FA, rollbackSignup, forgotPasswordRequest, forgotPasswordVerify, forgotPasswordReset } from "@/utils/authClient";
+import { useSearchParams } from "next/navigation";
+import { clearAuthToken, login, signup, verify2FA, get2FASetup, enable2FA, rollbackSignup, forgotPasswordRequest, forgotPasswordVerify, forgotPasswordReset } from "@/utils/authClient";
 
 // ─── Open-redirect guard ──────────────────────────────────────────────────────
 // Only allow same-origin relative paths (starts with "/", not "//").
@@ -47,11 +47,13 @@ type TwoFAMode = "verify" | "setup";
 function TwoFAStep({
   mode,
   qrUrl,
+  notice,
   onSuccess,
   onBack,
 }: {
   mode: TwoFAMode;
   qrUrl?: string;
+  notice?: string;
   onSuccess: () => void;
   onBack: () => void;
 }) {
@@ -96,6 +98,12 @@ function TwoFAStep({
 
   return (
     <div className="flex flex-col gap-6">
+      {notice && (
+        <div className="rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 px-3 py-2.5 text-xs text-amber-700 dark:text-amber-400">
+          {notice}
+        </div>
+      )}
+
       {mode === "setup" && qrUrl && (
         <div className="flex flex-col items-center gap-3">
           <p className="text-sm text-gray-600 dark:text-gray-400 text-center">
@@ -392,8 +400,15 @@ function ForgotResetForm({ onSuccess, onBack }: { onSuccess: () => void; onBack:
 
 // ─── Login Form ───────────────────────────────────────────────────────────────
 
-function LoginForm({ onSuccess2FA, onForgotPassword }: { onSuccess2FA: () => void; onForgotPassword: () => void }) {
-  const router = useRouter();
+function LoginForm({
+  onSuccess2FA,
+  onSuccess2FASetup,
+  onForgotPassword,
+}: {
+  onSuccess2FA: () => void;
+  onSuccess2FASetup: (qrUrl: string) => void;
+  onForgotPassword: () => void;
+}) {
   const searchParams = useSearchParams();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -407,6 +422,11 @@ function LoginForm({ onSuccess2FA, onForgotPassword }: { onSuccess2FA: () => voi
     setLoading(true);
     try {
       const data = await login(email, password);
+      if (data.requiresTwoFactorSetup) {
+        const setup = await get2FASetup();
+        onSuccess2FASetup(setup.qrCodeUrl);
+        return;
+      }
       if (data.requiresTwoFactor) {
         onSuccess2FA();
         return;
@@ -632,11 +652,11 @@ function SignupForm({ onShow2FASetup }: { onShow2FASetup: (qrUrl: string) => voi
 type Step = "login" | "signup" | "2fa-verify" | "2fa-setup" | "forgot-email" | "forgot-2fa" | "forgot-reset";
 
 function AuthPageInner() {
-  const router = useRouter();
   const searchParams = useSearchParams();
   const [step, setStep] = useState<Step>("login");
   const [tab, setTab] = useState<"login" | "signup">("login");
   const [setupQrUrl, setSetupQrUrl] = useState("");
+  const [twoFASetupSource, setTwoFASetupSource] = useState<"signup" | "login" | null>(null);
 
   const sessionExpired = searchParams.get("reason") === "session_expired";
 
@@ -646,6 +666,13 @@ function AuthPageInner() {
 
   function handleSignupSuccess2FA(qrUrl: string) {
     setSetupQrUrl(qrUrl);
+    setTwoFASetupSource("signup");
+    setStep("2fa-setup");
+  }
+
+  function handleLoginSetup2FA(qrUrl: string) {
+    setSetupQrUrl(qrUrl);
+    setTwoFASetupSource("login");
     setStep("2fa-setup");
   }
 
@@ -655,26 +682,44 @@ function AuthPageInner() {
 
   async function handleBack() {
     if (step === "2fa-setup") {
-      // Delete the partially-created account before going back so the user
-      // can re-submit the signup form with the same email without a 409 conflict.
-      try { await rollbackSignup(); } catch { /* best-effort */ }
-      setTab("signup");
-      setStep("signup");
-    } else {
-      setTab("login");
-      setStep("login");
+      if (twoFASetupSource === "signup") {
+        // Delete the partially-created account before going back so the user
+        // can re-submit the signup form with the same email without a 409 conflict.
+        try { await rollbackSignup(); } catch { /* best-effort */ }
+        setTab("signup");
+        setStep("signup");
+      } else {
+        clearAuthToken();
+        setTab("login");
+        setStep("login");
+      }
+      setSetupQrUrl("");
+      setTwoFASetupSource(null);
+      return;
     }
+
+    if (step === "2fa-verify") {
+      clearAuthToken();
+    }
+
+    setTab("login");
+    setStep("login");
   }
 
   // ── Forgot-password handlers ──────────────────────────────────────────────
   function handleForgotStart()  { setStep("forgot-email"); }
   function handleForgotEmail()  { setStep("forgot-2fa"); }
   function handleForgotTOTP()   { setStep("forgot-reset"); }
-  function handleForgotReset()  { setTab("login"); setStep("login"); }
+  function handleForgotReset()  { clearAuthToken(); setTab("login"); setStep("login"); }
   function handleForgotBack() {
-    if (step === "forgot-2fa")   setStep("forgot-email");
-    else if (step === "forgot-reset") setStep("forgot-2fa");
-    else { setTab("login"); setStep("login"); }
+    if (step === "forgot-2fa" || step === "forgot-reset") {
+      clearAuthToken();
+      setStep("forgot-email");
+    } else {
+      clearAuthToken();
+      setTab("login");
+      setStep("login");
+    }
   }
 
   const showTwoFA   = step === "2fa-verify" || step === "2fa-setup";
@@ -764,12 +809,21 @@ function AuthPageInner() {
 
           {/* Body */}
           <div className="px-8 py-7">
-            {step === "login" && <LoginForm onSuccess2FA={handleLoginSuccess2FA} onForgotPassword={handleForgotStart} />}
+            {step === "login" && (
+              <LoginForm
+                onSuccess2FA={handleLoginSuccess2FA}
+                onSuccess2FASetup={handleLoginSetup2FA}
+                onForgotPassword={handleForgotStart}
+              />
+            )}
             {step === "signup" && <SignupForm onShow2FASetup={handleSignupSuccess2FA} />}
             {(step === "2fa-verify" || step === "2fa-setup") && (
               <TwoFAStep
                 mode={step === "2fa-setup" ? "setup" : "verify"}
                 qrUrl={setupQrUrl}
+                notice={step === "2fa-setup" && twoFASetupSource === "login"
+                  ? "Your account exists, but two-factor authentication setup was never completed. Scan the QR code below to finish setup before signing in."
+                  : undefined}
                 onSuccess={handleTwoFASuccess}
                 onBack={handleBack}
               />

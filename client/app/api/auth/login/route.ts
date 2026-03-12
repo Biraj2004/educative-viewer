@@ -27,7 +27,7 @@ export async function POST(request: NextRequest) {
   // Set httpOnly cookie if a token was returned
   const token: string | undefined = data?.token;
   if (token) {
-    if (data?.requiresTwoFactor) {
+    if (data?.requiresTwoFactor || data?.requiresTwoFactorSetup) {
       // Partial token: short-lived (10 min) — allows 2FA endpoints to authenticate the user
       response.cookies.set(AUTH_COOKIE, token, {
         httpOnly: true,

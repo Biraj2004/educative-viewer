@@ -991,11 +991,19 @@ def auth_login():
 
     # Use constant-time comparison even when user is missing (prevents timing attacks)
     dummy_hash = b"$2b$12$" + b"x" * 53
-    stored_hash = user["password_hash"].encode() if user else dummy_hash
+    stored_hash = user["password_hash"].encode() if (user and user.get("password_hash")) else dummy_hash
     password_ok = bcrypt.checkpw(password.encode(), stored_hash)
 
     if not user or not password_ok:
         abort(401, description="Invalid email or password")
+
+    # Check for incomplete 2FA setup (signed up but never completed 2FA)
+    if user.get("two_factor_secret") and not user.get("two_factor_confirmed"):
+        return jsonify({
+            "token": _make_partial_token(user["id"]),
+            "requiresTwoFactorSetup": True,
+            "message": "Your account setup is incomplete. Please complete two-factor authentication to continue.",
+        }), 200
 
     if user["two_factor_enabled"] and user["two_factor_confirmed"]:
         return jsonify({
@@ -1439,6 +1447,13 @@ def auth_forgot_password_request():
         user = _fetch_user_by_email(conn, email)
     finally:
         conn.close()
+
+    # Check for incomplete 2FA setup (signed up but never completed 2FA)
+    if user and user.get("two_factor_secret") and not user.get("two_factor_confirmed"):
+        abort(400, description=(
+            "This account has incomplete two-factor authentication setup. "
+            "Password reset is not available. Please create a new account or contact support."
+        ))
 
     # Require a fully confirmed 2FA account — otherwise there is no second
     # factor available to verify ownership of the account.
