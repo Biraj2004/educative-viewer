@@ -166,5 +166,5 @@ jobs:
         if: always()
         with:
           name: client-next-zip-${{ steps.tag.outputs.next_tag }}
-          path: ../.next.zip
+          path: "**/.next.zip"
           if-no-files-found: ignore
