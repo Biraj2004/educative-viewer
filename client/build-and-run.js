@@ -530,23 +530,58 @@ async function stepUploadToRelease(rl, tagArg) {
   console.log(`\n[✓] Upload complete to all ${repos.length} repo(s).`);
 }
 
+function incrementTag(tag) {
+  if (!tag) return 'v1.0.0';
+  const match = tag.match(/^([^0-9]*)(\d+(?:\.\d+)*)$/);
+  if (!match) {
+    console.warn(`[!] Non-standard tag format: ${tag}. Defaulting to v1.0.0`);
+    return 'v1.0.0';
+  }
+
+  const prefix = match[1];
+  const parts = match[2].split('.').map((part) => Number(part));
+  parts[parts.length - 1] += 1;
+  return prefix + parts.join('.');
+}
+
 async function stepCreateRelease(rl, tagArg) {
   header('Create GitHub Release');
 
+  const isCI = !!process.env.CI || !!process.env.GITHUB_ACTIONS;
   const repos = await ensureRepos(rl);
   console.log(`\n  [*] Will create release in ${repos.length} repo(s): ${repos.join(', ')}`);
 
-  // Use first repo to suggest a latest tag
-  const latest = runCapture(`gh release list --limit 1 --repo "${repos[0]}"`) || '';
-  const latestTag = latest.trim().split(/\s+/)[0] || '';
-  if (latestTag) console.log(`  [+] Latest release in ${repos[0]}: ${latestTag}`);
+  let tag = tagArg;
+  let title;
+  let notes;
 
-  const tag     = tagArg || (await ask(rl, `New release tag${latestTag ? ` (latest is ${latestTag})` : ''}: `)).trim();
-  if (!tag) { console.error('[ERROR] Tag is required.'); process.exit(1); }
+  if (tag) {
+    console.log(`[+] Using provided tag: ${tag}`);
+    title = tag;
+    notes = `Automated release for ${tag}`;
+  } else if (isCI) {
+    console.log('[+] CI environment detected, automating release tag...');
+    const latest = runCapture(`gh release list --limit 1 --repo "${repos[0]}"`) || '';
+    const latestTag = latest.trim().split(/\s+/)[0] || '';
+    if (latestTag) console.log(`  [+] Latest release in ${repos[0]}: ${latestTag}`);
 
-  const titleIn = (await ask(rl, `Release title [${tag}]: `)).trim();
-  const notes   = (await ask(rl, 'Release notes (leave blank for none): ')).trim();
-  const title   = titleIn || tag;
+    tag = incrementTag(latestTag);
+    title = tag;
+    notes = `Automated release for ${tag}`;
+    console.log(`  [+] New release tag: ${tag}`);
+  } else {
+    // Interactive part
+    const latest = runCapture(`gh release list --limit 1 --repo "${repos[0]}"`) || '';
+    const latestTag = latest.trim().split(/\s+/)[0] || '';
+    if (latestTag) console.log(`  [+] Latest release in ${repos[0]}: ${latestTag}`);
+
+    tag = (await ask(rl, `New release tag${latestTag ? ` (latest is ${latestTag})` : ''}: `)).trim();
+    if (!tag) { console.error('[ERROR] Tag is required.'); process.exit(1); }
+
+    const titleIn = (await ask(rl, `Release title [${tag}]: `)).trim();
+    notes = (await ask(rl, 'Release notes (leave blank for none): ')).trim();
+    title = titleIn || tag;
+  }
 
   for (const repo of repos) {
     console.log(`\n  [→] Creating release in ${repo} ...`);
