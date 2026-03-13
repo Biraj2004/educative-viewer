@@ -38,13 +38,6 @@ function IconLayers() {
   );
 }
 
-function IconChevronDown() {
-  return (
-    <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">
-      <path d="m6 9 6 6 6-6" />
-    </svg>
-  );
-}
 
 function IconExternal() {
   return (
@@ -85,9 +78,13 @@ const features = [
 const componentTypes = [
   "Sandpack", "Code Blocks", "LaTeX Math", "Canvas Animation",
   "Draw IO", "Quiz", "Structured Quiz", "Permutation",
-  "Match Answers", "Tables", "Spoiler", "Markdown",
+  "Match Answers", "Tables", "Spoiler", "Markdown Layouts",
   "Columns", "Slate HTML", "InstaCalc", "File Viewer",
   "Educative Array", "API Widget", "Editor Code", "WebpackBin",
+  "Video Player", "Stack", "RunJS", "Notepad",
+  "Matrix", "NaryTree", "LinkedList", "Graphviz",
+  "BinaryTree", "CodeTest", "Chart", "ButtonLink",
+  "CodeDrawing", "Adaptive",
 ];
 
 const stats = [
@@ -104,7 +101,11 @@ export default function LandingPage() {
     <div className="h-screen overflow-y-auto bg-white dark:bg-gray-950 text-gray-900 dark:text-gray-100 no-scrollbar">
 
       {/* ── Nav ─────────────────────────────────────────────────────────── */}
-      <AppNavbar actions={<HomeNavSignIn />} />
+      <AppNavbar actions={
+        <div className="flex items-center gap-4">
+          <HomeNavSignIn />
+        </div>
+      } />
 
       {/* ── Hero ────────────────────────────────────────────────────────── */}
       <section className="relative overflow-hidden border-b border-gray-200 dark:border-gray-800">
@@ -136,31 +137,30 @@ export default function LandingPage() {
           </span>
 
           {/* Headline */}
-          <h1 className="text-5xl sm:text-6xl font-extrabold tracking-tight leading-[1.08] text-gray-950 dark:text-white mb-5">
+          <h1 className="text-5xl sm:text-7xl font-extrabold tracking-tight leading-[1.05] text-gray-950 dark:text-white mb-6">
             Explore. Code.
             <br />
-            <span className="text-transparent bg-clip-text bg-linear-to-r from-indigo-500 via-violet-500 to-indigo-600 dark:from-indigo-400 dark:via-violet-400 dark:to-sky-400">
+            <span className="text-transparent bg-clip-text bg-linear-to-r from-indigo-500 via-violet-500 to-indigo-600 dark:from-indigo-400 dark:via-fuchsia-400 dark:to-cyan-400">
               Master.
             </span>
           </h1>
 
           {/* Sub */}
-          <p className="max-w-xl mx-auto text-base text-gray-600 dark:text-gray-400 leading-relaxed mb-10">
+          <p className="max-w-xl mx-auto text-lg text-gray-600 dark:text-gray-400 leading-relaxed mb-10">
             An open-source, power-packed educational content viewer.
             25+ interactive component types — live sandboxes, quizzes,
-            diagrams, math, and more. Rendered properly for <span className="underline decoration-wavy decoration-indigo-500 dark:decoration-white/70 decoration-2">better user experience</span>.
+            diagrams, math, and more. Rendered properly for a <span className="underline decoration-wavy decoration-indigo-500 dark:decoration-indigo-400 decoration-2">better user experience</span>.
           </p>
 
           {/* CTAs */}
-          <div className="flex items-center justify-center gap-3 flex-wrap">
+          <div className="flex items-center justify-center gap-4 flex-wrap">
             <HomeHeroCTA />
-            <a
-              href="#components"
-              className="inline-flex items-center gap-1.5 px-5 py-2.5 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 text-sm font-medium transition-colors"
+            <Link
+              href="/about"
+              className="inline-flex items-center gap-2 px-6 py-2.5 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 hover:border-indigo-400 dark:hover:border-indigo-600 text-sm font-semibold transition-all hover:shadow-md"
             >
-              See Components
-              <IconChevronDown />
-            </a>
+              About the Project
+            </Link>
           </div>
         </div>
       </section>
@@ -190,12 +190,12 @@ export default function LandingPage() {
             {features.map(({ Icon, iconBg, iconColor, label, desc }) => (
               <div
                 key={label}
-                className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-6 hover:shadow-md dark:hover:shadow-gray-950/60 transition-shadow"
+                className="group rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900/80 p-8 hover:shadow-xl hover:-translate-y-1 dark:hover:shadow-indigo-500/10 transition-all duration-300"
               >
-                <div className={`w-10 h-10 rounded-lg flex items-center justify-center mb-4 ${iconBg} ${iconColor}`}>
+                <div className={`w-12 h-12 rounded-xl flex items-center justify-center mb-6 group-hover:scale-110 transition-transform ${iconBg} ${iconColor}`}>
                   <Icon />
                 </div>
-                <h3 className="font-semibold text-gray-900 dark:text-white text-sm mb-2">{label}</h3>
+                <h3 className="font-bold text-gray-900 dark:text-white text-lg mb-3">{label}</h3>
                 <p className="text-sm text-gray-600 dark:text-gray-400 leading-relaxed">{desc}</p>
               </div>
             ))}
@@ -234,22 +234,24 @@ export default function LandingPage() {
 
       {/* ── Footer ──────────────────────────────────────────────────────── */}
       <footer className="max-w-5xl mx-auto px-6 py-6 flex items-center justify-between text-xs text-gray-400 dark:text-gray-600">
-        <span>
-          © 2026{" "}
-          <strong className="text-gray-600 dark:text-gray-400 font-semibold">
-            Edu-Viewer PRO
-          </strong>{" "}
-          · Open Source · GPL-3.0
+        <span className="flex items-center gap-4">
+          <span>
+            © 2026{" "}
+            <strong className="text-gray-600 dark:text-gray-400 font-semibold">
+              Edu-Viewer PRO
+            </strong>{" "}
+            · Open Source
+          </span>
         </span>
-        <a
-          href="https://github.com/Biraj2004/educative-viewer"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="inline-flex items-center gap-1.5 hover:text-gray-600 font-bold dark:hover:text-gray-300 transition-colors"
-        >
-          GitHub
-          <IconExternal />
-        </a>
+        <div className="flex items-center gap-4">
+          <Link
+            href="/about"
+            className="inline-flex items-center gap-1.5 font-bold text-gray-700 dark:text-gray-300 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors cursor-pointer text-[13px]"
+          >
+            About Us
+            <IconExternal />
+          </Link>
+        </div>
       </footer>
 
     </div>

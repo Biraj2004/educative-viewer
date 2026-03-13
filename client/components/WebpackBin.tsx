@@ -388,7 +388,7 @@ function TreeItem({ node, depth, allLeaves, activeLeafId, onSelectLeaf, onDownlo
       <button
         onClick={(e) => { e.stopPropagation(); onDownloadLeaf(node); }}
         title={`Download ${node.module}`}
-        className="opacity-0 group-hover:opacity-100 transition-opacity text-gray-500 hover:text-white shrink-0"
+        className="opacity-0 group-hover:opacity-100 transition-opacity text-gray-500 hover:text-white shrink-0 cursor-pointer"
       >
         <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
           <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
@@ -548,7 +548,7 @@ export default function WebpackBin({ data }: { data: WebpackBinData }) {
               <button
                 onClick={() => setWordWrap((w) => !w)}
                 title={wordWrap ? "Disable word wrap" : "Enable word wrap"}
-                className={`text-[11px] font-mono font-semibold px-1.5 py-0.5 rounded border transition-colors select-none ${
+                className={`text-[11px] font-mono font-semibold px-1.5 py-0.5 rounded border transition-colors select-none cursor-pointer ${
                   wordWrap
                     ? "text-blue-300 border-blue-600 bg-blue-900/30"
                     : "text-gray-500 border-gray-700 hover:text-gray-200 hover:border-gray-500"
@@ -561,7 +561,7 @@ export default function WebpackBin({ data }: { data: WebpackBinData }) {
               <button
                 onClick={() => setShowInfo((p) => !p)}
                 title="Component info"
-                className={`transition-colors ${showInfo ? "text-blue-400" : "text-gray-500 hover:text-gray-200"}`}
+                className={`transition-colors cursor-pointer ${showInfo ? "text-blue-400" : "text-gray-500 hover:text-gray-200"}`}
               >
                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                   <circle cx="12" cy="12" r="10" />
@@ -572,7 +572,7 @@ export default function WebpackBin({ data }: { data: WebpackBinData }) {
               {/* Reset content */}
               <button
                 title="Reset to original"
-                className="text-gray-500 hover:text-gray-200 transition-colors"
+                className="text-gray-500 hover:text-gray-200 transition-colors cursor-pointer"
                 onClick={() => {
                   editorRef.current?.setValue(activeFile.data?.content ?? "");
                   editorRef.current?.revealLine(1);
@@ -587,7 +587,7 @@ export default function WebpackBin({ data }: { data: WebpackBinData }) {
               <button
                 onClick={() => setIsFullscreen((f) => !f)}
                 title={isFullscreen ? "Exit fullscreen" : "Fullscreen"}
-                className="text-gray-500 hover:text-gray-200 transition-colors"
+                className="text-gray-500 hover:text-gray-200 transition-colors cursor-pointer"
               >
                 {isFullscreen ? (
                   <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -756,7 +756,7 @@ export default function WebpackBin({ data }: { data: WebpackBinData }) {
               <div>
                 <button
                   onClick={() => setShowHint((p) => !p)}
-                  className="text-blue-400 hover:underline flex items-center gap-1"
+                  className="text-blue-400 hover:underline flex items-center gap-1 cursor-pointer"
                 >
                   <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -787,7 +787,7 @@ export default function WebpackBin({ data }: { data: WebpackBinData }) {
             <button
               onClick={handleCopy}
               title="Copy active file"
-              className="text-gray-500 hover:text-gray-200 transition-colors"
+              className="text-gray-500 hover:text-gray-200 transition-colors cursor-pointer"
             >
               {copied ? (
                 <svg className="w-4 h-4 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
