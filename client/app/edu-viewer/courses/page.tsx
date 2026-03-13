@@ -10,6 +10,8 @@ import type { ProgressData } from "@/utils/authClient";
 
 const BACKEND = (process.env.NEXT_PUBLIC_BACKEND_API_BASE ?? "").replace(/\/$/, "");
 
+const inflightFetches = new Map<string, Promise<any>>();
+
 interface Course {
   id: number | string;
   title: string;
@@ -37,17 +39,21 @@ export default function CoursesPage() {
       window.location.replace("/");
       return;
     }
-    Promise.all([
-      fetch(`${BACKEND}/api/courses`, {
+    const fetchKey = "courses-list";
+    let coursesPromise = inflightFetches.get(fetchKey);
+    if (!coursesPromise) {
+      coursesPromise = fetch(`${BACKEND}/api/courses`, {
         headers: { Authorization: `Bearer ${token}` },
       }).then(async (r) => {
         if (r.status === 401) throw Object.assign(new Error("Unauthorized"), { status: 401 });
         if (!r.ok) throw new Error(`Failed to load courses (${r.status})`);
         const json = await r.json();
         return (Array.isArray(json) ? json : (json.courses ?? json.data ?? [])) as Course[];
-      }),
-      getProgress(),
-    ])
+      }).finally(() => setTimeout(() => inflightFetches.delete(fetchKey), 50));
+      inflightFetches.set(fetchKey, coursesPromise);
+    }
+
+    Promise.all([coursesPromise, getProgress()])
       .then(([data, prog]) => {
         setCourses(data);
         setProgress(prog);
