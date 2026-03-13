@@ -4,12 +4,13 @@ import React, { useState, useRef, useEffect, useCallback } from "react";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-export interface MatchItem {
+// Internal (normalized) shape used by the renderer
+interface MatchItem {
   id: string;
   text: string;
 }
 
-export interface MatchTheAnswersData {
+interface NormalizedMatchData {
   comp_id: string;
   title?: string;
   leftHeader?: string;
@@ -17,6 +18,70 @@ export interface MatchTheAnswersData {
   statements: MatchItem[];
   options: MatchItem[];
   solution: Record<string, string>; // statementId → optionId
+}
+
+// ─── Real API JSON shape ───────────────────────────────────────────────────────
+
+interface RawMatchSide {
+  text: string;
+  mdHtml?: string;
+}
+
+interface RawMatchPair {
+  left: RawMatchSide;
+  right: RawMatchSide;
+  explanation?: string;
+}
+
+export interface MatchTheAnswersData {
+  comp_id: string;
+  version?: string;
+  content: {
+    statements: RawMatchPair[][];  // outer array = question sets, we use [0]
+  };
+  actualAnswers?: {
+    answers: number[][];           // answers[0][i] = index of correct right option for left[i]
+  };
+  protectedContent?: {
+    answers: number[][];
+  };
+}
+
+// ─── Normalizer ───────────────────────────────────────────────────────────────
+
+function normalizeMatchData(raw: MatchTheAnswersData): NormalizedMatchData {
+  const pairs = raw.content.statements[0] ?? [];
+
+  // Left items (statements)
+  const statements: MatchItem[] = pairs.map((p, i) => ({
+    id: `L${i}`,
+    text: p.left.text,
+  }));
+
+  // Right items (options) — same order as in the JSON; displayed as clickable targets.
+  // The solution tells us which right item each left item should match.
+  const options: MatchItem[] = pairs.map((p, i) => ({
+    id: `R${i}`,
+    text: p.right.text,
+  }));
+
+  // Build solution map: statementId → optionId
+  // answers[0][i] is the index of the correct right item for left[i]
+  const answerRow = (raw.actualAnswers?.answers ?? raw.protectedContent?.answers ?? [[]])[0];
+  const solution: Record<string, string> = {};
+  statements.forEach((stmt, i) => {
+    const correctRightIdx = answerRow[i];
+    if (correctRightIdx !== undefined) {
+      solution[stmt.id] = `R${correctRightIdx}`;
+    }
+  });
+
+  return {
+    comp_id: raw.comp_id,
+    statements,
+    options,
+    solution,
+  };
 }
 
 interface LineCoord {
@@ -31,7 +96,9 @@ interface LineCoord {
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export default function MatchTheAnswers({ data }: { data: MatchTheAnswersData }) {
+export default function MatchTheAnswers({ data: rawData }: { data: MatchTheAnswersData }) {
+  const data = normalizeMatchData(rawData);
+
   const [connections, setConnections] = useState<Record<string, string>>({});
   const [selectedLeft, setSelectedLeft] = useState<string | null>(null);
   const [showSolution, setShowSolution] = useState(false);
@@ -228,9 +295,9 @@ export default function MatchTheAnswers({ data }: { data: MatchTheAnswersData })
             <defs>
               {[
                 { id: `${uid}-neutral`, color: "#818cf8" },
-                { id: `${uid}-solution`, color: "#6366f1" },
-                { id: `${uid}-correct`,  color: "#10b981" },
-                { id: `${uid}-wrong`,    color: "#ef4444" },
+                { id: `${uid}-solution`, color: "#a855f7" },
+                { id: `${uid}-correct`, color: "#10b981" },
+                { id: `${uid}-wrong`, color: "#ef4444" },
               ].map(({ id, color }) => (
                 <marker key={id} id={id} markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto">
                   <path d="M0,0 L0,7 L7,3.5 z" fill={color} fillOpacity="0.9" />
@@ -241,15 +308,16 @@ export default function MatchTheAnswers({ data }: { data: MatchTheAnswersData })
             {lines.map((line) => {
               const isCorrect = line.correct === true;
               const isWrong = line.correct === false;
+              const isSolution = showSolution && !isCorrect && !isWrong;
               const stroke =
                 isCorrect ? "#10b981"
                   : isWrong ? "#ef4444"
-                    : showSolution ? "#6366f1"
+                    : isSolution ? "#a855f7"
                       : "#818cf8";
               const markerId =
                 isCorrect ? `${uid}-correct`
                   : isWrong ? `${uid}-wrong`
-                    : showSolution ? `${uid}-solution`
+                    : isSolution ? `${uid}-solution`
                       : `${uid}-neutral`;
               const mx = (line.x1 + line.x2) / 2;
 
@@ -259,8 +327,9 @@ export default function MatchTheAnswers({ data }: { data: MatchTheAnswersData })
                   d={`M ${line.x1} ${line.y1} C ${mx} ${line.y1}, ${mx} ${line.y2}, ${line.x2 - 7} ${line.y2}`}
                   fill="none"
                   stroke={stroke}
-                  strokeWidth="1.75"
-                  strokeOpacity="0.75"
+                  strokeWidth={isSolution ? "2.25" : "1.75"}
+                  strokeOpacity={isSolution ? "1" : "0.75"}
+                  strokeDasharray={isSolution ? "6 3" : undefined}
                   markerEnd={`url(#${markerId})`}
                 />
               );

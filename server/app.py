@@ -285,6 +285,35 @@ def get_topic_data():
         conn.close()
 
 
+# ── API 4: GET /test_components ──────────────────────────────────────────────────── #
+
+@app.route("/api/test_components", methods=["GET"])
+def get_test_components():
+    """Return all test components. Body: {} (no fields required)"""
+    user, _ = _resolve_user(require_full=True)
+    if not user:
+        abort(401, description="Authentication required")
+    conn = get_db()
+    try:
+        # Check if the table exists, and create it if it doesn't
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS test_components (
+                component_id INTEGER PRIMARY KEY,
+                component_type TEXT,
+                content_json TEXT,
+                topic_url TEXT
+            )
+        """)
+        conn.commit()
+
+        rows = conn.execute(
+            "SELECT component_id, component_type, content_json, topic_url FROM test_components ORDER BY component_id"
+        ).fetchall()
+        return jsonify(_rows_to_list(rows))
+    finally:
+        conn.close()
+
+
 
 # ── Webhook / cache revalidation ──────────────────────────────────────────── #
 

@@ -2,7 +2,7 @@
 
 import { createContext, useContext, useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
-import { getUser, logout as logoutApi, ApiError } from "@/utils/authClient";
+import { getUser, logout as logoutApi, ApiError, getAuthToken } from "@/utils/authClient";
 import type { AuthUser } from "@/utils/authClient";
 
 // ─── Context ──────────────────────────────────────────────────────────────────
@@ -12,6 +12,7 @@ interface AuthContextValue {
   loading: boolean;
   logout: () => Promise<void>;
   refresh: () => Promise<void>;
+  authToken: string | null;
 }
 
 const AuthContext = createContext<AuthContextValue>({
@@ -19,6 +20,7 @@ const AuthContext = createContext<AuthContextValue>({
   loading: true,
   logout: async () => {},
   refresh: async () => {},
+  authToken: null,
 });
 
 export function useAuth() {
@@ -30,6 +32,7 @@ export function useAuth() {
 export default function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [loading, setLoading] = useState(true);
+  const [authToken, setAuthToken] = useState<string | null>(null);
   const pathname = usePathname();
 
   // Re-run on every client-side navigation (pathname change).
@@ -37,6 +40,7 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
   // the check would only fire once when first entering /edu-viewer/*.
   useEffect(() => {
     let cancelled = false;
+    setAuthToken(getAuthToken());
     getUser()
       .then((u) => { if (!cancelled) setUser(u); })
       .catch(async (err) => {
@@ -68,12 +72,13 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
       await logoutApi();
     } finally {
       setUser(null);
+      setAuthToken(null);
       window.location.href = "/auth";
     }
   }
 
   return (
-    <AuthContext.Provider value={{ user, loading, logout, refresh }}>
+    <AuthContext.Provider value={{ user, loading, logout, refresh, authToken }}>
       {children}
     </AuthContext.Provider>
   );
