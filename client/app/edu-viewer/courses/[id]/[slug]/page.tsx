@@ -10,6 +10,8 @@ import { getAuthToken, clearAuthToken, getProgress } from "@/utils/authClient";
 import type { ProgressData } from "@/utils/authClient";
 
 const BACKEND = (process.env.NEXT_PUBLIC_BACKEND_API_BASE ?? "").replace(/\/$/, "");
+
+const inflightFetches = new Map<string, Promise<any>>();
 export default function CourseDetailPage() {
   const params = useParams<{ id: string; slug: string }>();
   const router = useRouter();
@@ -27,8 +29,10 @@ export default function CourseDetailPage() {
       router.replace(`/auth?next=/edu-viewer/courses/${params?.id}/${params?.slug}`);
       return;
     }
-    Promise.all([
-      fetch(`${BACKEND}/api/course-details`, {
+    const fetchKey = `course-details-${courseId}`;
+    let coursePromise = inflightFetches.get(fetchKey);
+    if (!coursePromise) {
+      coursePromise = fetch(`${BACKEND}/api/course-details`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({ course_id: courseId }),
@@ -37,9 +41,11 @@ export default function CourseDetailPage() {
         if (r.status === 404) return null;
         if (!r.ok) throw new Error(`Failed to load course (${r.status})`);
         return r.json() as Promise<CourseDetail>;
-      }),
-      getProgress(),
-    ])
+      }).finally(() => setTimeout(() => inflightFetches.delete(fetchKey), 50));
+      inflightFetches.set(fetchKey, coursePromise);
+    }
+
+    Promise.all([coursePromise, getProgress()])
       .then(([data, prog]) => {
         if (!data) { setMissing(true); setLoading(false); return; }
         setCourse(data);

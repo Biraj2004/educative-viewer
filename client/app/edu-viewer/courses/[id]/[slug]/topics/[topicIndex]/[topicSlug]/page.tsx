@@ -10,6 +10,7 @@ import { getAuthToken, clearAuthToken, getProgress } from "@/utils/authClient";
 
 const BACKEND = (process.env.NEXT_PUBLIC_BACKEND_API_BASE ?? "").replace(/\/$/, "");
 
+const inflightFetches = new Map<string, Promise<any>>();
 interface Component {
   type: string;
   content: Record<string, unknown>;
@@ -69,8 +70,10 @@ export default function TopicDetailPage() {
       router.replace(`/auth?next=/edu-viewer/courses/${params?.id}/${params?.slug}/topics/${params?.topicIndex}/${params?.topicSlug}`);
       return;
     }
-    Promise.all([
-      fetch(`${BACKEND}/api/topic-details`, {
+    const topicFetchKey = `topic-details-${courseId}-${topicIdx}`;
+    let topicPromise = inflightFetches.get(topicFetchKey);
+    if (!topicPromise) {
+      topicPromise = fetch(`${BACKEND}/api/topic-details`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({ course_id: courseId, topic_index: topicIdx }),
@@ -79,17 +82,25 @@ export default function TopicDetailPage() {
         if (r.status === 404) return null;
         if (!r.ok) throw new Error(`Failed to load topic (${r.status})`);
         return r.json() as Promise<TopicDetail>;
-      }),
-      fetch(`${BACKEND}/api/course-details`, {
+      }).finally(() => setTimeout(() => inflightFetches.delete(topicFetchKey), 50));
+      inflightFetches.set(topicFetchKey, topicPromise);
+    }
+
+    const courseFetchKey = `course-details-${courseId}`;
+    let coursePromise = inflightFetches.get(courseFetchKey);
+    if (!coursePromise) {
+      coursePromise = fetch(`${BACKEND}/api/course-details`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({ course_id: courseId }),
       }).then(async (r) => {
         if (r.status === 401) throw Object.assign(new Error("Unauthorized"), { status: 401 });
         return r.ok ? r.json() as Promise<CourseDetail> : null;
-      }),
-      getProgress(),
-    ])
+      }).finally(() => setTimeout(() => inflightFetches.delete(courseFetchKey), 50));
+      inflightFetches.set(courseFetchKey, coursePromise);
+    }
+
+    Promise.all([topicPromise, coursePromise, getProgress()])
       .then(([topicData, courseData, prog]) => {
         if (!topicData) { setMissing(true); setLoading(false); return; }
         setTopic(topicData);

@@ -1050,7 +1050,7 @@ def auth_progress_topic():
                     AND p.topic_index = :topic_index)
                 WHEN MATCHED THEN
                     UPDATE SET
-                        completed              = GREATEST(p.completed, :completed),
+                        completed              = :completed,
                         last_visited_at        = :now,
                         last_visited_course_at = :now
                 WHEN NOT MATCHED THEN
@@ -1071,25 +1071,6 @@ def auth_progress_topic():
         conn.close()
 
     return jsonify({"ok": True}), 200
-
-
-# ── GET /auth/progress ───────────────────────────────────────────────────── #
-
-@app.route("/api/auth/progress", methods=["GET"])
-def auth_get_progress():
-    """Return compact progress for the authenticated user.
-    Shape: {course_order: [id,...], completed: {"course_id": [topic_idx,...]}}
-    """
-    user, _ = _resolve_user(require_full=True)
-    if not user:
-        abort(401, description="Not authenticated")
-
-    conn = get_auth_db()
-    try:
-        return jsonify(_get_compact_progress(conn, user["id"])), 200
-    finally:
-        conn.close()
-
 
 # ── POST /auth/signup/rollback ───────────────────────────────────────────── #
 

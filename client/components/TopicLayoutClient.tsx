@@ -93,9 +93,7 @@ export default function TopicLayoutClient({ courseId, slug, course, topic, initi
   const next = currentPos < allTopics.length - 1 ? allTopics[currentPos + 1] : null;
 
   // Mark this topic as visited on every topic change (best-effort, don't block UI)
-  useEffect(() => {
-    recordTopicVisit(courseId, currentTopic.topic_index, isCompleted).catch(() => {});
-  }, [courseId, currentTopic.topic_index]); // eslint-disable-line react-hooks/exhaustive-deps
+  // (Removed per user request: only mark complete on explicit interaction)
 
   // Fetch fresh progress so sidebar stays in sync after navigation
   useEffect(() => {
@@ -121,7 +119,6 @@ export default function TopicLayoutClient({ courseId, slug, course, topic, initi
   const handleTopicNav = useCallback(async (href: string, destIdx: number) => {
     if (navigatingRef.current) return;
     navigatingRef.current = true;
-    recordTopicVisit(courseId, currentTopic.topic_index, isCompleted).catch(() => {});
     setTopicChanging(true);
     window.history.pushState({}, "", href);
     window.scrollTo(0, 0);

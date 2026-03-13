@@ -74,15 +74,15 @@ export interface ProgressData {
 }
 
 export interface AuthUser {
-  id: string | number;
+  id: number;
   email: string;
   name?: string;
   username?: string;
   avatar?: string;
-  role?: string;
-  theme?: "light" | "dark";
-  twoFactorEnabled?: boolean;
-  createdAt?: string;
+  role: string;
+  theme: "light" | "dark";
+  twoFactorEnabled: boolean;
+  createdAt: string;
   progress?: ProgressData;
 }
 
@@ -118,21 +118,38 @@ async function apiPost<T>(path: string, body: Record<string, unknown>): Promise<
   }
   return data as T;
 }
+const inflightGets = new Map<string, Promise<any>>();
 
 async function apiGet<T>(path: string): Promise<T> {
+  if (inflightGets.has(path)) {
+    return inflightGets.get(path) as Promise<T>;
+  }
+
   const token = getAuthToken();
   const headers: Record<string, string> = {};
   if (token) headers["Authorization"] = `Bearer ${token}`;
-  const res = await fetch(path, { headers });
-  const data = await res.json().catch(() => ({}));
-  if (res.status === 401 && token) {
-    await _handleUnauthorized();
-    throw new ApiError(data?.error ?? "Session expired. Please sign in again.", 401);
-  }
-  if (!res.ok) {
-    throw new ApiError(data?.error ?? data?.message ?? `Request failed (${res.status})`, res.status);
-  }
-  return data as T;
+
+  const fetchPromise = fetch(path, { headers })
+    .then(async (res) => {
+      const data = await res.json().catch(() => ({}));
+      if (res.status === 401 && token) {
+        await _handleUnauthorized();
+        throw new ApiError(data?.error ?? "Session expired. Please sign in again.", 401);
+      }
+      if (!res.ok) {
+        throw new ApiError(data?.error ?? data?.message ?? `Request failed (${res.status})`, res.status);
+      }
+      return data as T;
+    })
+    .finally(() => {
+      // Clear the cache shortly after the request completes or fails,
+      // so future requests aren't permanently cached, just deduplicated
+      // if they occur in the same tick / render cycle.
+      setTimeout(() => inflightGets.delete(path), 50);
+    });
+
+  inflightGets.set(path, fetchPromise);
+  return fetchPromise;
 }
 
 // ─── Auth API ─────────────────────────────────────────────────────────────────
@@ -219,11 +236,9 @@ export async function setTheme(theme: "light" | "dark"): Promise<void> {
 
 export async function getProgress(): Promise<ProgressData> {
   try {
-    const data = await apiGet<{ course_order?: number[]; completed?: Record<string, number[]> }>(`${API}/progress`);
-    return {
-      course_order: Array.isArray(data?.course_order) ? data.course_order : [],
-      completed: (data?.completed && typeof data.completed === "object") ? data.completed : {},
-    };
+    const user = await getUser();
+    if (user.progress) return user.progress;
+    return { course_order: [], completed: {} };
   } catch {
     return { course_order: [], completed: {} };
   }
