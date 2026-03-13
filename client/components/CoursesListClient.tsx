@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import CourseSearchInput from "./CourseSearchInput";
@@ -75,7 +75,15 @@ interface Props {
 export default function CoursesListClient({ courses, courseOrder = [], error }: Props) {
   const searchParams = useSearchParams();
   const [q, setQ] = useState(() => searchParams.get("q") ?? "");
+  const [page, setPage] = useState(1);
+  const ITEMS_PER_PAGE = 25;
+
   const normalised = q.toLowerCase().trim();
+
+  // Reset to page 1 when search query changes
+  useEffect(() => {
+    setPage(1);
+  }, [normalised]);
 
   // Build a position map for O(1) lookup — courses not in the list sort to the end
   const orderMap = new Map(courseOrder.map((id, i) => [id, i]));
@@ -89,6 +97,9 @@ export default function CoursesListClient({ courses, courseOrder = [], error }: 
   const filtered = normalised
     ? sorted.filter((c) => c.title.toLowerCase().includes(normalised))
     : sorted;
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / ITEMS_PER_PAGE));
+  const paginated = filtered.slice((page - 1) * ITEMS_PER_PAGE, page * ITEMS_PER_PAGE);
 
   return (
     <>
@@ -128,22 +139,24 @@ export default function CoursesListClient({ courses, courseOrder = [], error }: 
         {/* Course list */}
         {filtered.length > 0 && (
           <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 overflow-hidden divide-y divide-gray-100 dark:divide-gray-800">
-            {filtered.map((course, i) => {
+            {paginated.map((course, idx) => {
               const href = `/edu-viewer/courses/${course.id}/${course.slug ?? course.id}`;
               const inProgress = orderMap.has(Number(course.id));
+              const globalIndex = (page - 1) * ITEMS_PER_PAGE + idx;
               return (
                 <Link
                   key={course.id}
                   href={href}
+                  prefetch={false}
                   className="group flex items-center gap-4 px-5 py-4 hover:bg-gray-50/70 dark:hover:bg-gray-800/50 transition-colors"
                 >
                   {/* Index number */}
                   <span className="w-6 text-right text-xs font-medium text-gray-400 dark:text-gray-600 shrink-0 tabular-nums">
-                    {i + 1}
+                    {globalIndex + 1}
                   </span>
 
                   {/* Initials avatar */}
-                  <CourseAvatar title={course.title} index={i} />
+                  <CourseAvatar title={course.title} index={globalIndex} />
 
                   {/* Text block */}
                   <div className="flex-1 min-w-0">
@@ -212,6 +225,31 @@ export default function CoursesListClient({ courses, courseOrder = [], error }: 
                 </Link>
               );
             })}
+          </div>
+        )}
+
+        {/* Pagination Controls */}
+        {totalPages > 1 && (
+          <div className="mt-8 flex items-center justify-between border-t border-gray-200 dark:border-gray-800 pt-6">
+            <span className="text-xs text-gray-500 dark:text-gray-400 font-medium">
+              Showing {(page - 1) * ITEMS_PER_PAGE + 1} to {Math.min(page * ITEMS_PER_PAGE, filtered.length)} of {filtered.length}
+            </span>
+            <div className="flex gap-2">
+              <button
+                disabled={page <= 1}
+                onClick={() => setPage(p => p - 1)}
+                className="px-4 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer transition-colors"
+              >
+                Previous
+              </button>
+              <button
+                disabled={page >= totalPages}
+                onClick={() => setPage(p => p + 1)}
+                className="px-4 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer transition-colors"
+              >
+                Next
+              </button>
+            </div>
           </div>
         )}
 

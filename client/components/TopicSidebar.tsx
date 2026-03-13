@@ -82,6 +82,7 @@ export default function TopicSidebar({
                                                         <Link
                                                             ref={isActive ? activeRef : null}
                                                             href={`/edu-viewer/courses/${courseId}/${courseSlug}/topics/${topic.index}/${topic.slug}`}
+                                                            prefetch={false}
                                                             onClick={(e) => {
                                                                 if (onTopicClick) {
                                                                     e.preventDefault();
@@ -129,6 +130,7 @@ export default function TopicSidebar({
                                             <Link
                                                 ref={isActive ? activeRef : null}
                                                 href={`/edu-viewer/courses/${courseId}/${courseSlug}/topics/${entry.index}/${entry.slug}`}
+                                                prefetch={false}
                                                 onClick={(e) => {
                                                     if (onTopicClick) {
                                                         e.preventDefault();

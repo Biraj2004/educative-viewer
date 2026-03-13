@@ -173,6 +173,7 @@ export default function CourseDetailToc({ toc, courseId, slug, completedTopicInd
                         >
                           <Link
                             href={`/edu-viewer/courses/${courseId}/${slug}/topics/${topic.index}/${topic.slug}`}
+                            prefetch={false}
                             className={[
                               "flex items-center gap-3 px-4 py-2.5 text-sm transition-colors border-l-2",
                               isDone
@@ -212,6 +213,7 @@ export default function CourseDetailToc({ toc, courseId, slug, completedTopicInd
                 >
                   <Link
                     href={`/edu-viewer/courses/${courseId}/${slug}/topics/${entry.index}/${entry.slug}`}
+                    prefetch={false}
                     className={[
                       "flex items-center gap-3 px-4 py-2.5 text-sm transition-colors border-l-2",
                       isDone
