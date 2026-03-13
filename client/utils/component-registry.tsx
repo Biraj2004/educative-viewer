@@ -23,6 +23,20 @@ import Quiz from "@/components/Quiz";
 import StructuredQuiz from "@/components/StructuredQuiz";
 import Sandpack from "@/components/Sandpack";
 import WebpackBin from "@/components/WebpackBin";
+import Video from "@/components/Video";
+import Stack from "@/components/Stack";
+import RunJS from "@/components/RunJS";
+import Notepad from "@/components/Notepad";
+import Matrix from "@/components/Matrix";
+import NaryTree from "@/components/NaryTree";
+import LinkedList from "@/components/LinkedList";
+import Graphviz from "@/components/Graphviz";
+import BinaryTree from "@/components/BinaryTree";
+import CodeTest from "@/components/CodeTest";
+import ChartComponent from "@/components/Chart";
+import ButtonLink from "@/components/ButtonLink";
+import CodeDrawing from "@/components/CodeDrawing";
+import Adaptive from "@/components/Adaptive";
 import "katex/dist/katex.min.css";
 
 // ─── Component Feature Flags ─────────────────────────────────────────────────
@@ -79,6 +93,20 @@ export const COMPONENT_REGISTRY: Record<string, RendererFn> = {
   Sandpack:              (c) => <div data-component-type="Sandpack">             <Sandpack               data={c as any} /></div>,
   WebpackBin:            (c) => <div data-component-type="WebpackBin">           <WebpackBin             data={c as any} /></div>,
   Android:               (c) => <div data-component-type="Android">              <WebpackBin             data={c as any} /></div>,
+  Video:                 (c) => <div data-component-type="Video">                <Video                  data={c as any} /></div>,
+  Stack:                 (c) => <div data-component-type="Stack">                <Stack                  data={c as any} /></div>,
+  RunJS:                 (c) => <div data-component-type="RunJS">                <RunJS                  data={c as any} /></div>,
+  Notepad:               (c) => <div data-component-type="Notepad">              <Notepad                data={c as any} /></div>,
+  Matrix:                (c) => <div data-component-type="Matrix">               <Matrix                 data={c as any} /></div>,
+  NaryTree:              (c) => <div data-component-type="NaryTree">             <NaryTree               data={c as any} /></div>,
+  LinkedList:            (c) => <div data-component-type="LinkedList">           <LinkedList             data={c as any} /></div>,
+  Graphviz:              (c) => <div data-component-type="Graphviz">             <Graphviz               data={c as any} /></div>,
+  BinaryTree:            (c) => <div data-component-type="BinaryTree">           <BinaryTree             data={c as any} /></div>,
+  CodeTest:              (c) => <div data-component-type="CodeTest">             <CodeTest               data={c as any} /></div>,
+  Chart:                 (c) => <div data-component-type="Chart">                <ChartComponent         data={c as any} /></div>,
+  ButtonLink:            (c) => <div data-component-type="ButtonLink">           <ButtonLink             data={c as any} /></div>,
+  CodeDrawing:           (c) => <div data-component-type="CodeDrawing">          <CodeDrawing            data={c as any} /></div>,
+  Adaptive:              (c) => <div data-component-type="Adaptive">             <Adaptive               data={c as any} /></div>,
 };
 
 // ─── Lookup Helper ───────────────────────────────────────────────────────────

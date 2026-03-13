@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 import canvasAnimationData from '../../../public/canvasAnimation.json';
 import slateHtmlData from '../../../public/slatehtml.json';
 import latexComponentData from '../../../public/latexComponent.json';
@@ -23,6 +23,21 @@ import sandpackData from '../../../public/Sandpack.json';
 import sandpackStaticData from '../../../public/Sandpack-static.json';
 import webpackBinData from '../../../public/WebpackBin.json';
 import androidData from '../../../public/Android.json';
+import videoData from '../../../public/Video.json';
+import stackData from '../../../public/Stack.json';
+import runJSData from '../../../public/RunJS.json';
+import notepadData from '../../../public/Notepad.json';
+import drawIO2Data from '../../../public/DrawIO_2.json';
+import matrixData from '../../../public/Matrix.json';
+import naryTreeData from '../../../public/NaryTree.json';
+import linkedListData from '../../../public/LinkedList.json';
+import graphvizData from '../../../public/Graphviz.json';
+import binaryTreeData from '../../../public/BinaryTree.json';
+import codeTestData from '../../../public/CodeTest.json';
+import chartData from '../../../public/Chart.json';
+import buttonLinkData from '../../../public/ButtonLink.json';
+import codeDrawingData from '../../../public/CodeDrawing.json';
+import adaptiveData from '../../../public/Adaptive.json';
 import LazyLoadPlaceholder, { LazyLoadPlaceholderData } from '@/components/LazyLoadPlaceholder';
 import EditorCode, { EditorCodeComponentData } from '@/components/EditorCode';
 import SlateHTML from '@/components/SlateHTML';
@@ -31,6 +46,7 @@ import MarkdownEditor from '@/components/MarkdownEditor';
 import Code from '@/components/Code';
 import Columns from '@/components/Columns';
 import DrawIOWidget from '@/components/DrawIOWidget';
+import { DrawIOWidgetData } from '@/components/DrawIOWidget';
 import APIWidget from '@/components/APIWidget';
 import SpoilerEditor from '@/components/SpoilerEditor';
 import TabbedCode from '@/components/TabbedCode';
@@ -49,6 +65,34 @@ import Image from '@/components/Image';
 import File, { FileComponentData } from '@/components/File';
 import InstaCalc from '@/components/InstaCalc';
 import AppNavbar from '@/components/AppNavbar';
+import Video from '@/components/Video';
+import { VideoData } from '@/components/Video';
+import Stack from '@/components/Stack';
+import { StackData } from '@/components/Stack';
+import RunJS from '@/components/RunJS';
+import { RunJSData } from '@/components/RunJS';
+import Notepad from '@/components/Notepad';
+import { NotepadData } from '@/components/Notepad';
+import Matrix from '@/components/Matrix';
+import { MatrixComponentData } from '@/components/Matrix';
+import NaryTree from '@/components/NaryTree';
+import { NaryTreeData } from '@/components/NaryTree';
+import LinkedList from '@/components/LinkedList';
+import { LinkedListData } from '@/components/LinkedList';
+import Graphviz from '@/components/Graphviz';
+import { GraphvizData } from '@/components/Graphviz';
+import BinaryTree from '@/components/BinaryTree';
+import { BinaryTreeData } from '@/components/BinaryTree';
+import CodeTest from '@/components/CodeTest';
+import { CodeTestData } from '@/components/CodeTest';
+import ChartComponent from '@/components/Chart';
+import { ChartComponentData } from '@/components/Chart';
+import ButtonLink from '@/components/ButtonLink';
+import { ButtonLinkData } from '@/components/ButtonLink';
+import CodeDrawing from '@/components/CodeDrawing';
+import { CodeDrawingData } from '@/components/CodeDrawing';
+import Adaptive from '@/components/Adaptive';
+import { AdaptiveData } from '@/components/Adaptive';
 
 function SectionHeader({ name, note }: { name: string; note?: string }) {
   return (
@@ -68,7 +112,7 @@ function SectionHeader({ name, note }: { name: string; note?: string }) {
 
 export default function ComponentTestPage() {
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-950 overflow-x-hidden">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
       <AppNavbar
         crumbs={[{ label: "Component Test" }]}
         backHref="/edu-viewer"
@@ -270,6 +314,125 @@ export default function ComponentTestPage() {
           </div>
         </section>
 
+        {/* Video */}
+        <section>
+          <SectionHeader name="Video" note="YouTube embed" />
+          <div className="rounded-xl border border-gray-200 dark:border-gray-800 overflow-hidden bg-white dark:bg-gray-900">
+            <Video data={videoData as VideoData} />
+          </div>
+        </section>
+
+        {/* Stack */}
+        <section>
+          <SectionHeader name="Stack" note="SVG call stack visualization" />
+          <div className="rounded-xl border border-gray-200 dark:border-gray-800 overflow-hidden bg-white dark:bg-gray-900">
+            <Stack data={stackData as StackData} />
+          </div>
+        </section>
+
+        {/* RunJS */}
+        <section>
+          <SectionHeader name="RunJS" note="Jotted HTML/CSS/JS playground" />
+          <div className="rounded-xl border border-gray-200 dark:border-gray-800 overflow-hidden bg-white dark:bg-gray-900">
+            <RunJS data={runJSData as RunJSData} />
+          </div>
+        </section>
+
+        {/* Notepad */}
+        <section>
+          <SectionHeader name="Notepad" note="AI-assisted Q&A notepad" />
+          <div className="rounded-xl border border-gray-200 dark:border-gray-800 overflow-hidden bg-white dark:bg-gray-900">
+            <Notepad data={notepadData as NotepadData} />
+          </div>
+        </section>
+
+        {/* DrawIOWidget — slides mode */}
+        <section>
+          <SectionHeader name="DrawIOWidget" note="slides mode" />
+          <div className="rounded-xl border border-gray-200 dark:border-gray-800 overflow-hidden bg-white dark:bg-gray-900">
+            <DrawIOWidget data={drawIO2Data as DrawIOWidgetData} />
+          </div>
+        </section>
+
+        {/* Matrix */}
+        <section>
+          <SectionHeader name="Matrix" note="SVG matrix visualization" />
+          <div className="rounded-xl border border-gray-200 dark:border-gray-800 overflow-hidden bg-white dark:bg-gray-900">
+            <Matrix data={matrixData as MatrixComponentData} />
+          </div>
+        </section>
+
+        {/* NaryTree */}
+        <section>
+          <SectionHeader name="NaryTree" note="SVG N-ary tree visualization" />
+          <div className="rounded-xl border border-gray-200 dark:border-gray-800 overflow-hidden bg-white dark:bg-gray-900">
+            <NaryTree data={naryTreeData as NaryTreeData} />
+          </div>
+        </section>
+
+        {/* LinkedList */}
+        <section>
+          <SectionHeader name="LinkedList" note="SVG Linked List visualization" />
+          <div className="rounded-xl border border-gray-200 dark:border-gray-800 overflow-hidden bg-white dark:bg-gray-900">
+            <LinkedList data={linkedListData as LinkedListData} />
+          </div>
+        </section>
+
+        {/* Graphviz */}
+        <section>
+          <SectionHeader name="Graphviz" note="SVG Graphviz visualization" />
+          <div className="rounded-xl border border-gray-200 dark:border-gray-800 overflow-hidden bg-white dark:bg-gray-900">
+            <Graphviz data={graphvizData as GraphvizData} />
+          </div>
+        </section>
+
+        {/* BinaryTree */}
+        <section>
+          <SectionHeader name="BinaryTree" note="SVG Binary Tree visualization" />
+          <div className="rounded-xl border border-gray-200 dark:border-gray-800 overflow-hidden bg-white dark:bg-gray-900">
+            <BinaryTree data={binaryTreeData as BinaryTreeData} />
+          </div>
+        </section>
+        
+        {/* CodeTest */}
+        <section>
+          <SectionHeader name="CodeTest" note="Interactive Code Challenge wrapper code" />
+          <div className="rounded-xl border border-gray-200 dark:border-gray-800 overflow-hidden bg-white dark:bg-gray-900">
+            <CodeTest data={codeTestData as CodeTestData} />
+          </div>
+        </section>
+
+        {/* Chart */}
+        <section>
+          <SectionHeader name="Chart" note="Dynamic Chart.js dashboard block" />
+          <div className="rounded-xl border border-gray-200 dark:border-gray-800 overflow-hidden bg-white dark:bg-gray-900">
+            <ChartComponent data={chartData as unknown as ChartComponentData} />
+          </div>
+        </section>
+
+        {/* ButtonLink */}
+        <section>
+          <SectionHeader name="ButtonLink" note="Action link component" />
+          <div className="rounded-xl border border-gray-200 dark:border-gray-800 overflow-hidden bg-white dark:bg-gray-900 p-8">
+            <ButtonLink data={buttonLinkData as ButtonLinkData} />
+          </div>
+        </section>
+
+        {/* CodeDrawing */}
+        <section>
+          <SectionHeader name="CodeDrawing" note="Architecture diagram logic" />
+          <div className="rounded-xl border border-gray-200 dark:border-gray-800 overflow-hidden bg-white dark:bg-gray-900">
+            <CodeDrawing data={codeDrawingData as unknown as CodeDrawingData} />
+          </div>
+        </section>
+
+        {/* Adaptive */}
+        <section>
+          <SectionHeader name="Adaptive" note="Interactive step-by-step generic container" />
+          <div className="rounded-xl border border-gray-200 dark:border-gray-800 overflow-hidden bg-white dark:bg-gray-900">
+            <Adaptive data={adaptiveData as unknown as AdaptiveData} />
+          </div>
+        </section>
       </div>
     </div>
   );

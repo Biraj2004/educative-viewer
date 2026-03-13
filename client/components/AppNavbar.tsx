@@ -45,7 +45,7 @@ export default function AppNavbar({
   actions,
 }: AppNavbarProps) {
   return (
-    <div className="sticky top-0 z-20 bg-white/95 dark:bg-gray-900/95 backdrop-blur-sm border-b border-gray-200 dark:border-gray-800 shadow-sm">
+    <div className="sticky top-0 z-50 bg-white/95 dark:bg-gray-900/95 backdrop-blur-sm border-b border-gray-200 dark:border-gray-800 shadow-sm">
       <div className="w-full px-8 h-14 flex items-center justify-between gap-5">
 
         {/* ── Left: logo + breadcrumbs ─────────────────────────────────── */}
