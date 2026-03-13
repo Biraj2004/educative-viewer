@@ -655,9 +655,12 @@ def _resolve_user(require_full: bool = True) -> tuple[dict | None, dict | None]:
         conn.close()
     if not user:
         return None, payload
-    # For full tokens: enforce single active session
-    if not payload.get("partial") and user.get("session_id"):
-        if payload.get("sessionId") != user["session_id"]:
+    # For full tokens: enforce single active session.
+    # The JWT embeds the session_id that was active at login time.
+    # It MUST match the current DB value exactly.
+    # NULL in the DB means "logged out" — no token is valid in that state.
+    if not payload.get("partial"):
+        if payload.get("sessionId") != user.get("session_id"):
             abort(401, description="Session superseded by a newer login. Please sign in again.")
     return user, payload
 

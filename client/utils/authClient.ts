@@ -1,13 +1,41 @@
 /**
  * Client-side auth API helpers.
  * All calls go directly from the browser to NEXT_PUBLIC_BACKEND_API_BASE (Flask).
- * JWT is stored in localStorage — no httpOnly cookies, no Next.js proxy needed.
+ * JWT is stored in localStorage — stateless, no cookies.
+ *
+ * Single-session enforcement:
+ *   The Flask backend embeds a `sessionId` (UUID) in every JWT and stores the same
+ *   value in the `users_sensitive` table. On each new login the DB value is rotated,
+ *   so any old JWT that still carries the previous sessionId gets a 401 from the
+ *   backend on the very next API call → the global 401 handler fires → sign-in page.
  */
 
 const BACKEND = (process.env.NEXT_PUBLIC_BACKEND_API_BASE ?? "").replace(/\/$/, "");
 const API = `${BACKEND}/api/auth`;
 const LS_KEY = "ev_token";
 const IS_BROWSER = typeof window !== "undefined";
+
+// ─── Global 401 handler ───────────────────────────────────────────────────────
+// Registered once by AuthProvider. Fires when any protected API call returns 401
+// (expired token, or session superseded by a login from another browser).
+
+type UnauthorizedHandler = () => void | Promise<void>;
+let _unauthorizedHandler: UnauthorizedHandler | null = null;
+
+export function setUnauthorizedHandler(fn: UnauthorizedHandler | null): void {
+  _unauthorizedHandler = fn;
+}
+
+/** Called internally whenever a protected fetch returns 401. */
+async function _handleUnauthorized(): Promise<void> {
+  if (_unauthorizedHandler) {
+    await _unauthorizedHandler();
+  } else {
+    // Fallback if AuthProvider hasn't mounted yet (e.g. SSR or early client render).
+    clearAuthToken();
+    if (IS_BROWSER) window.location.replace("/auth?reason=session_expired");
+  }
+}
 
 // ─── Token storage ────────────────────────────────────────────────────────────
 
@@ -28,7 +56,7 @@ export function clearAuthToken(): void {
 
 // ─── Errors ──────────────────────────────────────────────────────────────────
 
-/** Carries the HTTP status so callers can react to 401 vs 5xx etc. */
+/** Carries the HTTP status so callers can react to specific status codes. */
 export class ApiError extends Error {
   constructor(message: string, public readonly status: number) {
     super(message);
@@ -80,6 +108,11 @@ async function apiPost<T>(path: string, body: Record<string, unknown>): Promise<
   if (token) headers["Authorization"] = `Bearer ${token}`;
   const res = await fetch(path, { method: "POST", headers, body: JSON.stringify(body) });
   const data = await res.json().catch(() => ({}));
+  if (res.status === 401 && token) {
+    // A 401 on a call that had a token means session is invalid/superseded.
+    await _handleUnauthorized();
+    throw new ApiError(data?.error ?? "Session expired. Please sign in again.", 401);
+  }
   if (!res.ok) {
     throw new ApiError(data?.error ?? data?.message ?? `Request failed (${res.status})`, res.status);
   }
@@ -92,6 +125,10 @@ async function apiGet<T>(path: string): Promise<T> {
   if (token) headers["Authorization"] = `Bearer ${token}`;
   const res = await fetch(path, { headers });
   const data = await res.json().catch(() => ({}));
+  if (res.status === 401 && token) {
+    await _handleUnauthorized();
+    throw new ApiError(data?.error ?? "Session expired. Please sign in again.", 401);
+  }
   if (!res.ok) {
     throw new ApiError(data?.error ?? data?.message ?? `Request failed (${res.status})`, res.status);
   }
@@ -213,6 +250,9 @@ async function apiFetch(path: string, init: RequestInit): Promise<void> {
   const res = await fetch(path, { ...init, headers });
   if (!res.ok) {
     const data = await res.json().catch(() => ({}));
+    if (res.status === 401 && token) {
+      await _handleUnauthorized();
+    }
     throw new ApiError(data?.error ?? `Request failed (${res.status})`, res.status);
   }
 }

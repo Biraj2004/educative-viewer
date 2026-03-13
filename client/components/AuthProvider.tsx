@@ -2,7 +2,7 @@
 
 import { createContext, useContext, useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
-import { getUser, logout as logoutApi, ApiError, getAuthToken } from "@/utils/authClient";
+import { getUser, logout as logoutApi, getAuthToken, setUnauthorizedHandler, clearAuthToken } from "@/utils/authClient";
 import type { AuthUser } from "@/utils/authClient";
 
 // ─── Context ──────────────────────────────────────────────────────────────────
@@ -35,25 +35,29 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
   const [authToken, setAuthToken] = useState<string | null>(null);
   const pathname = usePathname();
 
-  // Re-run on every client-side navigation (pathname change).
-  // Next.js layouts don't remount on navigation, so without this dependency
-  // the check would only fire once when first entering /edu-viewer/*.
+  // Register a global 401 handler once on mount.
+  // Every protected API call (apiGet / apiPost in authClient.ts) fires this when
+  // the server returns 401 — session expired or superseded by a newer login.
+  // We only clear the local token and redirect; no logout API call is needed
+  // because the session is already invalid on the server.
+  useEffect(() => {
+    const handle401 = () => {
+      clearAuthToken();
+      window.location.replace("/auth?reason=session_expired");
+    };
+    setUnauthorizedHandler(handle401);
+    return () => setUnauthorizedHandler(null);
+  }, []);
+
+  // Re-run /me on every client-side navigation to verify the session is still valid.
+  // Next.js layouts don't remount between navigations, so the pathname dep
+  // triggers this effect on every route change.
   useEffect(() => {
     let cancelled = false;
     setAuthToken(getAuthToken());
     getUser()
       .then((u) => { if (!cancelled) setUser(u); })
-      .catch(async (err) => {
-        if (!cancelled) {
-          setUser(null);
-          // If the server rejected the session (401 — superseded by a newer login),
-          // clear the stale cookie and force the user back to the sign-in page.
-          if (err instanceof ApiError && err.status === 401) {
-            await logoutApi().catch(() => {});
-            window.location.replace("/auth?reason=session_expired");
-          }
-        }
-      })
+      .catch(() => { if (!cancelled) setUser(null); })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
   }, [pathname]);
