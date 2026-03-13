@@ -100,16 +100,7 @@ const componentMapping: { [key: string]: React.ComponentType<any> } = {
 
 export default function ComponentTestPage() {
   const [components, setComponents] = useState<any[]>([]);
-  const [matchData, setMatchData] = useState<any>(null);
   const { authToken, user, loading } = useAuth();
-
-  // Load MatchTheAnswers test data from public folder (no auth needed)
-  useEffect(() => {
-    fetch('/matchTheAnswers.json')
-      .then((r) => r.json())
-      .then(setMatchData)
-      .catch((e) => console.error('Failed to load matchTheAnswers.json', e));
-  }, []);
 
 
   // Auth guard: redirect unauthenticated users once the auth state is resolved.
@@ -156,15 +147,6 @@ export default function ComponentTestPage() {
       />
 
       <div className="max-w-5xl mx-auto px-4 sm:px-6 py-10 space-y-10">
-        {/* Pinned: MatchTheAnswers loaded from public/matchTheAnswers.json */}
-        {matchData && (
-          <section>
-            <SectionHeader name="MatchTheAnswers" note="public/matchTheAnswers.json" />
-            <div className="rounded-xl border border-gray-200 dark:border-gray-800 overflow-hidden bg-white dark:bg-gray-900">
-              <MatchTheAnswers data={matchData} />
-            </div>
-          </section>
-        )}
 
         {components.map((component) => {
           const Component = componentMapping[component.component_type];
