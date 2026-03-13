@@ -10,6 +10,7 @@ import { getAuthToken, clearAuthToken, getProgress } from "@/utils/authClient";
 
 const BACKEND = (process.env.NEXT_PUBLIC_BACKEND_API_BASE ?? "").replace(/\/$/, "");
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const inflightFetches = new Map<string, Promise<any>>();
 interface Component {
   type: string;
@@ -117,6 +118,7 @@ export default function TopicDetailPage() {
         setMissing(true);
         setLoading(false);
       });
+      // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [courseId, topicIdx]);
 
   if (loading) {

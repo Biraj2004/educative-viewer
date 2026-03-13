@@ -13,8 +13,6 @@
     "@monaco-editor/react": "^4.7.0",
     "@types/jszip": "^3.4.0",
     "chart.js": "^4.5.1",
-    "highlight.js": "^11.11.1",
-    "jose": "^6.2.1",
     "jszip": "^3.10.1",
     "katex": "^0.16.37",
     "next": "16.1.6",
