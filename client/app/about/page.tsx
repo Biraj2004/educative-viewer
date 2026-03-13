@@ -131,8 +131,17 @@ export default function AboutPage() {
                         <IconGlobe />
                       </div>
                       <div>
-                        <div className="text-sm font-semibold text-gray-900 dark:text-white group-hover/link:text-indigo-600 dark:group-hover/link:text-indigo-400 transition-colors">EducativeViewer</div>
-                        <div className="text-xs text-gray-500 dark:text-gray-500">Public Release</div>
+                        <div className="flex items-center gap-2">
+                          <div className="text-sm font-semibold text-gray-900 dark:text-white group-hover/link:text-indigo-600 dark:group-hover/link:text-indigo-400 transition-colors">EducativeViewer</div>
+                          <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded font-bold uppercase tracking-wider text-[9px] bg-indigo-50 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-500/20">
+                            <span className="relative flex h-1.5 w-1.5">
+                              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75"></span>
+                              <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-indigo-500"></span>
+                            </span>
+                            This Project
+                          </span>
+                        </div>
+                        <div className="text-xs text-gray-500 dark:text-gray-500 mt-0.5">Public Release</div>
                       </div>
                     </div>
                     <IconExternal />
@@ -149,8 +158,17 @@ export default function AboutPage() {
                         <IconLock />
                       </div>
                       <div>
-                        <div className="text-sm font-semibold text-gray-900 dark:text-white group-hover/link:text-indigo-600 dark:group-hover/link:text-indigo-400 transition-colors">educative-viewer</div>
-                        <div className="text-xs text-gray-500 dark:text-gray-500">Private Repository</div>
+                        <div className="flex items-center gap-2">
+                          <div className="text-sm font-semibold text-gray-900 dark:text-white group-hover/link:text-indigo-600 dark:group-hover/link:text-indigo-400 transition-colors">educative-viewer</div>
+                          <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded font-bold uppercase tracking-wider text-[9px] bg-indigo-50 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-500/20">
+                            <span className="relative flex h-1.5 w-1.5">
+                              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75"></span>
+                              <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-indigo-500"></span>
+                            </span>
+                            This Project
+                          </span>
+                        </div>
+                        <div className="text-xs text-gray-500 dark:text-gray-500 mt-0.5">Private Repository</div>
                       </div>
                     </div>
                     <IconExternal />
