@@ -6,7 +6,7 @@ import AppNavbar from "@/components/AppNavbar";
 import UserMenu from "@/components/UserMenu";
 import { getRenderer, UnknownRenderer } from "@/utils/component-registry";
 import ComponentBadge from "@/components/ComponentBadge";
-import { recordTopicVisit, getProgress, getAuthToken, clearAuthToken } from "@/utils/authClient";
+import { recordTopicVisit, getAuthToken, clearAuthToken } from "@/utils/authClient";
 
 const BACKEND = (process.env.NEXT_PUBLIC_BACKEND_API_BASE ?? "").replace(/\/$/, "");
 
@@ -70,7 +70,7 @@ export default function TopicLayoutClient({ courseId, slug, course, topic, initi
   const navigatingRef = useRef(false);
   const completedRef = useRef<Set<number>>(new Set(initialCompleted));
 
-  // Keep completedRef current so handleTopicNav can read it without a stale closure
+  // Keep completedRef current (also updated synchronously below when mutating state)
   useEffect(() => { completedRef.current = completed; }, [completed]);
 
   // Signal the global NavProgressBar for in-page topic fetches
@@ -96,13 +96,8 @@ export default function TopicLayoutClient({ courseId, slug, course, topic, initi
   // (Removed per user request: only mark complete on explicit interaction)
 
   // Fetch fresh progress so sidebar stays in sync after navigation
-  useEffect(() => {
-    getProgress().then((data) => {
-      const ids = new Set<number>(data.completed[String(courseId)] ?? []);
-      setCompleted(ids);
-      setIsCompleted(ids.has(currentTopic.topic_index));
-    }).catch(() => {});
-  }, [courseId, currentTopic.topic_index]);
+  // (Removed: progress is now strictly maintained locally in the state below to prevent 
+  // race conditions where the server returns stale data right after we optimistically mark complete)
 
   const handleToggleComplete = useCallback(async () => {
     const next = !isCompleted;
@@ -110,6 +105,7 @@ export default function TopicLayoutClient({ courseId, slug, course, topic, initi
     setCompleted((prev) => {
       const s = new Set(prev);
       if (next) s.add(currentTopic.topic_index); else s.delete(currentTopic.topic_index);
+      completedRef.current = s;
       return s;
     });
     recordTopicVisit(courseId, currentTopic.topic_index, next).catch(() => {});
@@ -284,7 +280,11 @@ export default function TopicLayoutClient({ courseId, slug, course, topic, initi
                 onClick={() => {
                   if (!isCompleted) {
                     setIsCompleted(true);
-                    setCompleted((s) => { const n = new Set(s); n.add(currentTopic.topic_index); return n; });
+                    setCompleted((s) => { 
+                      const n = new Set(s); n.add(currentTopic.topic_index); 
+                      completedRef.current = n;
+                      return n; 
+                    });
                     recordTopicVisit(courseId, currentTopic.topic_index, true).catch(() => {});
                   }
                   handleTopicNav(`/edu-viewer/courses/${courseId}/${slug}/topics/${prev.index}/${prev.slug}`, prev.index);
@@ -302,7 +302,11 @@ export default function TopicLayoutClient({ courseId, slug, course, topic, initi
                 onClick={() => {
                   if (!isCompleted) {
                     setIsCompleted(true);
-                    setCompleted((prev) => { const s = new Set(prev); s.add(currentTopic.topic_index); return s; });
+                    setCompleted((ps) => { 
+                      const s = new Set(ps); s.add(currentTopic.topic_index); 
+                      completedRef.current = s;
+                      return s; 
+                    });
                     recordTopicVisit(courseId, currentTopic.topic_index, true).catch(() => {});
                   }
                   handleTopicNav(`/edu-viewer/courses/${courseId}/${slug}/topics/${next.index}/${next.slug}`, next.index);

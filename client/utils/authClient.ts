@@ -256,6 +256,13 @@ export async function recordTopicVisit(
   });
 }
 
+export async function resetCourseProgress(courseId: number): Promise<void> {
+  await apiFetch(`${API}/progress/course`, {
+    method: "DELETE",
+    body: JSON.stringify({ course_id: courseId }),
+  });
+}
+
 // ─── Internal helper ──────────────────────────────────────────────────────────
 
 async function apiFetch(path: string, init: RequestInit): Promise<void> {

@@ -1072,6 +1072,33 @@ def auth_progress_topic():
 
     return jsonify({"ok": True}), 200
 
+
+# ── DELETE /auth/progress/course ─────────────────────────────────────────── #
+
+@app.route("/api/auth/progress/course", methods=["DELETE"])
+def auth_reset_course_progress():
+    user, _ = _resolve_user(require_full=True)
+    if not user:
+        abort(401, description="Not authenticated")
+
+    data = request.get_json(force=True, silent=True) or {}
+    course_id = data.get("course_id")
+    if course_id is None:
+        abort(400, description="course_id is required")
+
+    conn = get_auth_db()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                "DELETE FROM user_progress WHERE user_id = :user_id AND course_id = :course_id",
+                {"user_id": user["id"], "course_id": int(course_id)},
+            )
+        conn.commit()
+    finally:
+        conn.close()
+
+    return jsonify({"ok": True, "message": "Course progress has been reset"}), 200
+
 # ── POST /auth/signup/rollback ───────────────────────────────────────────── #
 
 @app.route("/api/auth/signup/rollback", methods=["POST"])
