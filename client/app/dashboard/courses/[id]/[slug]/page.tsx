@@ -72,7 +72,11 @@ export default function CourseDetailPage() {
     return (
       <main className="min-h-screen bg-gray-50 dark:bg-gray-950">
         <AppNavbar
-          crumbs={[{ label: "Courses", href: "/dashboard/courses" }, { label: "…" }]}
+          crumbs={[
+            { label: "Dashboard", href: "/dashboard" },
+            { label: "Courses", href: "/dashboard/courses" },
+            { label: "…" }
+          ]}
           backHref="/dashboard/courses"
           backLabel="Courses"
           actions={<UserMenu />}
@@ -135,6 +139,7 @@ export default function CourseDetailPage() {
     <main className="min-h-screen bg-gray-50 dark:bg-gray-950">
       <AppNavbar
         crumbs={[
+          { label: "Dashboard", href: "/dashboard" },
           { label: "Courses", href: "/dashboard/courses" },
           { label: course.title },
         ]}

@@ -126,7 +126,11 @@ export default function TopicDetailPage() {
     return (
       <div className="min-h-screen flex flex-col bg-gray-50 dark:bg-gray-950">
         <AppNavbar
-          crumbs={[{ label: "Courses", href: "/dashboard/courses" }, { label: "…" }]}
+          crumbs={[
+            { label: "Dashboard", href: "/dashboard" },
+            { label: "Courses", href: "/dashboard/courses" },
+            { label: "…" }
+          ]}
           backHref={`/dashboard/courses/${params?.id}/${params?.slug}`}
           backLabel="Topics"
           actions={<UserMenu />}

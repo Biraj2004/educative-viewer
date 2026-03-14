@@ -165,6 +165,7 @@ export default function TopicLayoutClient({ courseId, slug, course, topic, initi
       {/* Full-width AppNavbar — consistent with the rest of the app */}
       <AppNavbar
         crumbs={[
+          { label: "Dashboard", href: "/dashboard" },
           { label: "Courses", href: "/dashboard/courses" },
           ...(course
             ? [{ label: course.title, href: `/dashboard/courses/${courseId}/${slug}` }]

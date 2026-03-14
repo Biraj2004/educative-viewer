@@ -76,7 +76,7 @@ export default function CoursesPage() {
     return (
       <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
         <AppNavbar
-          crumbs={[{ label: "Courses" }]}
+          crumbs={[{ label: "Dashboard", href: "/dashboard" }, { label: "Courses" }]}
           backHref="/dashboard"
           backLabel="Dashboard"
           actions={<UserMenu />}
@@ -108,7 +108,7 @@ export default function CoursesPage() {
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
       <AppNavbar
-        crumbs={[{ label: "Courses" }]}
+        crumbs={[{ label: "Dashboard", href: "/dashboard" }, { label: "Courses" }]}
         backHref="/dashboard"
         backLabel="Dashboard"
         actions={<UserMenu />}
