@@ -12,6 +12,7 @@ const BACKEND = (process.env.NEXT_PUBLIC_BACKEND_API_BASE ?? "").replace(/\/$/, 
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const inflightFetches = new Map<string, Promise<any>>();
+
 interface Component {
   type: string;
   content: Record<string, unknown>;
@@ -68,7 +69,7 @@ export default function TopicDetailPage() {
     if (isNaN(courseId) || isNaN(topicIdx)) { setMissing(true); setLoading(false); return; }
     const token = getAuthToken();
     if (!token) {
-      router.replace(`/auth?next=/edu-viewer/courses/${params?.id}/${params?.slug}/topics/${params?.topicIndex}/${params?.topicSlug}`);
+      router.replace(`/auth?next=/dashboard/courses/${params?.id}/${params?.slug}/topics/${params?.topicIndex}/${params?.topicSlug}`);
       return;
     }
     const topicFetchKey = `topic-details-${courseId}-${topicIdx}`;
@@ -125,8 +126,8 @@ export default function TopicDetailPage() {
     return (
       <div className="min-h-screen flex flex-col bg-gray-50 dark:bg-gray-950">
         <AppNavbar
-          crumbs={[{ label: "Courses", href: "/edu-viewer/courses" }, { label: "\u2026" }]}
-          backHref={`/edu-viewer/courses/${params?.id}/${params?.slug}`}
+          crumbs={[{ label: "Courses", href: "/dashboard/courses" }, { label: "…" }]}
+          backHref={`/dashboard/courses/${params?.id}/${params?.slug}`}
           backLabel="Topics"
           actions={<UserMenu />}
         />
@@ -174,45 +175,4 @@ export default function TopicDetailPage() {
       initialCompleted={initialCompleted}
     />
   );
-}
-
-
-interface Component {
-  type: string;
-  content: Record<string, unknown>;
-  index: number;
-  width?: string;
-}
-
-interface TopicDetail {
-  api_url: string;
-  components: Component[];
-  course_id: number;
-  status: string;
-  topic_index: number;
-  topic_name: string;
-  topic_slug: string;
-  topic_url: string;
-}
-
-interface Topic {
-  api_url: string;
-  course_id: number;
-  index: number;
-  slug: string;
-  title: string;
-  topic_index: number;
-}
-
-interface Category {
-  category: string;
-  topics: Topic[];
-}
-
-interface CourseDetail {
-  id: number;
-  slug: string;
-  title: string;
-  toc: Category[];
-  type: string;
 }

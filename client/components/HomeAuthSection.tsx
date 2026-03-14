@@ -85,7 +85,7 @@ export function HomeNavSignIn() {
   if (isAuthed !== false) return null;
   return (
     <Link
-      href="/auth?next=/edu-viewer"
+      href="/auth?next=/dashboard"
       className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-md bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium transition-colors"
     >
       Sign In
@@ -99,8 +99,8 @@ export function HomeNavSignIn() {
 export function HomeHeroCTA() {
   const { isAuthed, setIsAuthed } = useContext(HomeAuthCtx);
   const router = useRouter();
-  const appHref = "/edu-viewer";
-  const signInHref = "/auth?next=/edu-viewer";
+  const appHref = "/dashboard";
+  const signInHref = "/auth?next=/dashboard";
 
   const handleLaunch = async (e: React.MouseEvent) => {
     e.preventDefault();
@@ -149,8 +149,8 @@ export function HomeHeroCTA() {
 export function HomeBottomCTA() {
   const { isAuthed, setIsAuthed } = useContext(HomeAuthCtx);
   const router = useRouter();
-  const appHref = "/edu-viewer";
-  const signInHref = "/auth?next=/edu-viewer";
+  const appHref = "/dashboard";
+  const signInHref = "/auth?next=/dashboard";
 
   const handleLaunch = async (e: React.MouseEvent) => {
     e.preventDefault();

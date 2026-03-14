@@ -27,11 +27,17 @@ function levelBadge(level?: string) {
   if (!level) return null;
   const lower = level.toLowerCase();
   let cls = "bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400";
-  if (lower.includes("begin")) cls = "bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400";
-  if (lower.includes("inter")) cls = "bg-amber-50 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400";
-  if (lower.includes("adv"))   cls = "bg-rose-50 dark:bg-rose-900/30 text-rose-600 dark:text-rose-400";
+  if (lower.includes("begin"))
+    cls =
+      "bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400";
+  if (lower.includes("inter"))
+    cls = "bg-amber-50 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400";
+  if (lower.includes("adv"))
+    cls = "bg-rose-50 dark:bg-rose-900/30 text-rose-600 dark:text-rose-400";
   return (
-    <span className={`inline-flex items-center text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full ${cls}`}>
+    <span
+      className={`inline-flex items-center text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full ${cls}`}
+    >
       {level}
     </span>
   );
@@ -40,12 +46,21 @@ function levelBadge(level?: string) {
 // ─── Course initials avatar ────────────────────────────────────────────────────
 
 const PALETTE = [
-  ["bg-indigo-100 dark:bg-indigo-900/50", "text-indigo-600 dark:text-indigo-400"],
-  ["bg-violet-100 dark:bg-violet-900/50", "text-violet-600 dark:text-violet-400"],
-  ["bg-sky-100 dark:bg-sky-900/50",       "text-sky-600 dark:text-sky-400"],
-  ["bg-emerald-100 dark:bg-emerald-900/50","text-emerald-600 dark:text-emerald-400"],
-  ["bg-rose-100 dark:bg-rose-900/50",     "text-rose-600 dark:text-rose-400"],
-  ["bg-amber-100 dark:bg-amber-900/50",   "text-amber-600 dark:text-amber-400"],
+  [
+    "bg-indigo-100 dark:bg-indigo-900/50",
+    "text-indigo-600 dark:text-indigo-400",
+  ],
+  [
+    "bg-violet-100 dark:bg-violet-900/50",
+    "text-violet-600 dark:text-violet-400",
+  ],
+  ["bg-sky-100 dark:bg-sky-900/50", "text-sky-600 dark:text-sky-400"],
+  [
+    "bg-emerald-100 dark:bg-emerald-900/50",
+    "text-emerald-600 dark:text-emerald-400",
+  ],
+  ["bg-rose-100 dark:bg-rose-900/50", "text-rose-600 dark:text-rose-400"],
+  ["bg-amber-100 dark:bg-amber-900/50", "text-amber-600 dark:text-amber-400"],
 ];
 
 function CourseAvatar({ title, index }: { title: string; index: number }) {
@@ -57,7 +72,9 @@ function CourseAvatar({ title, index }: { title: string; index: number }) {
     .map((w) => w[0].toUpperCase())
     .join("");
   return (
-    <div className={`w-11 h-11 rounded-lg flex items-center justify-center shrink-0 font-bold text-sm select-none ${bg} ${text}`}>
+    <div
+      className={`w-11 h-11 rounded-lg flex items-center justify-center shrink-0 font-bold text-sm select-none ${bg} ${text}`}
+    >
       {initials}
     </div>
   );
@@ -72,16 +89,26 @@ interface Props {
   error?: string;
 }
 
-export default function CoursesListClient({ courses, courseOrder = [], error }: Props) {
+export default function CoursesListClient({
+  courses,
+  courseOrder = [],
+  error,
+}: Props) {
   const searchParams = useSearchParams();
   const [q, setQ] = useState(() => searchParams.get("q") ?? "");
   const [page, setPage] = useState(1);
-  const ITEMS_PER_PAGE = 25;
+  const ITEMS_PER_PAGE = 30;
 
   const normalised = q.toLowerCase().trim();
 
+  // Scroll to top whenever the page number changes
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [page]);
+
   // Reset to page 1 when search query changes
   useEffect(() => {
+    // eslint-disable-next-line
     setPage(1);
   }, [normalised]);
 
@@ -99,7 +126,10 @@ export default function CoursesListClient({ courses, courseOrder = [], error }: 
     : sorted;
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / ITEMS_PER_PAGE));
-  const paginated = filtered.slice((page - 1) * ITEMS_PER_PAGE, page * ITEMS_PER_PAGE);
+  const paginated = filtered.slice(
+    (page - 1) * ITEMS_PER_PAGE,
+    page * ITEMS_PER_PAGE,
+  );
 
   return (
     <>
@@ -115,7 +145,6 @@ export default function CoursesListClient({ courses, courseOrder = [], error }: 
       </div>
 
       <div className="max-w-5xl mx-auto px-6 py-6">
-
         {/* Error state */}
         {error && (
           <div className="rounded-lg border border-red-200 bg-red-50 dark:bg-red-900/20 dark:border-red-800 px-5 py-4 text-sm text-red-700 dark:text-red-400">
@@ -126,12 +155,22 @@ export default function CoursesListClient({ courses, courseOrder = [], error }: 
         {/* Empty state */}
         {!error && filtered.length === 0 && (
           <div className="text-center py-24 text-gray-400 dark:text-gray-600">
-            <svg className="w-10 h-10 mx-auto mb-3 opacity-40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5}>
+            <svg
+              className="w-10 h-10 mx-auto mb-3 opacity-40"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth={1.5}
+            >
               <circle cx="11" cy="11" r="8" />
               <path d="m21 21-4.35-4.35" />
             </svg>
             <p className="text-sm">
-              {normalised ? <>No courses matched &ldquo;{q}&rdquo;</> : "No courses found."}
+              {normalised ? (
+                <>No courses matched &ldquo;{q}&rdquo;</>
+              ) : (
+                "No courses found."
+              )}
             </p>
           </div>
         )}
@@ -140,7 +179,7 @@ export default function CoursesListClient({ courses, courseOrder = [], error }: 
         {filtered.length > 0 && (
           <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 overflow-hidden divide-y divide-gray-100 dark:divide-gray-800">
             {paginated.map((course, idx) => {
-              const href = `/edu-viewer/courses/${course.id}/${course.slug ?? course.id}`;
+              const href = `/dashboard/courses/${course.id}/${course.slug ?? course.id}`;
               const inProgress = orderMap.has(Number(course.id));
               const globalIndex = (page - 1) * ITEMS_PER_PAGE + idx;
               return (
@@ -167,7 +206,18 @@ export default function CoursesListClient({ courses, courseOrder = [], error }: 
                       {levelBadge(course.level)}
                       {inProgress && (
                         <span className="inline-flex items-center gap-1 text-[10px] font-medium text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/30 px-1.5 py-0.5 rounded-full">
-                          <svg className="w-2.5 h-2.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9" /><path d="M12 6v6l3 3" /></svg>
+                          <svg
+                            className="w-2.5 h-2.5"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth={2.5}
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          >
+                            <circle cx="12" cy="12" r="9" />
+                            <path d="M12 6v6l3 3" />
+                          </svg>
                           In progress
                         </span>
                       )}
@@ -181,23 +231,52 @@ export default function CoursesListClient({ courses, courseOrder = [], error }: 
                     <div className="flex flex-wrap items-center gap-3 mt-1.5 text-[11px] text-gray-400 dark:text-gray-500">
                       {course.author && (
                         <span className="flex items-center gap-1">
-                          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0zM4.501 20.118a7.5 7.5 0 0 1 14.998 0" />
+                          <svg
+                            width="10"
+                            height="10"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="2"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0zM4.501 20.118a7.5 7.5 0 0 1 14.998 0"
+                            />
                           </svg>
                           {course.author}
                         </span>
                       )}
                       {course.lessons !== undefined && (
                         <span className="flex items-center gap-1">
-                          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25H12" />
+                          <svg
+                            width="10"
+                            height="10"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="2"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25H12"
+                            />
                           </svg>
                           {course.lessons} lessons
                         </span>
                       )}
                       {course.duration && (
                         <span className="flex items-center gap-1">
-                          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <svg
+                            width="10"
+                            height="10"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="2"
+                          >
                             <circle cx="12" cy="12" r="9" />
                             <path strokeLinecap="round" d="M12 6v6l4 2" />
                           </svg>
@@ -206,7 +285,12 @@ export default function CoursesListClient({ courses, courseOrder = [], error }: 
                       )}
                       {course.rating !== undefined && (
                         <span className="flex items-center gap-1 text-amber-400">
-                          <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor">
+                          <svg
+                            width="10"
+                            height="10"
+                            viewBox="0 0 24 24"
+                            fill="currentColor"
+                          >
                             <path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z" />
                           </svg>
                           <span className="text-gray-400">{course.rating}</span>
@@ -218,7 +302,12 @@ export default function CoursesListClient({ courses, courseOrder = [], error }: 
                   {/* Arrow */}
                   <svg
                     className="w-4 h-4 text-gray-300 dark:text-gray-700 group-hover:text-indigo-400 transition-colors shrink-0"
-                    viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth={2.5}
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
                   >
                     <path d="m9 18 6-6-6-6" />
                   </svg>
@@ -232,19 +321,21 @@ export default function CoursesListClient({ courses, courseOrder = [], error }: 
         {totalPages > 1 && (
           <div className="mt-8 flex items-center justify-between border-t border-gray-200 dark:border-gray-800 pt-6">
             <span className="text-xs text-gray-500 dark:text-gray-400 font-medium">
-              Showing {(page - 1) * ITEMS_PER_PAGE + 1} to {Math.min(page * ITEMS_PER_PAGE, filtered.length)} of {filtered.length}
+              Showing {(page - 1) * ITEMS_PER_PAGE + 1} to{" "}
+              {Math.min(page * ITEMS_PER_PAGE, filtered.length)} of{" "}
+              {filtered.length}
             </span>
             <div className="flex gap-2">
               <button
                 disabled={page <= 1}
-                onClick={() => setPage(p => p - 1)}
+                onClick={() => setPage((p) => p - 1)}
                 className="px-4 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer transition-colors"
               >
                 Previous
               </button>
               <button
                 disabled={page >= totalPages}
-                onClick={() => setPage(p => p + 1)}
+                onClick={() => setPage((p) => p + 1)}
                 className="px-4 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer transition-colors"
               >
                 Next
@@ -252,7 +343,6 @@ export default function CoursesListClient({ courses, courseOrder = [], error }: 
             </div>
           </div>
         )}
-
       </div>
     </>
   );

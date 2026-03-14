@@ -107,7 +107,6 @@ function ChangePasswordCard() {
 
   const handleToggle = () => {
     setOpen(o => !o);
-    // Reset form state when closing
     if (open) {
       setCurrent(""); setNext(""); setConfirm("");
       setShowCurrent(false); setShowNext(false); setShowConfirm(false);
@@ -137,7 +136,6 @@ function ChangePasswordCard() {
 
   return (
     <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 overflow-hidden">
-      {/* Clickable header */}
       <button
         type="button"
         onClick={handleToggle}
@@ -149,7 +147,6 @@ function ChangePasswordCard() {
           </svg>
           <h3 className="text-sm font-semibold text-gray-800 dark:text-gray-200">Change Password</h3>
         </div>
-        {/* Chevron */}
         <svg
           className={`w-4 h-4 text-gray-400 dark:text-gray-500 transition-transform duration-200 ${open ? "rotate-180" : ""}`}
           viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"
@@ -158,7 +155,6 @@ function ChangePasswordCard() {
         </svg>
       </button>
 
-      {/* Collapsible form */}
       {open && (
         <form onSubmit={handleSubmit} className="px-5 pb-5 pt-1 space-y-4 border-t border-gray-100 dark:border-gray-800">
           <PasswordField
@@ -177,7 +173,6 @@ function ChangePasswordCard() {
             placeholder="Repeat new password" autoComplete="new-password"
           />
 
-          {/* Feedback */}
           {message && (
             <p className={`text-xs font-medium ${
               status === "success"
@@ -216,7 +211,7 @@ export default function ProfilePage() {
 
   useEffect(() => {
     if (!loading && !user) {
-      router.replace("/auth?next=/edu-viewer/profile");
+      router.replace("/auth?next=/dashboard/profile");
     }
   }, [loading, user, router]);
 
@@ -247,9 +242,9 @@ export default function ProfilePage() {
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
       <AppNavbar
-        crumbs={[{ label: "Courses", href: "/edu-viewer/courses" }, { label: "Profile" }]}
-        backHref="/edu-viewer/courses"
-        backLabel="Courses"
+        crumbs={[{ label: "Dashboard", href: "/dashboard" }, { label: "Profile" }]}
+        backHref="/dashboard"
+        backLabel="Dashboard"
         actions={<UserMenu />}
       />
 
@@ -266,7 +261,6 @@ export default function ProfilePage() {
         {/* Avatar card */}
         <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-6">
           <div className="flex items-center gap-5">
-            {/* Avatar */}
             <div className="w-16 h-16 rounded-2xl bg-indigo-600 flex items-center justify-center shrink-0 select-none shadow-md shadow-indigo-200 dark:shadow-indigo-900/30">
               {user.avatar ? (
                 // eslint-disable-next-line @next/next/no-img-element
@@ -276,7 +270,6 @@ export default function ProfilePage() {
               )}
             </div>
 
-            {/* Name + email */}
             <div className="min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
                 <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100 truncate">{displayName}</h2>
@@ -338,7 +331,7 @@ export default function ProfilePage() {
         {/* Change Password */}
         <ChangePasswordCard />
 
-        {/* Danger zone */}
+        {/* Actions */}
         <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 overflow-hidden">
           <div className="px-5 py-4 border-b border-gray-100 dark:border-gray-800 flex items-center gap-2">
             <svg className="w-4 h-4 text-gray-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">

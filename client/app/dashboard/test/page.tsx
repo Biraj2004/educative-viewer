@@ -58,6 +58,7 @@ function SectionHeader({ name, note }: { name: string; note?: string }) {
   );
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const componentMapping: { [key: string]: React.ComponentType<any> } = {
     "CanvasAnimation": (props: { data: LazyLoadPlaceholderData }) => <LazyLoadPlaceholder {...props} />,
     "Latex": Latex,
@@ -72,6 +73,7 @@ const componentMapping: { [key: string]: React.ComponentType<any> } = {
     "DrawIOWidget": DrawIOWidget,
     "APIWidget": APIWidget,
     "EducativeArray": EducativeArray,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any, jsx-a11y/alt-text
     "Image": (props: { data: any }) => <Image {...props} />,
     "File": (props: { data: FileComponentData }) => <File {...props} />,
     "InstaCalc": InstaCalc,
@@ -99,11 +101,10 @@ const componentMapping: { [key: string]: React.ComponentType<any> } = {
 };
 
 export default function ComponentTestPage() {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [components, setComponents] = useState<any[]>([]);
   const { authToken, user, loading } = useAuth();
 
-
-  // Auth guard: redirect unauthenticated users once the auth state is resolved.
   useEffect(() => {
     if (!loading && !user) {
       window.location.replace("/auth");
@@ -117,38 +118,32 @@ export default function ComponentTestPage() {
         const BACKEND = (process.env.NEXT_PUBLIC_BACKEND_API_BASE ?? "").replace(/\/$/, "");
         const API = `${BACKEND}/api`;
         const response = await fetch(`${API}/test_components`, {
-          headers: {
-            Authorization: `Bearer ${authToken}`,
-          },
+          headers: { Authorization: `Bearer ${authToken}` },
         });
         if (response.ok) {
           const data = await response.json();
           setComponents(data);
-        } else {
-          console.error('Failed to fetch test components');
         }
       } catch (error) {
-        console.error('Error fetching test components:', error);
+        console.error("Error fetching test components:", error);
       }
     };
-
     fetchComponents();
   }, [authToken]);
 
-  // Render nothing while auth state is being resolved (avoids flash of content).
   if (loading || !user) return null;
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-950 overflow-x-hidden">
       <AppNavbar
         crumbs={[{ label: "Component Test" }]}
-        backHref="/edu-viewer"
+        backHref="/dashboard"
         backLabel="Dashboard"
       />
 
       <div className="max-w-5xl mx-auto px-4 sm:px-6 py-10 space-y-10">
-
-        {components.map((component) => {
+        {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+        {components.map((component: any) => {
           const Component = componentMapping[component.component_type];
           if (!Component) {
             return (

@@ -7,9 +7,11 @@ import CoursesListClient from "@/components/CoursesListClient";
 import UserMenu from "@/components/UserMenu";
 import { getAuthToken, clearAuthToken, getProgress } from "@/utils/authClient";
 import type { ProgressData } from "@/utils/authClient";
+import ScrollToTop from "@/components/ScrollToTop";
 
 const BACKEND = (process.env.NEXT_PUBLIC_BACKEND_API_BASE ?? "").replace(/\/$/, "");
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const inflightFetches = new Map<string, Promise<any>>();
 
 interface Course {
@@ -75,7 +77,7 @@ export default function CoursesPage() {
       <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
         <AppNavbar
           crumbs={[{ label: "Courses" }]}
-          backHref="/edu-viewer"
+          backHref="/dashboard"
           backLabel="Dashboard"
           actions={<UserMenu />}
         />
@@ -107,7 +109,7 @@ export default function CoursesPage() {
     <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
       <AppNavbar
         crumbs={[{ label: "Courses" }]}
-        backHref="/edu-viewer"
+        backHref="/dashboard"
         backLabel="Dashboard"
         actions={<UserMenu />}
       />
@@ -128,6 +130,7 @@ export default function CoursesPage() {
         courseOrder={progress.course_order}
         error={error ?? undefined}
       />
+      <ScrollToTop />
     </div>
   );
 }

@@ -8,7 +8,7 @@ import { clearAuthToken, login, signup, verify2FA, get2FASetup, enable2FA, rollb
 // ─── Open-redirect guard ──────────────────────────────────────────────────────
 // Only allow same-origin relative paths (starts with "/", not "//").
 // Rejects absolute URLs, protocol-relative URLs, and anything off-domain.
-function safeRedirect(next: string | null, fallback = "/edu-viewer/courses"): string {
+function safeRedirect(next: string | null, fallback = "/dashboard/courses"): string {
   if (!next) return fallback;
   if (!next.startsWith("/") || next.startsWith("//")) return fallback;
   // Block attempts like "/auth" to avoid redirect loops

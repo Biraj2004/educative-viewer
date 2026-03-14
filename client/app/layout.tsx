@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
-import "./edu-viewer/globals.css";
+import "./globals.css";
 import { getTheme } from "@/utils/theme";
 import NavigationEvents from "@/components/NavigationEvents";
 import NavProgressBar from "@/components/NavProgressBar";

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import DarkModeToggle from "./DarkModeToggle";
+import BackButton from "@/components/BackButton";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -11,11 +12,17 @@ interface Crumb {
 interface AppNavbarProps {
   /** Breadcrumb segments shown after the EV logo, with "/" separators */
   crumbs?: Crumb[];
-  /** Shows a "← backLabel" button on the right */
+  /**
+   * Shows a "← backLabel" button on the right.
+   * Pass `"back"` (the literal string) to use browser history (router.back()),
+   * or a full path string to navigate to that specific page.
+   */
   backHref?: string;
   backLabel?: string;
   /** Extra React nodes inserted between back button and DarkModeToggle */
   actions?: React.ReactNode;
+  /** Button rendered to the LEFT of the logo on mobile/tablet (hidden on desktop) */
+  mobileMenuTrigger?: React.ReactNode;
 }
 
 // ─── Icons ────────────────────────────────────────────────────────────────────
@@ -43,13 +50,18 @@ export default function AppNavbar({
   backHref,
   backLabel = "Back",
   actions,
+  mobileMenuTrigger,
 }: AppNavbarProps) {
   return (
     <div className="sticky top-0 z-50 bg-white/95 dark:bg-gray-900/95 backdrop-blur-sm border-b border-gray-200 dark:border-gray-800 shadow-sm">
       <div className="w-full px-8 h-14 flex items-center justify-between gap-5">
 
-        {/* ── Left: logo + breadcrumbs ─────────────────────────────────── */}
-        <div className="flex items-center min-w-0 overflow-hidden">
+        {/* ── Left: hamburger (mobile/tablet) + logo + breadcrumbs ──────── */}
+        <div className="flex items-center min-w-0 overflow-hidden gap-2">
+          {/* Hamburger — only shown on < lg, rendered before the logo */}
+          {mobileMenuTrigger && (
+            <span className="lg:hidden shrink-0">{mobileMenuTrigger}</span>
+          )}
           {/* Logo */}
           <Link href="/" className="flex items-center gap-2 group shrink-0">
             <span className="w-7 h-7 rounded-md bg-indigo-600 group-hover:bg-indigo-700 transition-colors flex items-center justify-center select-none">
@@ -85,13 +97,7 @@ export default function AppNavbar({
         <div className="flex items-center gap-4 shrink-0">
           {actions}
           {backHref && (
-            <Link
-              href={backHref}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 hover:border-indigo-300 dark:hover:border-indigo-700 hover:text-indigo-700 dark:hover:text-indigo-400 text-xs font-medium transition-all"
-            >
-              <ChevronLeft />
-              {backLabel}
-            </Link>
+            <BackButton href={backHref} label={backLabel} icon={<ChevronLeft />} />
           )}
           <span className="ml-2">
             <DarkModeToggle />

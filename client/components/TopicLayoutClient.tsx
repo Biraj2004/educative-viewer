@@ -141,6 +141,7 @@ export default function TopicLayoutClient({ courseId, slug, course, topic, initi
       setTopicChanging(false);
       navigatingRef.current = false;
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [courseId, currentTopic.topic_index, isCompleted]);
 
   // Keep in sync when user presses browser back/forward
@@ -164,30 +165,28 @@ export default function TopicLayoutClient({ courseId, slug, course, topic, initi
       {/* Full-width AppNavbar — consistent with the rest of the app */}
       <AppNavbar
         crumbs={[
-          { label: "Courses", href: "/edu-viewer/courses" },
+          { label: "Courses", href: "/dashboard/courses" },
           ...(course
-            ? [{ label: course.title, href: `/edu-viewer/courses/${courseId}/${slug}` }]
+            ? [{ label: course.title, href: `/dashboard/courses/${courseId}/${slug}` }]
             : []),
           { label: currentTopic.topic_name },
         ]}
-        backHref={`/edu-viewer/courses/${courseId}/${slug}`}
+        backHref={`/dashboard/courses/${courseId}/${slug}`}
         backLabel="Topics"
-        actions={
-          <div className="flex items-center gap-2">
-            <UserMenu />
-            {course && (
-              <button
-                onClick={() => setDrawerOpen((o) => !o)}
-                className="lg:hidden p-1.5 rounded-md text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors cursor-pointer"
-                aria-label="Toggle navigation"
-              >
-                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
-                </svg>
-              </button>
-            )}
-          </div>
+        mobileMenuTrigger={
+          course ? (
+            <button
+              onClick={() => setDrawerOpen((o) => !o)}
+              className="p-1.5 rounded-md text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors cursor-pointer"
+              aria-label="Toggle navigation"
+            >
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
+              </svg>
+            </button>
+          ) : undefined
         }
+        actions={<UserMenu />}
       />
 
       {/* Tablet drawer overlay — only on < lg, offset below navbar */}
@@ -287,7 +286,7 @@ export default function TopicLayoutClient({ courseId, slug, course, topic, initi
                     });
                     recordTopicVisit(courseId, currentTopic.topic_index, true).catch(() => {});
                   }
-                  handleTopicNav(`/edu-viewer/courses/${courseId}/${slug}/topics/${prev.index}/${prev.slug}`, prev.index);
+                  handleTopicNav(`/dashboard/courses/${courseId}/${slug}/topics/${prev.index}/${prev.slug}`, prev.index);
                 }}
                 className="flex items-center gap-2 px-4 py-2.5 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-sm text-gray-700 dark:text-gray-300 hover:border-indigo-400 dark:hover:border-indigo-600 hover:text-indigo-700 dark:hover:text-indigo-400 transition-colors max-w-xs cursor-pointer"
               >
@@ -309,7 +308,7 @@ export default function TopicLayoutClient({ courseId, slug, course, topic, initi
                     });
                     recordTopicVisit(courseId, currentTopic.topic_index, true).catch(() => {});
                   }
-                  handleTopicNav(`/edu-viewer/courses/${courseId}/${slug}/topics/${next.index}/${next.slug}`, next.index);
+                  handleTopicNav(`/dashboard/courses/${courseId}/${slug}/topics/${next.index}/${next.slug}`, next.index);
                 }}
                 className="flex items-center gap-2 px-4 py-2.5 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-sm text-gray-700 dark:text-gray-300 hover:border-indigo-400 dark:hover:border-indigo-600 hover:text-indigo-700 dark:hover:text-indigo-400 transition-colors max-w-xs cursor-pointer"
               >

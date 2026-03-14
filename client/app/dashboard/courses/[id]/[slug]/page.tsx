@@ -11,7 +11,9 @@ import type { ProgressData } from "@/utils/authClient";
 
 const BACKEND = (process.env.NEXT_PUBLIC_BACKEND_API_BASE ?? "").replace(/\/$/, "");
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const inflightFetches = new Map<string, Promise<any>>();
+
 export default function CourseDetailPage() {
   const params = useParams<{ id: string; slug: string }>();
   const router = useRouter();
@@ -28,7 +30,7 @@ export default function CourseDetailPage() {
     if (isNaN(courseId)) { setMissing(true); setLoading(false); return; }
     const token = getAuthToken();
     if (!token) {
-      router.replace(`/auth?next=/edu-viewer/courses/${params?.id}/${params?.slug}`);
+      router.replace(`/auth?next=/dashboard/courses/${params?.id}/${params?.slug}`);
       return;
     }
     const fetchKey = `course-details-${courseId}`;
@@ -63,14 +65,15 @@ export default function CourseDetailPage() {
         setMissing(true);
         setLoading(false);
       });
+      // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [courseId]);
 
   if (loading) {
     return (
       <main className="min-h-screen bg-gray-50 dark:bg-gray-950">
         <AppNavbar
-          crumbs={[{ label: "Courses", href: "/edu-viewer/courses" }, { label: "\u2026" }]}
-          backHref="/edu-viewer/courses"
+          crumbs={[{ label: "Courses", href: "/dashboard/courses" }, { label: "…" }]}
+          backHref="/dashboard/courses"
           backLabel="Courses"
           actions={<UserMenu />}
         />
@@ -115,7 +118,6 @@ export default function CourseDetailPage() {
     setResetting(true);
     try {
       await resetCourseProgress(courseId);
-      // Optimistically clear local state
       setProgress(p => {
         const next = { ...p.completed };
         delete next[String(courseId)];
@@ -133,10 +135,10 @@ export default function CourseDetailPage() {
     <main className="min-h-screen bg-gray-50 dark:bg-gray-950">
       <AppNavbar
         crumbs={[
-          { label: "Courses", href: "/edu-viewer/courses" },
+          { label: "Courses", href: "/dashboard/courses" },
           { label: course.title },
         ]}
-        backHref="/edu-viewer/courses"
+        backHref="/dashboard/courses"
         backLabel="Courses"
         actions={<UserMenu />}
       />

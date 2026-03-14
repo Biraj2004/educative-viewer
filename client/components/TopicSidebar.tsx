@@ -81,12 +81,12 @@ export default function TopicSidebar({
                                                     <li key={topic.index}>
                                                         <Link
                                                             ref={isActive ? activeRef : null}
-                                                            href={`/edu-viewer/courses/${courseId}/${courseSlug}/topics/${topic.index}/${topic.slug}`}
+                                                            href={`/dashboard/courses/${courseId}/${courseSlug}/topics/${topic.index}/${topic.slug}`}
                                                             prefetch={false}
                                                             onClick={(e) => {
                                                                 if (onTopicClick) {
                                                                     e.preventDefault();
-                                                                    onTopicClick(`/edu-viewer/courses/${courseId}/${courseSlug}/topics/${topic.index}/${topic.slug}`, topic.index);
+                                                                    onTopicClick(`/dashboard/courses/${courseId}/${courseSlug}/topics/${topic.index}/${topic.slug}`, topic.index);
                                                                 }
                                                                 onClose?.();
                                                             }}
@@ -129,12 +129,12 @@ export default function TopicSidebar({
                                         <li>
                                             <Link
                                                 ref={isActive ? activeRef : null}
-                                                href={`/edu-viewer/courses/${courseId}/${courseSlug}/topics/${entry.index}/${entry.slug}`}
+                                                href={`/dashboard/courses/${courseId}/${courseSlug}/topics/${entry.index}/${entry.slug}`}
                                                 prefetch={false}
                                                 onClick={(e) => {
                                                     if (onTopicClick) {
                                                         e.preventDefault();
-                                                        onTopicClick(`/edu-viewer/courses/${courseId}/${courseSlug}/topics/${entry.index}/${entry.slug}`, entry.index);
+                                                        onTopicClick(`/dashboard/courses/${courseId}/${courseSlug}/topics/${entry.index}/${entry.slug}`, entry.index);
                                                     }
                                                     onClose?.();
                                                 }}

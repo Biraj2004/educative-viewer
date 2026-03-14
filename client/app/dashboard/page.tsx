@@ -10,7 +10,7 @@ import { getAuthToken } from "@/utils/authClient";
 
 const sections = [
   {
-    href: "/edu-viewer/courses",
+    href: "/dashboard/courses",
     label: "Courses",
     accent: "indigo",
     available: true,
@@ -102,13 +102,14 @@ function IconArrow() {
   );
 }
 
-export default function EduViewerHome() {
+export default function DashboardHome() {
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
     if (!getAuthToken()) {
       window.location.replace("/");
     } else {
+      // eslint-disable-next-line
       setReady(true);
     }
   }, []);
@@ -117,7 +118,7 @@ export default function EduViewerHome() {
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
-      <AppNavbar backHref="/" backLabel="Home" actions={<UserMenu />} />
+      <AppNavbar crumbs={[{ label: "Dashboard" }]} backHref="/" backLabel="Home" actions={<UserMenu />} />
 
       {/* Page header */}
       <div className="border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900">
@@ -180,7 +181,7 @@ export default function EduViewerHome() {
         {/* Dev tools */}
         <div className="mt-6 flex justify-end">
           <Link
-            href="/edu-viewer/test"
+            href="/dashboard/test"
             className="inline-flex font-bold items-center gap-1.5 text-xs text-gray-400 dark:text-gray-600 hover:text-gray-600 dark:hover:text-gray-400 transition-colors"
           >
             <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">

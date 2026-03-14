@@ -10,10 +10,65 @@
  *   backend on the very next API call → the global 401 handler fires → sign-in page.
  */
 
-const BACKEND = (process.env.NEXT_PUBLIC_BACKEND_API_BASE ?? "").replace(/\/$/, "");
+const BACKEND = (process.env.NEXT_PUBLIC_BACKEND_API_BASE ?? "").replace(
+  /\/$/,
+  "",
+);
 const API = `${BACKEND}/api/auth`;
 const LS_KEY = "ev_token";
 const IS_BROWSER = typeof window !== "undefined";
+
+// ─── RSA password encryption ──────────────────────────────────────────────────
+// Passwords are encrypted with the server's RSA-2048 public key (RSA-OAEP /
+// SHA-256) before being sent over the wire. The server decrypts them before
+// any bcrypt operations. No npm libraries needed — uses the Web Crypto API.
+
+let _cachedPublicKey: CryptoKey | null = null;
+
+/** Import a PEM-encoded RSA public key into a CryptoKey — no fetch needed. */
+async function _importPem(pem: string): Promise<CryptoKey> {
+  // Env vars often store newlines as literal \n — normalise them first.
+  const normalised = pem.replace(/\\n/g, "\n");
+  const b64 = normalised.replace(/-----[^-]+-----/g, "").replace(/\s/g, "");
+  const der = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+  return window.crypto.subtle.importKey(
+    "spki",
+    der.buffer,
+    { name: "RSA-OAEP", hash: "SHA-256" },
+    false,
+    ["encrypt"],
+  );
+}
+
+/** Return the server RSA public key from the baked-in env var. */
+async function _getPublicKey(): Promise<CryptoKey> {
+  if (_cachedPublicKey) return _cachedPublicKey;
+
+  const baked = process.env.NEXT_PUBLIC_RSA_PUBLIC_KEY;
+  if (baked) {
+    _cachedPublicKey = await _importPem(baked);
+    return _cachedPublicKey;
+  }
+
+  throw new Error(
+    "RSA Public Key missing. Please set NEXT_PUBLIC_RSA_PUBLIC_KEY in .env.local"
+  );
+}
+
+/**
+ * Encrypt a plaintext password with the server's RSA public key.
+ * Returns a Base64-encoded ciphertext string.
+ */
+async function _encryptPassword(password: string): Promise<string> {
+  const publicKey = await _getPublicKey();
+  const encoded = new TextEncoder().encode(password);
+  const encrypted = await window.crypto.subtle.encrypt(
+    { name: "RSA-OAEP" },
+    publicKey,
+    encoded,
+  );
+  return btoa(String.fromCharCode(...new Uint8Array(encrypted)));
+}
 
 // ─── Global 401 handler ───────────────────────────────────────────────────────
 // Registered once by AuthProvider. Fires when any protected API call returns 401
@@ -58,7 +113,10 @@ export function clearAuthToken(): void {
 
 /** Carries the HTTP status so callers can react to specific status codes. */
 export class ApiError extends Error {
-  constructor(message: string, public readonly status: number) {
+  constructor(
+    message: string,
+    public readonly status: number,
+  ) {
     super(message);
     this.name = "ApiError";
   }
@@ -102,22 +160,38 @@ export interface TwoFASetup {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-async function apiPost<T>(path: string, body: Record<string, unknown>): Promise<T> {
+async function apiPost<T>(
+  path: string,
+  body: Record<string, unknown>,
+): Promise<T> {
   const token = getAuthToken();
-  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+  };
   if (token) headers["Authorization"] = `Bearer ${token}`;
-  const res = await fetch(path, { method: "POST", headers, body: JSON.stringify(body) });
+  const res = await fetch(path, {
+    method: "POST",
+    headers,
+    body: JSON.stringify(body),
+  });
   const data = await res.json().catch(() => ({}));
   if (res.status === 401 && token) {
     // A 401 on a call that had a token means session is invalid/superseded.
     await _handleUnauthorized();
-    throw new ApiError(data?.error ?? "Session expired. Please sign in again.", 401);
+    throw new ApiError(
+      data?.error ?? "Session expired. Please sign in again.",
+      401,
+    );
   }
   if (!res.ok) {
-    throw new ApiError(data?.error ?? data?.message ?? `Request failed (${res.status})`, res.status);
+    throw new ApiError(
+      data?.error ?? data?.message ?? `Request failed (${res.status})`,
+      res.status,
+    );
   }
   return data as T;
 }
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const inflightGets = new Map<string, Promise<any>>();
 
 async function apiGet<T>(path: string): Promise<T> {
@@ -134,10 +208,16 @@ async function apiGet<T>(path: string): Promise<T> {
       const data = await res.json().catch(() => ({}));
       if (res.status === 401 && token) {
         await _handleUnauthorized();
-        throw new ApiError(data?.error ?? "Session expired. Please sign in again.", 401);
+        throw new ApiError(
+          data?.error ?? "Session expired. Please sign in again.",
+          401,
+        );
       }
       if (!res.ok) {
-        throw new ApiError(data?.error ?? data?.message ?? `Request failed (${res.status})`, res.status);
+        throw new ApiError(
+          data?.error ?? data?.message ?? `Request failed (${res.status})`,
+          res.status,
+        );
       }
       return data as T;
     })
@@ -154,8 +234,15 @@ async function apiGet<T>(path: string): Promise<T> {
 
 // ─── Auth API ─────────────────────────────────────────────────────────────────
 
-export async function login(email: string, password: string): Promise<AuthResponse> {
-  const result = await apiPost<AuthResponse>(`${API}/login`, { email, password });
+export async function login(
+  email: string,
+  password: string,
+): Promise<AuthResponse> {
+  const encryptedPassword = await _encryptPassword(password);
+  const result = await apiPost<AuthResponse>(`${API}/login`, {
+    email,
+    password: encryptedPassword,
+  });
   if (result.token) storeAuthToken(result.token);
   return result;
 }
@@ -164,15 +251,25 @@ export async function signup(
   email: string,
   password: string,
   inviteCode: string,
-  name?: string
+  name?: string,
 ): Promise<AuthResponse> {
-  const result = await apiPost<AuthResponse>(`${API}/signup`, { email, password, inviteCode, name });
+  const encryptedPassword = await _encryptPassword(password);
+  const result = await apiPost<AuthResponse>(`${API}/signup`, {
+    email,
+    password: encryptedPassword,
+    inviteCode,
+    name,
+  });
   if (result.token) storeAuthToken(result.token);
   return result;
 }
 
 export async function logout(): Promise<void> {
-  try { await apiPost<unknown>(`${API}/logout`, {}); } catch { /* best-effort */ }
+  try {
+    await apiPost<unknown>(`${API}/logout`, {});
+  } catch {
+    /* best-effort */
+  }
   clearAuthToken();
 }
 
@@ -204,34 +301,57 @@ export async function rollbackSignup(): Promise<void> {
 // ─── Forgot password ──────────────────────────────────────────────────────────
 
 /** Step 1 — verify email; stores the pw_reset_pending token. */
-export async function forgotPasswordRequest(email: string): Promise<AuthResponse> {
-  const result = await apiPost<AuthResponse>(`${API}/forgot-password/request`, { email });
+export async function forgotPasswordRequest(
+  email: string,
+): Promise<AuthResponse> {
+  const result = await apiPost<AuthResponse>(`${API}/forgot-password/request`, {
+    email,
+  });
   if (result.token) storeAuthToken(result.token);
   return result;
 }
 
 /** Step 2 — verify TOTP code; stores the pw_reset_confirmed token. */
-export async function forgotPasswordVerify(code: string): Promise<AuthResponse> {
-  const result = await apiPost<AuthResponse>(`${API}/forgot-password/verify`, { code });
+export async function forgotPasswordVerify(
+  code: string,
+): Promise<AuthResponse> {
+  const result = await apiPost<AuthResponse>(`${API}/forgot-password/verify`, {
+    code,
+  });
   if (result.token) storeAuthToken(result.token);
   return result;
 }
 
 /** Step 3 — set new password using the confirmed token. */
-export async function forgotPasswordReset(password: string): Promise<{ message: string }> {
-  return apiPost<{ message: string }>(`${API}/forgot-password/reset`, { password });
+export async function forgotPasswordReset(
+  password: string,
+): Promise<{ message: string }> {
+  const encryptedPassword = await _encryptPassword(password);
+  return apiPost<{ message: string }>(`${API}/forgot-password/reset`, {
+    password: encryptedPassword,
+  });
 }
 
 /** Change password for the currently authenticated user. */
-export async function changePassword(currentPassword: string, newPassword: string): Promise<{ message: string }> {
+export async function changePassword(
+  currentPassword: string,
+  newPassword: string,
+): Promise<{ message: string }> {
+  const [encryptedCurrent, encryptedNew] = await Promise.all([
+    _encryptPassword(currentPassword),
+    _encryptPassword(newPassword),
+  ]);
   return apiPost<{ message: string }>(`${API}/change-password`, {
-    current_password: currentPassword,
-    new_password: newPassword,
+    current_password: encryptedCurrent,
+    new_password: encryptedNew,
   });
 }
 
 export async function setTheme(theme: "light" | "dark"): Promise<void> {
-  await apiFetch(`${API}/theme`, { method: "PUT", body: JSON.stringify({ theme }) });
+  await apiFetch(`${API}/theme`, {
+    method: "PUT",
+    body: JSON.stringify({ theme }),
+  });
 }
 
 export async function getProgress(): Promise<ProgressData> {
@@ -247,7 +367,7 @@ export async function getProgress(): Promise<ProgressData> {
 export async function recordTopicVisit(
   courseId: number,
   topicIndex: number,
-  completed = false
+  completed = false,
 ): Promise<void> {
   await apiPost<unknown>(`${API}/progress/topic`, {
     course_id: courseId,
@@ -267,14 +387,27 @@ export async function resetCourseProgress(courseId: number): Promise<void> {
 
 async function apiFetch(path: string, init: RequestInit): Promise<void> {
   const token = getAuthToken();
-  const authHeaders: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
-  const headers = { "Content-Type": "application/json", ...authHeaders, ...(init.headers as Record<string, string> | undefined) };
+  const authHeaders: Record<string, string> = token
+    ? { Authorization: `Bearer ${token}` }
+    : {};
+  const headers = {
+    "Content-Type": "application/json",
+    ...authHeaders,
+    ...(init.headers as Record<string, string> | undefined),
+  };
   const res = await fetch(path, { ...init, headers });
   if (!res.ok) {
     const data = await res.json().catch(() => ({}));
     if (res.status === 401 && token) {
       await _handleUnauthorized();
+      throw new ApiError(
+        data?.error ?? "Session expired. Please sign in again.",
+        401,
+      );
     }
-    throw new ApiError(data?.error ?? `Request failed (${res.status})`, res.status);
+    throw new ApiError(
+      data?.error ?? `Request failed (${res.status})`,
+      res.status,
+    );
   }
 }

@@ -43,6 +43,8 @@ import io
 import time
 import uuid
 from pathlib import Path
+from cryptography.hazmat.primitives.asymmetric import rsa, padding
+from cryptography.hazmat.primitives import hashes, serialization
 from waitress import serve
 from apscheduler.schedulers.background import BackgroundScheduler
 
@@ -108,6 +110,54 @@ INVITE_CODES: set = {c.strip() for c in _raw_codes.split(",") if c.strip()}
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 log = logging.getLogger(__name__)
 
+# ── RSA Key Pair ─────────────────────────────────────────────────────────── #
+# Load a stable private key from the RSA_PRIVATE_KEY env var (PEM, newlines as \n).
+# If not set, a new key is generated and logged — copy it into server/.env so
+# the public key stays the same across restarts (and can be baked into the client).
+
+_rsa_private_pem_env = os.environ.get("RSA_PRIVATE_KEY", "").replace("\\n", "\n").strip()
+
+if _rsa_private_pem_env:
+    _rsa_private_key = serialization.load_pem_private_key(
+        _rsa_private_pem_env.encode(), password=None
+    )
+    log.info("RSA private key loaded from RSA_PRIVATE_KEY env var")
+else:
+    _rsa_private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    _generated_pem = _rsa_private_key.private_bytes(
+        encoding=serialization.Encoding.PEM,
+        format=serialization.PrivateFormat.TraditionalOpenSSL,
+        encryption_algorithm=serialization.NoEncryption(),
+    ).decode().replace("\n", "\\n")
+    log.warning(
+        "RSA_PRIVATE_KEY not set — key generated fresh (not stable across restarts).\n"
+        "Add this to server/.env to make it persistent:\n\n"
+        "RSA_PRIVATE_KEY=%s\n", _generated_pem
+    )
+
+_rsa_public_key = _rsa_private_key.public_key()
+_rsa_public_pem = _rsa_public_key.public_bytes(
+    encoding=serialization.Encoding.PEM,
+    format=serialization.PublicFormat.SubjectPublicKeyInfo,
+).decode()
+_rsa_private_pem_export = _rsa_private_key.private_bytes(
+    encoding=serialization.Encoding.PEM,
+    format=serialization.PrivateFormat.TraditionalOpenSSL,
+    encryption_algorithm=serialization.NoEncryption(),
+).decode()
+
+_pub_oneliner  = _rsa_public_pem.replace("\n", "\\n")
+_priv_oneliner = _rsa_private_pem_export.replace("\n", "\\n")
+print("\n" + "=" * 70)
+print("  RSA KEY PAIR — copy both lines into your .env files")
+print("=" * 70)
+print("  [server/.env]")
+print("  RSA_PRIVATE_KEY=" + _priv_oneliner)
+print()
+print("  [client/.env.local]")
+print("  NEXT_PUBLIC_RSA_PUBLIC_KEY=" + _pub_oneliner)
+print("=" * 70 + "\n")
+
 # ── App setup ─────────────────────────────────────────────────────────────── #
 
 app = Flask(__name__)
@@ -148,6 +198,32 @@ def _require(payload, *keys):
     missing = [k for k in keys if k not in payload]
     if missing:
         abort(400, description=f"Missing required field(s): {', '.join(missing)}")
+
+
+def _decrypt_password(ciphertext_b64: str) -> str:
+    """Decrypt an RSA-OAEP / SHA-256 encrypted, Base64-encoded password.
+
+    The client encrypts every password with the server's public key before
+    sending it over the wire. This helper decrypts it back to plaintext so
+    bcrypt operations can proceed normally.
+
+    Aborts with HTTP 400 if the ciphertext is missing or cannot be decrypted.
+    """
+    if not ciphertext_b64:
+        abort(400, description="Password field is required")
+    try:
+        ciphertext = base64.b64decode(ciphertext_b64)
+        plaintext  = _rsa_private_key.decrypt(
+            ciphertext,
+            padding.OAEP(
+                mgf=padding.MGF1(algorithm=hashes.SHA256()),
+                algorithm=hashes.SHA256(),
+                label=None,
+            ),
+        )
+        return plaintext.decode("utf-8")
+    except Exception:
+        abort(400, description="Invalid or malformed password encryption")
 
 
 # ── API 1: GET /courses ──────────────────────────────────────────────────── #
@@ -736,7 +812,7 @@ def _json_error(e):
 def auth_signup():
     data     = request.get_json(force=True, silent=True) or {}
     email    = str(data.get("email", "")).strip().lower()
-    password = str(data.get("password", ""))
+    password = _decrypt_password(str(data.get("password", "")))
     invite   = str(data.get("inviteCode", "")).strip()
     name     = str(data.get("name", "")).strip() or None
 
@@ -793,10 +869,12 @@ def auth_signup():
 def auth_login():
     data     = request.get_json(force=True, silent=True) or {}
     email    = str(data.get("email", "")).strip().lower()
-    password = str(data.get("password", ""))
+    raw_pw   = str(data.get("password", ""))
 
-    if not email or not password:
+    if not email or not raw_pw:
         abort(400, description="Email and password are required")
+
+    password = _decrypt_password(raw_pw)
 
     conn = get_auth_db()
     try:
@@ -908,8 +986,8 @@ def auth_change_password():
         abort(401, description="Not authenticated")
 
     body             = request.get_json(force=True, silent=True) or {}
-    current_password = str(body.get("current_password", "")).strip()
-    new_password     = str(body.get("new_password", ""))
+    current_password = _decrypt_password(str(body.get("current_password", "")).strip())
+    new_password     = _decrypt_password(str(body.get("new_password", "")))
 
     if not current_password or not new_password:
         abort(400, description="current_password and new_password are required")
@@ -1361,7 +1439,7 @@ def auth_forgot_password_reset():
         abort(401, description="Invalid or expired password-reset session")
 
     body     = request.get_json(force=True, silent=True) or {}
-    password = str(body.get("password", ""))
+    password = _decrypt_password(str(body.get("password", "")))
 
     if len(password) < 8 or len(password) > 72:
         abort(400, description="Password must be 8–72 characters")
