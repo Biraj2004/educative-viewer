@@ -141,8 +141,7 @@ export default function TopicLayoutClient({ courseId, slug, course, topic, initi
       setTopicChanging(false);
       navigatingRef.current = false;
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [courseId, currentTopic.topic_index, isCompleted]);
+  }, [courseId]);
 
   // Keep in sync when user presses browser back/forward
   useEffect(() => {

@@ -119,8 +119,7 @@ export default function InstaCalc({ data }: { data: InstaCalcData }) {
   // Run once on mount to resolve initial formulas
   useEffect(() => {
     setValues((prev) => recompute(prev));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [recompute]);
 
   function handleChange(key: string, raw: string) {
     setValues((prev) => {

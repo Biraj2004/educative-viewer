@@ -236,8 +236,7 @@ function RemoteView({ data }: { data: SandpackData }) {
       .then((id) => { if (!cancelled) { setSandboxId(id); setStatus("ready"); } })
       .catch(() => { if (!cancelled) setStatus("error"); });
     return () => { cancelled = true; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [data.comp_id]);
+  }, [data.comp_id, data.files, template]);
 
   const view = data.hideEditor ? "preview" : "split";
   const embedUrl = sandboxId

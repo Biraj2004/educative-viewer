@@ -56,8 +56,12 @@ interface CourseDetail {
 export default function TopicDetailPage() {
   const params = useParams<{ id: string; slug: string; topicIndex: string; topicSlug: string }>();
   const router = useRouter();
-  const courseId = Number(params?.id);
-  const topicIdx = Number(params?.topicIndex);
+  const routeId = params?.id ?? "";
+  const routeSlug = params?.slug ?? "";
+  const routeTopicIndex = params?.topicIndex ?? "";
+  const routeTopicSlug = params?.topicSlug ?? "";
+  const courseId = Number(routeId);
+  const topicIdx = Number(routeTopicIndex);
 
   const [topic, setTopic] = useState<TopicDetail | null>(null);
   const [course, setCourse] = useState<CourseDetail | null>(null);
@@ -68,7 +72,7 @@ export default function TopicDetailPage() {
   useEffect(() => {
     if (isNaN(courseId) || isNaN(topicIdx)) { setMissing(true); setLoading(false); return; }
     let cancelled = false;
-    const nextPath = `/dashboard/courses/${params?.id}/${params?.slug}/topics/${params?.topicIndex}/${params?.topicSlug}`;
+    const nextPath = `/dashboard/courses/${routeId}/${routeSlug}/topics/${routeTopicIndex}/${routeTopicSlug}`;
     const hadToken = Boolean(getAuthToken());
 
     getUser()
@@ -146,8 +150,7 @@ export default function TopicDetailPage() {
     return () => {
       cancelled = true;
     };
-      // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [courseId, topicIdx]);
+  }, [courseId, topicIdx, routeId, routeSlug, routeTopicIndex, routeTopicSlug, router]);
 
   if (loading) {
     return (
@@ -158,7 +161,7 @@ export default function TopicDetailPage() {
             { label: "Courses", href: "/dashboard/courses" },
             { label: "…" }
           ]}
-          backHref={`/dashboard/courses/${params?.id}/${params?.slug}`}
+          backHref={`/dashboard/courses/${routeId}/${routeSlug}`}
           backLabel="Topics"
           actions={<UserMenu />}
         />
@@ -200,7 +203,7 @@ export default function TopicDetailPage() {
   return (
     <TopicLayoutClient
       courseId={courseId}
-      slug={params?.slug ?? ""}
+      slug={routeSlug}
       course={course}
       topic={topic}
       initialCompleted={initialCompleted}

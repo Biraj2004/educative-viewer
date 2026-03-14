@@ -69,8 +69,7 @@ export default function Permutation({ data }: { data: PermutationData }) {
   const [shuffledOptions, setShuffledOptions] = useState<PermutationOption[]>(data.options);
   useEffect(() => {
     setShuffledOptions(shuffle(data.options));
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [data.options]);
 
   const optionMap = useMemo(() => {
     const m: Record<string, PermutationOption> = {};

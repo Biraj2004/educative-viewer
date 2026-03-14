@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, Suspense } from "react";
+import { useState, useEffect, useRef, useCallback, Suspense } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { clearAuthToken, login, signup, verify2FA, get2FASetup, enable2FA, rollbackSignup, forgotPasswordRequest, forgotPasswordVerify, forgotPasswordReset } from "@/utils/authClient";
@@ -64,7 +64,7 @@ function TwoFAStep({
 
   useEffect(() => { inputRef.current?.focus(); }, []);
 
-  async function handleVerify(digits: string) {
+  const handleVerify = useCallback(async (digits: string) => {
     if (digits.length !== 6) return;
     setLoading(true);
     setError("");
@@ -80,15 +80,14 @@ function TwoFAStep({
     } finally {
       setLoading(false);
     }
-  }
+  }, [mode, onSuccess]);
 
   // Auto-submit when all 6 digits are entered
   useEffect(() => {
     if (code.length === 6) {
       handleVerify(code);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [code]);
+  }, [code, handleVerify]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -238,7 +237,7 @@ function ForgotTOTPStep({ onSuccess, onBack }: { onSuccess: () => void; onBack: 
 
   useEffect(() => { inputRef.current?.focus(); }, []);
 
-  async function handleVerify(digits: string) {
+  const handleVerify = useCallback(async (digits: string) => {
     if (digits.length !== 6) return;
     setLoading(true);
     setError("");
@@ -251,12 +250,11 @@ function ForgotTOTPStep({ onSuccess, onBack }: { onSuccess: () => void; onBack: 
     } finally {
       setLoading(false);
     }
-  }
+  }, [onSuccess]);
 
   useEffect(() => {
     if (code.length === 6) handleVerify(code);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [code]);
+  }, [code, handleVerify]);
 
   return (
     <div className="flex flex-col gap-6">

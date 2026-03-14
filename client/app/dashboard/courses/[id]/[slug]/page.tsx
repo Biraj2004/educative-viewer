@@ -17,7 +17,9 @@ const inflightFetches = new Map<string, Promise<any>>();
 export default function CourseDetailPage() {
   const params = useParams<{ id: string; slug: string }>();
   const router = useRouter();
-  const courseId = Number(params?.id);
+  const routeId = params?.id ?? "";
+  const routeSlug = params?.slug ?? "";
+  const courseId = Number(routeId);
 
   const [course, setCourse] = useState<CourseDetail | null>(null);
   const [progress, setProgress] = useState<ProgressData>({ course_order: [], completed: {} });
@@ -29,7 +31,7 @@ export default function CourseDetailPage() {
   useEffect(() => {
     if (isNaN(courseId)) { setMissing(true); setLoading(false); return; }
     let cancelled = false;
-    const nextPath = `/dashboard/courses/${params?.id}/${params?.slug}`;
+    const nextPath = `/dashboard/courses/${routeId}/${routeSlug}`;
     const hadToken = Boolean(getAuthToken());
 
     getUser()
@@ -92,8 +94,7 @@ export default function CourseDetailPage() {
     return () => {
       cancelled = true;
     };
-      // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [courseId]);
+  }, [courseId, routeId, routeSlug, router]);
 
   if (loading) {
     return (
