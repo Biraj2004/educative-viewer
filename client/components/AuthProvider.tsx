@@ -36,7 +36,7 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
   const pathname = usePathname();
 
   // Register a global 401 handler once on mount.
-  // Every protected API call (apiGet / apiPost in authClient.ts) fires this when
+  // Every protected API call (apiGet / apiPost / apiFetch in authClient.ts) fires this when
   // the server returns 401 — session expired or superseded by a newer login.
   // We only clear the local token and redirect; no logout API call is needed
   // because the session is already invalid on the server.
