@@ -1,11 +1,10 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
 import AppNavbar from "@/components/AppNavbar";
 import CoursesListClient from "@/components/CoursesListClient";
 import UserMenu from "@/components/UserMenu";
-import { getAuthToken, clearAuthToken, getProgress } from "@/utils/authClient";
+import { getAuthToken, clearAuthToken, getProgress, getUser } from "@/utils/authClient";
 import type { ProgressData } from "@/utils/authClient";
 import ScrollToTop from "@/components/ScrollToTop";
 
@@ -29,48 +28,73 @@ interface Course {
 }
 
 export default function CoursesPage() {
-  const router = useRouter();
   const [courses, setCourses] = useState<Course[]>([]);
   const [progress, setProgress] = useState<ProgressData>({ course_order: [], completed: {} });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    const token = getAuthToken();
-    if (!token) {
-      window.location.replace("/");
-      return;
-    }
-    const fetchKey = "courses-list";
-    let coursesPromise = inflightFetches.get(fetchKey);
-    if (!coursesPromise) {
-      coursesPromise = fetch(`${BACKEND}/api/courses`, {
-        headers: { Authorization: `Bearer ${token}` },
-      }).then(async (r) => {
-        if (r.status === 401) throw Object.assign(new Error("Unauthorized"), { status: 401 });
-        if (!r.ok) throw new Error(`Failed to load courses (${r.status})`);
-        const json = await r.json();
-        return (Array.isArray(json) ? json : (json.courses ?? json.data ?? [])) as Course[];
-      }).finally(() => setTimeout(() => inflightFetches.delete(fetchKey), 50));
-      inflightFetches.set(fetchKey, coursesPromise);
-    }
+    let cancelled = false;
+    const hadToken = Boolean(getAuthToken());
 
-    Promise.all([coursesPromise, getProgress()])
-      .then(([data, prog]) => {
-        setCourses(data);
-        setProgress(prog);
-        setLoading(false);
-      })
-      .catch((err: unknown) => {
-        if (err && (err as { status?: number }).status === 401) {
-          clearAuthToken();
-          window.location.replace("/auth?reason=session_expired");
+    getUser()
+      .then(() => {
+        if (cancelled) return;
+
+        const token = getAuthToken();
+        if (!token) {
+          window.location.replace("/");
           return;
         }
-        setError(err instanceof Error ? err.message : "Failed to load courses");
-        setLoading(false);
+
+        const fetchKey = "courses-list";
+        let coursesPromise = inflightFetches.get(fetchKey);
+        if (!coursesPromise) {
+          coursesPromise = fetch(`${BACKEND}/api/courses`, {
+            headers: { Authorization: `Bearer ${token}` },
+          }).then(async (r) => {
+            if (r.status === 401) throw Object.assign(new Error("Unauthorized"), { status: 401 });
+            if (!r.ok) throw new Error(`Failed to load courses (${r.status})`);
+            const json = await r.json();
+            return (Array.isArray(json) ? json : (json.courses ?? json.data ?? [])) as Course[];
+          }).finally(() => setTimeout(() => inflightFetches.delete(fetchKey), 50));
+          inflightFetches.set(fetchKey, coursesPromise);
+        }
+
+        Promise.all([coursesPromise, getProgress()])
+          .then(([data, prog]) => {
+            if (cancelled) return;
+            setCourses(data);
+            setProgress(prog);
+            setLoading(false);
+          })
+          .catch((err: unknown) => {
+            if (cancelled) return;
+            if (err && (err as { status?: number }).status === 401) {
+              clearAuthToken();
+              window.location.replace("/auth?reason=session_expired");
+              return;
+            }
+            setError(err instanceof Error ? err.message : "Failed to load courses");
+            setLoading(false);
+          });
+      })
+      .catch((err: unknown) => {
+        if (cancelled) return;
+        const status = (err as { status?: number })?.status;
+
+        if (status === 401 && hadToken) {
+          // authClient already redirected to /auth?reason=session_expired.
+          return;
+        }
+
+        window.location.replace("/");
       });
-  }, [router]);
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   if (loading) {
     return (

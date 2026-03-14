@@ -6,7 +6,7 @@ import { notFound } from "next/navigation";
 import TopicLayoutClient from "@/components/TopicLayoutClient";
 import AppNavbar from "@/components/AppNavbar";
 import UserMenu from "@/components/UserMenu";
-import { getAuthToken, clearAuthToken, getProgress } from "@/utils/authClient";
+import { getAuthToken, clearAuthToken, getProgress, getUser } from "@/utils/authClient";
 
 const BACKEND = (process.env.NEXT_PUBLIC_BACKEND_API_BASE ?? "").replace(/\/$/, "");
 
@@ -67,58 +67,85 @@ export default function TopicDetailPage() {
 
   useEffect(() => {
     if (isNaN(courseId) || isNaN(topicIdx)) { setMissing(true); setLoading(false); return; }
-    const token = getAuthToken();
-    if (!token) {
-      router.replace(`/auth?next=/dashboard/courses/${params?.id}/${params?.slug}/topics/${params?.topicIndex}/${params?.topicSlug}`);
-      return;
-    }
-    const topicFetchKey = `topic-details-${courseId}-${topicIdx}`;
-    let topicPromise = inflightFetches.get(topicFetchKey);
-    if (!topicPromise) {
-      topicPromise = fetch(`${BACKEND}/api/topic-details`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ course_id: courseId, topic_index: topicIdx }),
-      }).then(async (r) => {
-        if (r.status === 401) throw Object.assign(new Error("Unauthorized"), { status: 401 });
-        if (r.status === 404) return null;
-        if (!r.ok) throw new Error(`Failed to load topic (${r.status})`);
-        return r.json() as Promise<TopicDetail>;
-      }).finally(() => setTimeout(() => inflightFetches.delete(topicFetchKey), 50));
-      inflightFetches.set(topicFetchKey, topicPromise);
-    }
+    let cancelled = false;
+    const nextPath = `/dashboard/courses/${params?.id}/${params?.slug}/topics/${params?.topicIndex}/${params?.topicSlug}`;
+    const hadToken = Boolean(getAuthToken());
 
-    const courseFetchKey = `course-details-${courseId}`;
-    let coursePromise = inflightFetches.get(courseFetchKey);
-    if (!coursePromise) {
-      coursePromise = fetch(`${BACKEND}/api/course-details`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ course_id: courseId }),
-      }).then(async (r) => {
-        if (r.status === 401) throw Object.assign(new Error("Unauthorized"), { status: 401 });
-        return r.ok ? r.json() as Promise<CourseDetail> : null;
-      }).finally(() => setTimeout(() => inflightFetches.delete(courseFetchKey), 50));
-      inflightFetches.set(courseFetchKey, coursePromise);
-    }
+    getUser()
+      .then(() => {
+        if (cancelled) return;
 
-    Promise.all([topicPromise, coursePromise, getProgress()])
-      .then(([topicData, courseData, prog]) => {
-        if (!topicData) { setMissing(true); setLoading(false); return; }
-        setTopic(topicData);
-        setCourse(courseData);
-        setInitialCompleted(prog.completed[String(courseId)] ?? []);
-        setLoading(false);
-      })
-      .catch((err: unknown) => {
-        if (err && (err as { status?: number }).status === 401) {
-          clearAuthToken();
-          window.location.replace("/auth?reason=session_expired");
+        const token = getAuthToken();
+        if (!token) {
+          router.replace(`/auth?next=${nextPath}`);
           return;
         }
-        setMissing(true);
-        setLoading(false);
+
+        const topicFetchKey = `topic-details-${courseId}-${topicIdx}`;
+        let topicPromise = inflightFetches.get(topicFetchKey);
+        if (!topicPromise) {
+          topicPromise = fetch(`${BACKEND}/api/topic-details`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+            body: JSON.stringify({ course_id: courseId, topic_index: topicIdx }),
+          }).then(async (r) => {
+            if (r.status === 401) throw Object.assign(new Error("Unauthorized"), { status: 401 });
+            if (r.status === 404) return null;
+            if (!r.ok) throw new Error(`Failed to load topic (${r.status})`);
+            return r.json() as Promise<TopicDetail>;
+          }).finally(() => setTimeout(() => inflightFetches.delete(topicFetchKey), 50));
+          inflightFetches.set(topicFetchKey, topicPromise);
+        }
+
+        const courseFetchKey = `course-details-${courseId}`;
+        let coursePromise = inflightFetches.get(courseFetchKey);
+        if (!coursePromise) {
+          coursePromise = fetch(`${BACKEND}/api/course-details`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+            body: JSON.stringify({ course_id: courseId }),
+          }).then(async (r) => {
+            if (r.status === 401) throw Object.assign(new Error("Unauthorized"), { status: 401 });
+            return r.ok ? r.json() as Promise<CourseDetail> : null;
+          }).finally(() => setTimeout(() => inflightFetches.delete(courseFetchKey), 50));
+          inflightFetches.set(courseFetchKey, coursePromise);
+        }
+
+        Promise.all([topicPromise, coursePromise, getProgress()])
+          .then(([topicData, courseData, prog]) => {
+            if (cancelled) return;
+            if (!topicData) { setMissing(true); setLoading(false); return; }
+            setTopic(topicData);
+            setCourse(courseData);
+            setInitialCompleted(prog.completed[String(courseId)] ?? []);
+            setLoading(false);
+          })
+          .catch((err: unknown) => {
+            if (cancelled) return;
+            if (err && (err as { status?: number }).status === 401) {
+              clearAuthToken();
+              window.location.replace("/auth?reason=session_expired");
+              return;
+            }
+            setMissing(true);
+            setLoading(false);
+          });
+      })
+      .catch((err: unknown) => {
+        if (cancelled) return;
+        const status = (err as { status?: number })?.status;
+
+        if (status === 401 && hadToken) {
+          // authClient already redirected to /auth?reason=session_expired.
+          return;
+        }
+
+        router.replace(`/auth?next=${nextPath}`);
       });
+
+    return () => {
+      cancelled = true;
+    };
       // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [courseId, topicIdx]);
 

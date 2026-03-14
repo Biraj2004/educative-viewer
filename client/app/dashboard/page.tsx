@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import AppNavbar from "@/components/AppNavbar";
 import UserMenu from "@/components/UserMenu";
-import { getAuthToken } from "@/utils/authClient";
+import { getAuthToken, getUser } from "@/utils/authClient";
 
 // ─── Section data ─────────────────────────────────────────────────────────────
 
@@ -106,12 +106,27 @@ export default function DashboardHome() {
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
-    if (!getAuthToken()) {
-      window.location.replace("/");
-    } else {
-      // eslint-disable-next-line
-      setReady(true);
-    }
+    let cancelled = false;
+    const hadToken = Boolean(getAuthToken());
+
+    getUser()
+      .then(() => {
+        if (!cancelled) setReady(true);
+      })
+      .catch((err: unknown) => {
+        if (cancelled) return;
+        const status = (err as { status?: number })?.status;
+
+        // If a token existed and /me returned 401, authClient already ran the
+        // global unauthorized handler and redirected to /auth?reason=session_expired.
+        if (status === 401 && hadToken) return;
+
+        window.location.replace("/");
+      });
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   if (!ready) return null;
