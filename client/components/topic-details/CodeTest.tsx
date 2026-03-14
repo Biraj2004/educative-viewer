@@ -448,7 +448,7 @@ function resolveJudge0LanguageId(
 }
 
 async function fetchJudge0Languages(): Promise<Judge0LanguageInfo[]> {
-  const response = await fetch("/api/code-test/execute", { method: "GET" });
+  const response = await fetch("/service/code-test/execute", { method: "GET" });
   const payload = (await response.json().catch(() => ({}))) as
     | { languages?: unknown; error?: string; details?: unknown }
     | Record<string, unknown>;
@@ -1342,7 +1342,7 @@ export default function CodeTest({ data }: { data: CodeTestData }) {
         };
       }
 
-      const batchResponse = await fetch("/api/code-test/execute", {
+      const batchResponse = await fetch("/service/code-test/execute", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
