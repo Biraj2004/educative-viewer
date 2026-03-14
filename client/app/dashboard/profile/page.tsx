@@ -1,12 +1,29 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import AppNavbar from "@/components/AppNavbar";
 import UserMenu from "@/components/UserMenu";
 import { useAuth } from "@/components/AuthProvider";
 import { changePassword } from "@/utils/authClient";
+
+function safeFromPath(path: string | null): string | null {
+  if (!path) return null;
+  if (!path.startsWith("/") || path.startsWith("//")) return null;
+  return path;
+}
+
+function backLabelFromPath(path: string | null): string {
+  if (!path) return "Dashboard";
+  if (path.includes("/topics/")) return "Topic";
+  if (/^\/dashboard\/courses\/[^/]+\/[^/]+$/.test(path)) return "Course";
+  if (path.startsWith("/dashboard/courses")) return "Courses";
+  if (path.startsWith("/dashboard/test")) return "Test";
+  if (path === "/") return "Home";
+  if (path.startsWith("/dashboard")) return "Dashboard";
+  return "Back";
+}
 
 // ─── Info row ─────────────────────────────────────────────────────────────────
 
@@ -208,6 +225,7 @@ function ChangePasswordCard() {
 export default function ProfilePage() {
   const { user, loading } = useAuth();
   const router = useRouter();
+  const searchParams = useSearchParams();
 
   useEffect(() => {
     if (!loading && !user) {
@@ -238,13 +256,16 @@ export default function ProfilePage() {
   const joinedDate = user.createdAt
     ? new Date(user.createdAt).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })
     : null;
+  const fromPath = safeFromPath(searchParams.get("from"));
+  const backHref = fromPath && fromPath !== "/dashboard/profile" ? fromPath : "/dashboard";
+  const backLabel = backLabelFromPath(fromPath);
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
       <AppNavbar
         crumbs={[{ label: "Dashboard", href: "/dashboard" }, { label: "Profile" }]}
-        backHref="/dashboard"
-        backLabel="Dashboard"
+        backHref={backHref}
+        backLabel={backLabel}
         actions={<UserMenu />}
       />
 

@@ -2,6 +2,7 @@
 
 import { useRef, useState, useEffect } from "react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { useAuth } from "./AuthProvider";
 
 // ─── Avatar initials helper ───────────────────────────────────────────────────
@@ -24,6 +25,7 @@ function getDisplayName(user: { name?: string; username?: string; email: string 
 
 export default function UserMenu() {
   const { user, loading, logout } = useAuth();
+  const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -67,6 +69,8 @@ export default function UserMenu() {
   const initials = getInitials(user);
   const displayName = getDisplayName(user);
   const firstName = (user.name ?? user.username ?? "").split(/\s+/)[0] || user.email.split("@")[0];
+  const fromPath = pathname && pathname.startsWith("/") ? pathname : "/dashboard";
+  const profileHref = `/dashboard/profile?from=${encodeURIComponent(fromPath)}`;
 
   return (
     <div ref={containerRef} className="relative">
@@ -125,7 +129,7 @@ export default function UserMenu() {
           {/* Menu items */}
           <div className="py-1">
             <Link
-              href="/dashboard/profile"
+              href={profileHref}
               onClick={() => setOpen(false)}
               className="flex items-center gap-2.5 px-4 py-2.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 hover:text-indigo-700 dark:hover:text-indigo-400 transition-colors cursor-pointer"
             >
