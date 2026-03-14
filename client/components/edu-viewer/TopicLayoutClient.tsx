@@ -237,10 +237,11 @@ export default function TopicLayoutClient({ courseId, slug, course, topic, initi
             const renderer = getRenderer(comp.type);
             const subType =
               typeof comp.content?.type === "string" ? comp.content.type : undefined;
+            const componentLabel = `<${comp.type}-${i}>`;
             return (
               <div key={i} className="relative">
                 {renderer ? renderer(comp.content) : <UnknownRenderer type={comp.type} />}
-                <ComponentBadge componentName={comp.type} subType={subType} />
+                <ComponentBadge componentName={componentLabel} subType={subType} />
               </div>
             );
           })}

@@ -151,7 +151,10 @@ export default function ComponentTestPage() {
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
       <AppNavbar
-        crumbs={[{ label: "Component's Test Page" }]}
+        crumbs={[
+          { label: "Dashboard", href: "/dashboard" },
+          { label: "Component's Test Page" },
+        ]}
         backHref="/dashboard"
         backLabel="Dashboard"
       />
@@ -188,7 +191,7 @@ export default function ComponentTestPage() {
             return (
               <section key={component.component_id}>
                 <SectionHeader
-                  name={component.component_type}
+                  name={`<${component.component_type}-${component.component_id}>`}
                   action={
                     <button
                       type="button"
