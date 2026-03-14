@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import Link from "next/link";
 import AppNavbar from "@/components/AppNavbar";
 import UserMenu from "@/components/UserMenu";
-import { getAuthToken, getUser } from "@/utils/authClient";
+import { useAuth } from "@/components/AuthProvider";
 
 // ─── Section data ─────────────────────────────────────────────────────────────
 
@@ -103,33 +103,28 @@ function IconArrow() {
 }
 
 export default function DashboardHome() {
-  const [ready, setReady] = useState(false);
+  const { user, loading, authToken } = useAuth();
 
   useEffect(() => {
-    let cancelled = false;
-    const hadToken = Boolean(getAuthToken());
+    if (!loading && !user && !authToken) {
+      window.location.replace("/");
+    }
+  }, [loading, user, authToken]);
 
-    getUser()
-      .then(() => {
-        if (!cancelled) setReady(true);
-      })
-      .catch((err: unknown) => {
-        if (cancelled) return;
-        const status = (err as { status?: number })?.status;
-
-        // If a token existed and /me returned 401, authClient already ran the
-        // global unauthorized handler and redirected to /auth?reason=session_expired.
-        if (status === 401 && hadToken) return;
-
-        window.location.replace("/");
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  if (!ready) return null;
+  if (loading || !user) {
+    return (
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
+        <div className="h-14 border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900" />
+        <div className="border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900">
+          <div className="max-w-5xl mx-auto px-6 py-5">
+            <div className="h-3.5 w-24 rounded bg-gray-200/70 dark:bg-gray-700/70" />
+            <div className="mt-3 h-7 w-72 max-w-[80%] rounded bg-gray-200/70 dark:bg-gray-700/70" />
+            <div className="mt-2 h-4 w-64 max-w-[70%] rounded bg-gray-200/70 dark:bg-gray-700/70" />
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
