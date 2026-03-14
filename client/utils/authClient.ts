@@ -27,17 +27,29 @@ let _cachedPublicKey: CryptoKey | null = null;
 
 /** Import a PEM-encoded RSA public key into a CryptoKey — no fetch needed. */
 async function _importPem(pem: string): Promise<CryptoKey> {
+  if (!IS_BROWSER || !window.crypto?.subtle) {
+    throw new Error(
+      "Secure browser crypto is unavailable. Open the app on localhost or HTTPS."
+    );
+  }
+
   // Env vars often store newlines as literal \n — normalise them first.
   const normalised = pem.replace(/\\n/g, "\n");
   const b64 = normalised.replace(/-----[^-]+-----/g, "").replace(/\s/g, "");
   const der = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
-  return window.crypto.subtle.importKey(
-    "spki",
-    der.buffer,
-    { name: "RSA-OAEP", hash: "SHA-256" },
-    false,
-    ["encrypt"],
-  );
+  try {
+    return await window.crypto.subtle.importKey(
+      "spki",
+      der.buffer,
+      { name: "RSA-OAEP", hash: "SHA-256" },
+      false,
+      ["encrypt"],
+    );
+  } catch {
+    throw new Error(
+      "Invalid NEXT_PUBLIC_RSA_PUBLIC_KEY. Sync it from server/.env (RSA_PRIVATE_KEY) and restart the Next.js dev server."
+    );
+  }
 }
 
 /** Return the server RSA public key from the baked-in env var. */
@@ -348,6 +360,8 @@ export async function changePassword(
 }
 
 export async function setTheme(theme: "light" | "dark"): Promise<void> {
+  // Public pages also use the theme toggle; only persist to DB when authenticated.
+  if (!getAuthToken()) return;
   await apiFetch(`${API}/theme`, {
     method: "PUT",
     body: JSON.stringify({ theme }),
@@ -398,7 +412,7 @@ async function apiFetch(path: string, init: RequestInit): Promise<void> {
   const res = await fetch(path, { ...init, headers });
   if (!res.ok) {
     const data = await res.json().catch(() => ({}));
-    if (res.status === 401 && token) {
+    if (res.status === 401) {
       await _handleUnauthorized();
       throw new ApiError(
         data?.error ?? "Session expired. Please sign in again.",
