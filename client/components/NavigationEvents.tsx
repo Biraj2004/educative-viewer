@@ -3,6 +3,9 @@
 import { useEffect, useRef } from "react";
 import { usePathname } from "next/navigation";
 
+const PREV_PATH_KEY = "ev_prev_path";
+const CURRENT_PATH_KEY = "ev_current_path";
+
 /**
  * Placed once in the root layout. Intercepts every internal anchor click and
  * signals NavProgressBar to start/stop via lightweight window CustomEvents.
@@ -14,6 +17,19 @@ export default function NavigationEvents() {
 
   // Signal "done" whenever the active pathname resolves (route fully rendered)
   useEffect(() => {
+    // Persist a tiny in-app path history for BackButton label/destination logic.
+    try {
+      const prevCurrent = window.sessionStorage.getItem(CURRENT_PATH_KEY);
+      if (prevCurrent && prevCurrent !== pathname) {
+        window.sessionStorage.setItem(PREV_PATH_KEY, prevCurrent);
+      }
+      if (pathname) {
+        window.sessionStorage.setItem(CURRENT_PATH_KEY, pathname);
+      }
+    } catch {
+      // ignore storage access failures (private mode, blocked storage)
+    }
+
     // Skip the very first mount so we don't fire a spurious "done" on page load
     if (!mounted.current) { mounted.current = true; return; }
     window.dispatchEvent(new Event("navprogress:done"));
