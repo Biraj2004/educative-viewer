@@ -3,9 +3,9 @@
 import { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
-import AppNavbar from "@/components/AppNavbar";
-import UserMenu from "@/components/UserMenu";
-import { useAuth } from "@/components/AuthProvider";
+import AppNavbar from "@/components/edu-viewer/AppNavbar";
+import UserMenu from "@/components/edu-viewer/UserMenu";
+import { useAuth } from "@/components/edu-viewer/AuthProvider";
 import { changePassword } from "@/utils/authClient";
 
 function safeFromPath(path: string | null): string | null {

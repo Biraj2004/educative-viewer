@@ -1,12 +1,12 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import AppNavbar from "@/components/AppNavbar";
-import CoursesListClient from "@/components/CoursesListClient";
-import UserMenu from "@/components/UserMenu";
+import AppNavbar from "@/components/edu-viewer/AppNavbar";
+import CoursesListClient from "@/components/edu-viewer/CoursesListClient";
+import UserMenu from "@/components/edu-viewer/UserMenu";
 import { getAuthToken, clearAuthToken, getProgress, getUser } from "@/utils/authClient";
 import type { ProgressData } from "@/utils/authClient";
-import ScrollToTop from "@/components/ScrollToTop";
+import ScrollToTop from "@/components/edu-viewer/ScrollToTop";
 
 const BACKEND = (process.env.NEXT_PUBLIC_BACKEND_API_BASE ?? "").replace(/\/$/, "");
 

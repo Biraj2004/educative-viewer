@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import AuthProvider from "@/components/AuthProvider";
+import AuthProvider from "@/components/edu-viewer/AuthProvider";
 
 export const metadata: Metadata = {
   title: "Dashboard · Edu-Viewer PRO",

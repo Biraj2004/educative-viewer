@@ -1,59 +1,69 @@
 "use client";
-import { useEffect, useState } from 'react';
-import AppNavbar from '@/components/AppNavbar';
-import { useAuth } from '@/components/AuthProvider';
-import LazyLoadPlaceholder, { LazyLoadPlaceholderData } from '@/components/LazyLoadPlaceholder';
-import EditorCode, { EditorCodeComponentData } from '@/components/EditorCode';
-import SlateHTML from '@/components/SlateHTML';
-import Latex from '@/components/Latex';
-import MarkdownEditor from '@/components/MarkdownEditor';
-import Code from '@/components/Code';
-import Columns from '@/components/Columns';
-import DrawIOWidget from '@/components/DrawIOWidget';
-import APIWidget from '@/components/APIWidget';
-import SpoilerEditor from '@/components/SpoilerEditor';
-import TabbedCode from '@/components/TabbedCode';
-import Table from '@/components/Table';
-import EducativeArray from '@/components/EducativeArray';
-import MatchTheAnswers from '@/components/MatchTheAnswers';
-import Permutation from '@/components/Permutation';
-import Quiz from '@/components/Quiz';
-import { QuizData } from '@/components/Quiz';
-import StructuredQuiz from '@/components/StructuredQuiz';
-import { StructuredQuizData } from '@/components/StructuredQuiz';
-import Sandpack from '@/components/Sandpack';
-import { SandpackData } from '@/components/Sandpack';
-import WebpackBin, { WebpackBinData } from '@/components/WebpackBin';
-import Image from '@/components/Image';
-import File, { FileComponentData } from '@/components/File';
-import InstaCalc from '@/components/InstaCalc';
-import ChartComponent, { ChartComponentData } from '@/components/Chart';
-import RunJS, { RunJSData } from '@/components/RunJS';
-import Notepad, { NotepadData } from '@/components/Notepad';
-import CodeDrawing, { CodeDrawingData } from '@/components/CodeDrawing';
-import NaryTree, { NaryTreeData } from '@/components/NaryTree';
-import Video, { VideoData } from '@/components/Video';
-import Adaptive, { AdaptiveData } from '@/components/Adaptive';
-import BinaryTree, { BinaryTreeData } from '@/components/BinaryTree';
-import Graphviz, { GraphvizData } from '@/components/Graphviz';
-import LinkedList, { LinkedListData } from '@/components/LinkedList';
-import Stack, { StackData } from '@/components/Stack';
-import Matrix, { MatrixComponentData } from '@/components/Matrix';
-import ButtonLink, { ButtonLinkData } from '@/components/ButtonLink';
-import CodeTest, { CodeTestData } from '@/components/CodeTest';
+import { useEffect, useState, type ReactNode } from 'react';
+import AppNavbar from '@/components/edu-viewer/AppNavbar';
+import { useAuth } from '@/components/edu-viewer/AuthProvider';
+import LazyLoadPlaceholder, { LazyLoadPlaceholderData } from '@/components/topic-details/LazyLoadPlaceholder';
+import EditorCode, { EditorCodeComponentData } from '@/components/topic-details/EditorCode';
+import SlateHTML from '@/components/topic-details/SlateHTML';
+import Latex from '@/components/topic-details/Latex';
+import MarkdownEditor from '@/components/topic-details/MarkdownEditor';
+import Code from '@/components/topic-details/Code';
+import Columns from '@/components/topic-details/Columns';
+import DrawIOWidget from '@/components/topic-details/DrawIOWidget';
+import APIWidget from '@/components/topic-details/APIWidget';
+import SpoilerEditor from '@/components/topic-details/SpoilerEditor';
+import TabbedCode from '@/components/topic-details/TabbedCode';
+import Table from '@/components/topic-details/Table';
+import EducativeArray from '@/components/topic-details/EducativeArray';
+import MatchTheAnswers from '@/components/topic-details/MatchTheAnswers';
+import Permutation from '@/components/topic-details/Permutation';
+import Quiz from '@/components/topic-details/Quiz';
+import { QuizData } from '@/components/topic-details/Quiz';
+import StructuredQuiz from '@/components/topic-details/StructuredQuiz';
+import { StructuredQuizData } from '@/components/topic-details/StructuredQuiz';
+import Sandpack from '@/components/topic-details/Sandpack';
+import { SandpackData } from '@/components/topic-details/Sandpack';
+import WebpackBin, { WebpackBinData } from '@/components/topic-details/WebpackBin';
+import Image from '@/components/topic-details/Image';
+import File, { FileComponentData } from '@/components/topic-details/File';
+import InstaCalc from '@/components/topic-details/InstaCalc';
+import ChartComponent, { ChartComponentData } from '@/components/topic-details/Chart';
+import RunJS, { RunJSData } from '@/components/topic-details/RunJS';
+import Notepad, { NotepadData } from '@/components/topic-details/Notepad';
+import CodeDrawing, { CodeDrawingData } from '@/components/topic-details/CodeDrawing';
+import NaryTree, { NaryTreeData } from '@/components/topic-details/NaryTree';
+import Video, { VideoData } from '@/components/topic-details/Video';
+import Adaptive, { AdaptiveData } from '@/components/topic-details/Adaptive';
+import BinaryTree, { BinaryTreeData } from '@/components/topic-details/BinaryTree';
+import Graphviz, { GraphvizData } from '@/components/topic-details/Graphviz';
+import LinkedList, { LinkedListData } from '@/components/topic-details/LinkedList';
+import Stack, { StackData } from '@/components/topic-details/Stack';
+import Matrix, { MatrixComponentData } from '@/components/topic-details/Matrix';
+import ButtonLink, { ButtonLinkData } from '@/components/topic-details/ButtonLink';
+import CodeTest, { CodeTestData } from '@/components/topic-details/CodeTest';
 
-function SectionHeader({ name, note }: { name: string; note?: string }) {
+interface TestComponentRow {
+  component_id: number;
+  component_type: string;
+  content_json: string;
+  topic_url?: string | null;
+}
+
+function SectionHeader({ name, note, action }: { name: string; note?: string; action?: ReactNode }) {
   return (
-    <div className="flex items-center gap-2 mb-3">
-      <span className="text-xs font-mono font-semibold tracking-wide text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/60 border border-indigo-200 dark:border-indigo-800 px-2.5 py-1 rounded-md">
-        {name}
-      </span>
-      {note && (
-        <>
-          <span className="text-gray-300 dark:text-gray-700 text-xs select-none">·</span>
-          <span className="text-xs font-mono text-gray-400 dark:text-gray-500">{note}</span>
-        </>
-      )}
+    <div className="flex items-center justify-between gap-3 mb-3">
+      <div className="flex items-center gap-2 min-w-0">
+        <span className="text-xs font-mono font-semibold tracking-wide text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/60 border border-indigo-200 dark:border-indigo-800 px-2.5 py-1 rounded-md">
+          {name}
+        </span>
+        {note && (
+          <>
+            <span className="text-gray-300 dark:text-gray-700 text-xs select-none">·</span>
+            <span className="text-xs font-mono text-gray-400 dark:text-gray-500 truncate">{note}</span>
+          </>
+        )}
+      </div>
+      {action ? <div className="shrink-0">{action}</div> : null}
     </div>
   );
 }
@@ -101,8 +111,7 @@ const componentMapping: { [key: string]: React.ComponentType<any> } = {
 };
 
 export default function ComponentTestPage() {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [components, setComponents] = useState<any[]>([]);
+  const [components, setComponents] = useState<TestComponentRow[]>([]);
   const { authToken, user, loading } = useAuth();
 
   useEffect(() => {
@@ -121,8 +130,8 @@ export default function ComponentTestPage() {
           headers: { Authorization: `Bearer ${authToken}` },
         });
         if (response.ok) {
-          const data = await response.json();
-          setComponents(data);
+          const data: unknown = await response.json();
+          setComponents(Array.isArray(data) ? (data as TestComponentRow[]) : []);
         }
       } catch (error) {
         console.error("Error fetching test components:", error);
@@ -133,35 +142,80 @@ export default function ComponentTestPage() {
 
   if (loading || !user) return null;
 
+  const handleOpenTopic = (topicUrl: string | null) => {
+    if (!topicUrl) return;
+    const newWindow = window.open(topicUrl, "_blank", "noopener,noreferrer");
+    if (newWindow) newWindow.opener = null;
+  };
+
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-950 overflow-x-hidden">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
       <AppNavbar
-        crumbs={[{ label: "Component Test" }]}
+        crumbs={[{ label: "Component's Test Page" }]}
         backHref="/dashboard"
         backLabel="Dashboard"
       />
 
-      <div className="max-w-5xl mx-auto px-4 sm:px-6 py-10 space-y-10">
-        {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-        {components.map((component: any) => {
-          const Component = componentMapping[component.component_type];
-          if (!Component) {
+      <div className="overflow-x-hidden">
+        <div className="max-w-5xl mx-auto px-4 sm:px-6 py-10 space-y-10">
+          {components.map((component) => {
+            const Component = componentMapping[component.component_type];
+            if (!Component) {
+              return (
+                <div key={component.component_id}>
+                  Unknown component type: {component.component_type}
+                </div>
+              );
+            }
+
+            let content: unknown = {};
+            try {
+              content = JSON.parse(component.content_json);
+            } catch (error) {
+              console.error(`Invalid content_json for component ${component.component_id}:`, error);
+            }
+
+            const topicUrlFromContent =
+              content &&
+              typeof content === "object" &&
+              "topic_url" in content &&
+              typeof content.topic_url === "string"
+                ? content.topic_url
+                : null;
+            const topicUrl = component.topic_url?.trim() || topicUrlFromContent?.trim() || null;
+            const hasTopicUrl = Boolean(topicUrl);
+
             return (
-              <div key={component.component_id}>
-                Unknown component type: {component.component_type}
-              </div>
+              <section key={component.component_id}>
+                <SectionHeader
+                  name={component.component_type}
+                  action={
+                    <button
+                      type="button"
+                      onClick={() => handleOpenTopic(topicUrl)}
+                      disabled={!hasTopicUrl}
+                      className={[
+                        "inline-flex items-center gap-2 px-3 py-1.5 rounded-md border text-xs font-medium transition-colors",
+                        hasTopicUrl
+                          ? "bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:border-indigo-400 dark:hover:border-indigo-600 hover:text-indigo-700 dark:hover:text-indigo-400 cursor-pointer"
+                          : "bg-gray-100 dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-400 dark:text-gray-500 cursor-not-allowed",
+                      ].join(" ")}
+                      aria-label={`Open source topic for ${component.component_type} in a new tab`}
+                    >
+                      Open Topic
+                      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 6H18m0 0v4.5M18 6l-7.5 7.5M6.75 6h3M6 9.75V17.25A.75.75 0 006.75 18h7.5a.75.75 0 00.75-.75v-3" />
+                      </svg>
+                    </button>
+                  }
+                />
+                <div className="rounded-xl border border-gray-200 dark:border-gray-800 overflow-hidden bg-white dark:bg-gray-900">
+                  <Component data={content} />
+                </div>
+              </section>
             );
-          }
-          const content = JSON.parse(component.content_json);
-          return (
-            <section key={component.component_id}>
-              <SectionHeader name={component.component_type} />
-              <div className="rounded-xl border border-gray-200 dark:border-gray-800 overflow-hidden bg-white dark:bg-gray-900">
-                <Component data={content} />
-              </div>
-            </section>
-          );
-        })}
+          })}
+        </div>
       </div>
     </div>
   );

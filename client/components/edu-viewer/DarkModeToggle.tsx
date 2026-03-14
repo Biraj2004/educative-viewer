@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useAuth } from "@/components/AuthProvider";
+import { useAuth } from "@/components/edu-viewer/AuthProvider";
 import { setTheme as syncThemeToBackend } from "@/utils/authClient";
 
 function saveTheme(theme: "dark" | "light") {

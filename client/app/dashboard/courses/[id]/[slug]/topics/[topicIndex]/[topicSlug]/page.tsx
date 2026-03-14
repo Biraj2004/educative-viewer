@@ -3,9 +3,9 @@
 import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { notFound } from "next/navigation";
-import TopicLayoutClient from "@/components/TopicLayoutClient";
-import AppNavbar from "@/components/AppNavbar";
-import UserMenu from "@/components/UserMenu";
+import TopicLayoutClient from "@/components/edu-viewer/TopicLayoutClient";
+import AppNavbar from "@/components/edu-viewer/AppNavbar";
+import UserMenu from "@/components/edu-viewer/UserMenu";
 import { getAuthToken, clearAuthToken, getProgress, getUser } from "@/utils/authClient";
 
 const BACKEND = (process.env.NEXT_PUBLIC_BACKEND_API_BASE ?? "").replace(/\/$/, "");

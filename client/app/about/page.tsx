@@ -1,7 +1,7 @@
 import React from "react";
 import Image from "next/image";
-import AppNavbar from "@/components/AppNavbar";
-import { HomeAuthProvider } from "@/components/HomeAuthSection";
+import AppNavbar from "@/components/edu-viewer/AppNavbar";
+import { HomeAuthProvider } from "@/components/edu-viewer/HomeAuthSection";
 
 // ─── Icons ────────────────────────────────────────────────────────────────────
 

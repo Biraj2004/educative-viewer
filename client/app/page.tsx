@@ -1,11 +1,11 @@
 import Link from "next/link";
-import AppNavbar from "@/components/AppNavbar";
+import AppNavbar from "@/components/edu-viewer/AppNavbar";
 import {
   HomeAuthProvider,
   HomeNavSignIn,
   HomeHeroCTA,
   HomeBottomCTA,
-} from "@/components/HomeAuthSection";
+} from "@/components/edu-viewer/HomeAuthSection";
 
 // ─── Icons ────────────────────────────────────────────────────────────────────
 

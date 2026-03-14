@@ -1,11 +1,11 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import TopicSidebar from "@/components/TopicSidebar";
-import AppNavbar from "@/components/AppNavbar";
-import UserMenu from "@/components/UserMenu";
+import TopicSidebar from "@/components/edu-viewer/TopicSidebar";
+import AppNavbar from "@/components/edu-viewer/AppNavbar";
+import UserMenu from "@/components/edu-viewer/UserMenu";
 import { getRenderer, UnknownRenderer } from "@/utils/component-registry";
-import ComponentBadge from "@/components/ComponentBadge";
+import ComponentBadge from "@/components/edu-viewer/ComponentBadge";
 import { recordTopicVisit, getAuthToken, clearAuthToken } from "@/utils/authClient";
 
 const BACKEND = (process.env.NEXT_PUBLIC_BACKEND_API_BASE ?? "").replace(/\/$/, "");

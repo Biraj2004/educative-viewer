@@ -2,9 +2,9 @@
 
 import { useEffect } from "react";
 import Link from "next/link";
-import AppNavbar from "@/components/AppNavbar";
-import UserMenu from "@/components/UserMenu";
-import { useAuth } from "@/components/AuthProvider";
+import AppNavbar from "@/components/edu-viewer/AppNavbar";
+import UserMenu from "@/components/edu-viewer/UserMenu";
+import { useAuth } from "@/components/edu-viewer/AuthProvider";
 
 // ─── Section data ─────────────────────────────────────────────────────────────
 

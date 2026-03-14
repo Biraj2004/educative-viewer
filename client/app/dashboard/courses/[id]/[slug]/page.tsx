@@ -3,9 +3,9 @@
 import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { notFound } from "next/navigation";
-import AppNavbar from "@/components/AppNavbar";
-import CourseDetailToc from "@/components/CourseDetailToc";
-import UserMenu from "@/components/UserMenu";
+import AppNavbar from "@/components/edu-viewer/AppNavbar";
+import CourseDetailToc from "@/components/edu-viewer/CourseDetailToc";
+import UserMenu from "@/components/edu-viewer/UserMenu";
 import { getAuthToken, clearAuthToken, getProgress, getUser, resetCourseProgress } from "@/utils/authClient";
 import type { ProgressData } from "@/utils/authClient";
 

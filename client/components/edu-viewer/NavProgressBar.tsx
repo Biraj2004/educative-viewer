@@ -78,7 +78,7 @@ export default function NavProgressBar() {
   if (phase === "hidden") return null;
 
   return (
-    <div className="fixed top-14 left-0 right-0 z-[21] h-[2.5px] pointer-events-none overflow-hidden">
+    <div className="fixed top-14 left-0 right-0 z-21 h-[2.5px] pointer-events-none overflow-hidden">
       <div
         style={STYLES[phase]}
         className="absolute inset-y-0 left-0 bg-indigo-500 dark:bg-indigo-400"

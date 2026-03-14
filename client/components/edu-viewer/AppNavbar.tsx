@@ -1,6 +1,6 @@
 import Link from "next/link";
 import DarkModeToggle from "./DarkModeToggle";
-import BackButton from "@/components/BackButton";
+import BackButton from "@/components/edu-viewer/BackButton";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 

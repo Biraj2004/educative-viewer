@@ -654,7 +654,7 @@ function AuthPageInner() {
 
     // Fast path: no token means user is not authenticated.
     if (!getAuthToken()) {
-      setCheckingSession(false);
+      setCheckingSession(false); // eslint-disable-line
       return;
     }
 

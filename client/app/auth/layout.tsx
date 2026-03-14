@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import AppNavbar from "@/components/AppNavbar";
+import AppNavbar from "@/components/edu-viewer/AppNavbar";
 
 export const metadata: Metadata = {
   title: "Sign In · Edu-Viewer PRO",
