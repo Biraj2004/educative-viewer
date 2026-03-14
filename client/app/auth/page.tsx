@@ -3,18 +3,9 @@
 import { useState, useEffect, useRef, useCallback, Suspense } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { clearAuthToken, login, signup, verify2FA, get2FASetup, enable2FA, rollbackSignup, forgotPasswordRequest, forgotPasswordVerify, forgotPasswordReset } from "@/utils/authClient";
+import { clearAuthToken, getAuthToken, getUser, login, signup, verify2FA, get2FASetup, enable2FA, rollbackSignup, forgotPasswordRequest, forgotPasswordVerify, forgotPasswordReset } from "@/utils/authClient";
 
-// ─── Open-redirect guard ──────────────────────────────────────────────────────
-// Only allow same-origin relative paths (starts with "/", not "//").
-// Rejects absolute URLs, protocol-relative URLs, and anything off-domain.
-function safeRedirect(next: string | null, fallback = "/dashboard/courses"): string {
-  if (!next) return fallback;
-  if (!next.startsWith("/") || next.startsWith("//")) return fallback;
-  // Block attempts like "/auth" to avoid redirect loops
-  if (next === "/auth" || next.startsWith("/auth/")) return fallback;
-  return next;
-}
+const AUTH_SUCCESS_REDIRECT = "/dashboard";
 
 // ─── Shared input style ───────────────────────────────────────────────────────
 
@@ -407,7 +398,6 @@ function LoginForm({
   onSuccess2FASetup: (qrUrl: string) => void;
   onForgotPassword: () => void;
 }) {
-  const searchParams = useSearchParams();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPass, setShowPass] = useState(false);
@@ -429,7 +419,7 @@ function LoginForm({
         onSuccess2FA();
         return;
       }
-      window.location.href = safeRedirect(searchParams.get("next"));
+      window.location.href = AUTH_SUCCESS_REDIRECT;
     } catch (err) {
       setError(err instanceof Error ? err.message : "Login failed");
     } finally {
@@ -651,12 +641,47 @@ type Step = "login" | "signup" | "2fa-verify" | "2fa-setup" | "forgot-email" | "
 
 function AuthPageInner() {
   const searchParams = useSearchParams();
+  const [checkingSession, setCheckingSession] = useState(true);
   const [step, setStep] = useState<Step>("login");
   const [tab, setTab] = useState<"login" | "signup">("login");
   const [setupQrUrl, setSetupQrUrl] = useState("");
   const [twoFASetupSource, setTwoFASetupSource] = useState<"signup" | "login" | null>(null);
 
   const sessionExpired = searchParams.get("reason") === "session_expired";
+
+  useEffect(() => {
+    let cancelled = false;
+
+    // Fast path: no token means user is not authenticated.
+    if (!getAuthToken()) {
+      setCheckingSession(false);
+      return;
+    }
+
+    getUser()
+      .then(() => {
+        if (!cancelled) {
+          window.location.replace(AUTH_SUCCESS_REDIRECT);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setCheckingSession(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  if (checkingSession) {
+    return (
+      <div className="flex-1 flex items-center justify-center px-4 py-12">
+        <div className="w-8 h-8 rounded-full border-2 border-indigo-600 border-t-transparent animate-spin" />
+      </div>
+    );
+  }
 
   function handleLoginSuccess2FA() {
     setStep("2fa-verify");
@@ -675,7 +700,7 @@ function AuthPageInner() {
   }
 
   function handleTwoFASuccess() {
-    window.location.href = safeRedirect(searchParams.get("next"));
+    window.location.href = AUTH_SUCCESS_REDIRECT;
   }
 
   async function handleBack() {
