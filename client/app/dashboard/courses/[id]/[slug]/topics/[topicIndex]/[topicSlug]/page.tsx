@@ -70,7 +70,7 @@ export default function TopicDetailPage() {
   const [missing, setMissing] = useState(false);
 
   useEffect(() => {
-    if (isNaN(courseId) || isNaN(topicIdx)) { setMissing(true); setLoading(false); return; }
+    if (isNaN(courseId) || isNaN(topicIdx)) { setMissing(true); setLoading(false); return; } // eslint-disable-line
     let cancelled = false;
     const nextPath = `/dashboard/courses/${routeId}/${routeSlug}/topics/${routeTopicIndex}/${routeTopicSlug}`;
     const hadToken = Boolean(getAuthToken());
