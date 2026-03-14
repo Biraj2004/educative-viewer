@@ -35,6 +35,7 @@ export default function CoursesPage() {
 
   useEffect(() => {
     let cancelled = false;
+    const nextPath = "/dashboard/courses";
     const hadToken = Boolean(getAuthToken());
 
     getUser()
@@ -43,7 +44,7 @@ export default function CoursesPage() {
 
         const token = getAuthToken();
         if (!token) {
-          window.location.replace("/");
+          window.location.replace(`/auth?next=${nextPath}`);
           return;
         }
 
@@ -88,7 +89,7 @@ export default function CoursesPage() {
           return;
         }
 
-        window.location.replace("/");
+        window.location.replace(`/auth?next=${nextPath}`);
       });
 
     return () => {
