@@ -1,6 +1,9 @@
 name: Client Release
 
 on:
+  push:
+    branches:
+      - main
   workflow_dispatch:
 
 concurrency:
@@ -110,9 +113,6 @@ jobs:
           REVALIDATE_SECRET=${REVALIDATE_SECRET}
           EOF
 
-      - name: Download and refresh public JSON files
-        run: node build-and-run.js public:sync
-
       - name: Resolve next release tag
         id: tag
         run: |
@@ -155,8 +155,7 @@ jobs:
         run: gh --version
 
       - name: Build, zip, and publish releases through build-and-run.js
-        run: |
-          printf '1\n%s\n\n\n' "${{ steps.tag.outputs.next_tag }}" | node build-and-run.js
+        run: node build-and-run.js release "${{ steps.tag.outputs.next_tag }}"
       
       - name: Debug Path
         run: |
@@ -169,5 +168,5 @@ jobs:
         if: always()
         with:
           name: client-next-zip-${{ steps.tag.outputs.next_tag }}
-          path: ${{ github.workspace }}/.next.zip
+          path: ${{ github.workspace }}/client/.next.zip
           if-no-files-found: ignore

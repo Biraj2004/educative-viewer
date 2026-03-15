@@ -10,10 +10,10 @@
  *   node build.js build      — build + obfuscate + zip only (no upload)
  *   node build.js local      — build + obfuscate + start local server
  *   node build.js serve      — start local server using existing .next folder
- *   node build.js download   — download .next.zip from an existing release
  *   node build.js upload     — zip + upload to existing GitHub release
  *   node build.js release    — zip + create new GitHub release
- *   node build.js public:sync — download and refresh JSON files in public/
+ *   node build.js download   — download .next.zip from an existing release
+ *   node build.js public:sync — disabled (legacy public sync path)
  */
 
 'use strict';
@@ -141,61 +141,9 @@ function stepClean() {
 
 async function stepSyncPublicJson() {
   header('Sync Public JSON Files');
-
-  const JSZip = require('jszip');
-  console.log(`[*] Downloading ${PUBLIC_ZIP_ASSET} from ${PUBLIC_ZIP_REPO}@${PUBLIC_ZIP_TAG} ...`);
-
-  if (fs.existsSync(PUBLIC_ZIP_PATH)) fs.unlinkSync(PUBLIC_ZIP_PATH);
-  downloadReleaseAsset(PUBLIC_ZIP_REPO, PUBLIC_ZIP_TAG, PUBLIC_ZIP_ASSET, PUBLIC_ZIP_PATH, PUBLIC_ZIP_ASSET);
-
-  if (!fs.existsSync(PUBLIC_ZIP_PATH)) {
-    throw new Error(`Could not download ${PUBLIC_ZIP_ASSET}`);
-  }
-
-  const zipBuffer = fs.readFileSync(PUBLIC_ZIP_PATH);
-  const zip = await JSZip.loadAsync(zipBuffer);
-
-  fs.mkdirSync(PUBLIC_DIR, { recursive: true });
-  const publicRoot = path.resolve(PUBLIC_DIR) + path.sep;
-  let updated = 0;
-  let skipped = 0;
-
-  for (const [entryName, entry] of Object.entries(zip.files)) {
-    if (entry.dir) continue;
-
-    let relPath = entryName.replace(/\\/g, '/').replace(/^\/+/, '');
-    if (relPath.toLowerCase().startsWith('public/')) {
-      relPath = relPath.slice('public/'.length);
-    }
-
-    if (!relPath || !relPath.toLowerCase().endsWith('.json')) {
-      skipped += 1;
-      continue;
-    }
-
-    const targetPath = path.resolve(PUBLIC_DIR, relPath);
-    if (targetPath !== path.resolve(PUBLIC_DIR) && !targetPath.startsWith(publicRoot)) {
-      skipped += 1;
-      console.log(`[!] Skipping unsafe zip entry: ${entryName}`);
-      continue;
-    }
-
-    fs.mkdirSync(path.dirname(targetPath), { recursive: true });
-    const data = await entry.async('nodebuffer');
-    fs.writeFileSync(targetPath, data);
-    updated += 1;
-  }
-
-  if (updated === 0) {
-    throw new Error('public.zip was downloaded but no JSON files were extracted.');
-  }
-
-  console.log(`[+] Updated ${updated} JSON file(s) in public/.`);
-  if (skipped > 0) {
-    console.log(`[i] Skipped ${skipped} non-JSON or invalid zip entr${skipped === 1 ? 'y' : 'ies'}.`);
-  }
-
-  if (fs.existsSync(PUBLIC_ZIP_PATH)) fs.unlinkSync(PUBLIC_ZIP_PATH);
+  console.log('[i] Public JSON sync is disabled.');
+  console.log('[i] Legacy implementation depended on jszip, which is no longer installed.');
+  console.log('[i] Re-enable this step only if that dependency and flow are restored.');
 }
 
 function stepBuild() {
@@ -653,12 +601,11 @@ async function interactiveMenu(rl) {
   console.log('  7) Upload existing .next.zip to existing release');
   console.log('  8) Upload existing .next.zip as new release');
   console.log('  9) Manage saved GitHub repos');
-  console.log('  10) Download and refresh public JSON files');
-  console.log('  11) Download .next.zip from existing release');
+  console.log('  10) Public JSON sync (disabled)');
   console.log('  0) Exit');
   console.log('');
 
-  const choice = (await ask(rl, 'Choose [0-11]: ')).trim();
+  const choice = (await ask(rl, 'Choose [0-10]: ')).trim();
 
   switch (choice) {
     case '1':
@@ -700,9 +647,6 @@ async function interactiveMenu(rl) {
       break;
     case '10':
       await stepSyncPublicJson();
-      break;
-    case '11':
-      await downloadZip(rl);
       break;
     case '0':
       console.log('Bye.');
