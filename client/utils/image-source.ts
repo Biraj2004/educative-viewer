@@ -125,26 +125,11 @@ export async function prepareImageSource(url: string): Promise<PreparedImageSour
   const headers = getRequestHeaders(requestUrl);
   const needsAuthenticatedBlob = Boolean(headers);
 
-  let headType = "";
-  if (!needsAuthenticatedBlob) {
-    try {
-      const headResp = await fetch(requestUrl, { method: "HEAD", cache: "force-cache", headers });
-      if (headResp.ok) {
-        headType = normalizeContentType(headResp.headers.get("Content-Type"));
-        if (headType.startsWith("image/")) {
-          return { src: requestUrl, shouldRevoke: false };
-        }
-      }
-    } catch {
-      // Ignore HEAD failures and fall back to GET sniffing.
-    }
-  }
-
   try {
     const resp = await fetch(requestUrl, { cache: "force-cache", headers });
     if (!resp.ok) return { src: requestUrl, shouldRevoke: false };
 
-    const contentType = normalizeContentType(resp.headers.get("Content-Type")) || headType;
+    const contentType = normalizeContentType(resp.headers.get("Content-Type"));
     if (!needsAuthenticatedBlob && contentType.startsWith("image/")) {
       return { src: requestUrl, shouldRevoke: false };
     }
