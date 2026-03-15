@@ -208,19 +208,56 @@ function writeEnvFile(filePath, vars) {
   fs.writeFileSync(filePath, out, 'utf8');
 }
 
-async function promptEnvVars(rl) {
+function ensureEnvLocalFile() {
   const examplePath = path.join(ROOT, '.env.local.example');
 
-  // Bootstrap .env.local from example if missing
   if (!fs.existsSync(ENV_PATH)) {
     if (fs.existsSync(examplePath)) {
       fs.copyFileSync(examplePath, ENV_PATH);
       console.log('[+] Created .env.local from .env.local.example');
     } else {
       console.log('[!] No .env.local or .env.local.example found. Skipping env setup.');
-      return;
+      return null;
     }
   }
+
+  return examplePath;
+}
+
+function saveEnvFilePreservingTemplate(vars, examplePath) {
+  const exampleVars = fs.existsSync(examplePath) ? parseEnvFile(examplePath) : {};
+
+  if (!fs.existsSync(examplePath)) {
+    writeEnvFile(ENV_PATH, vars);
+    return;
+  }
+
+  let out = '';
+  for (const line of fs.readFileSync(examplePath, 'utf8').split('\n')) {
+    const t = line.trim();
+    if (!t || t.startsWith('#')) {
+      out += line + '\n';
+      continue;
+    }
+    const eq = t.indexOf('=');
+    if (eq === -1) {
+      out += line + '\n';
+      continue;
+    }
+    const k = t.slice(0, eq).trim();
+    out += k in vars ? `${k}=${vars[k]}\n` : `${line}\n`;
+  }
+
+  for (const [k, v] of Object.entries(vars)) {
+    if (!(k in exampleVars)) out += `${k}=${v}\n`;
+  }
+
+  fs.writeFileSync(ENV_PATH, out, 'utf8');
+}
+
+async function promptEnvVars(rl) {
+  const examplePath = ensureEnvLocalFile();
+  if (!examplePath) return;
 
   const vars        = parseEnvFile(ENV_PATH);
   const exampleVars = fs.existsSync(examplePath) ? parseEnvFile(examplePath) : {};
@@ -251,24 +288,7 @@ async function promptEnvVars(rl) {
   }
 
   if (changed) {
-    // Rewrite preserving comments from example template
-    let out = '';
-    if (fs.existsSync(examplePath)) {
-      for (const line of fs.readFileSync(examplePath, 'utf8').split('\n')) {
-        const t = line.trim();
-        if (!t || t.startsWith('#')) { out += line + '\n'; continue; }
-        const eq = t.indexOf('=');
-        if (eq === -1) { out += line + '\n'; continue; }
-        const k = t.slice(0, eq).trim();
-        out += k in vars ? `${k}=${vars[k]}\n` : `${line}\n`;
-      }
-      for (const [k, v] of Object.entries(vars)) {
-        if (!(k in exampleVars)) out += `${k}=${v}\n`;
-      }
-    } else {
-      out = Object.entries(vars).map(([k, v]) => `${k}=${v}`).join('\n') + '\n';
-    }
-    fs.writeFileSync(ENV_PATH, out, 'utf8');
+    saveEnvFilePreservingTemplate(vars, examplePath);
     console.log('\n[+] .env.local saved.');
   } else {
     console.log('');
@@ -601,11 +621,10 @@ async function interactiveMenu(rl) {
   console.log('  7) Upload existing .next.zip to existing release');
   console.log('  8) Upload existing .next.zip as new release');
   console.log('  9) Manage saved GitHub repos');
-  console.log('  10) Public JSON sync (disabled)');
   console.log('  0) Exit');
   console.log('');
 
-  const choice = (await ask(rl, 'Choose [0-10]: ')).trim();
+  const choice = (await ask(rl, 'Choose [0-9]: ')).trim();
 
   switch (choice) {
     case '1':
@@ -644,9 +663,6 @@ async function interactiveMenu(rl) {
       break;
     case '9':
       await stepManageRepos(rl);
-      break;
-    case '10':
-      await stepSyncPublicJson();
       break;
     case '0':
       console.log('Bye.');
