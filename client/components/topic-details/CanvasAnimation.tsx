@@ -1,12 +1,15 @@
 "use client";
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
+import { resolveEduUrl } from '@/utils/constants';
 import { prepareSvg } from '@/utils/svg-helpers';
+import { usePreparedImageSources } from '@/utils/use-prepared-image';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
 interface SlideData {
     id: number;
     svgBackground: string;
+    imagePath: string;
     width: number;
     height: number;
 }
@@ -15,6 +18,13 @@ interface CanvasObject {
     svg_string?: string;
     width?: number;
     height?: number;
+    objectsDict?: Record<string, {
+        educativeObjContent?: {
+            content?: {
+                path?: string;
+            };
+        };
+    }>;
 }
 
 export interface CanvasAnimationData {
@@ -33,6 +43,20 @@ export interface CanvasAnimationData {
 
 // ─── Parsing ──────────────────────────────────────────────────────────────────
 
+function readPath(value?: string): string {
+    const next = value?.trim() ?? '';
+    return next;
+}
+
+function extractCanvasPath(obj: CanvasObject): string {
+    for (const entry of Object.values(obj.objectsDict ?? {})) {
+        const entryPath = readPath(entry.educativeObjContent?.content?.path);
+        if (entryPath) return entryPath;
+    }
+
+    return '';
+}
+
 function parseSlides(data: CanvasAnimationData): SlideData[] {
     const slides: SlideData[] = [];
 
@@ -43,6 +67,7 @@ function parseSlides(data: CanvasAnimationData): SlideData[] {
             slides.push({
                 id: index,
                 svgBackground: obj.svg_string ?? '',
+                imagePath: extractCanvasPath(obj),
                 width: obj.width ?? data.width ?? 710,
                 height: obj.height ?? data.height ?? 550,
             });
@@ -59,6 +84,7 @@ function parseSlides(data: CanvasAnimationData): SlideData[] {
                 slides.push({
                     id: index,
                     svgBackground: obj.svg_string ?? '',
+                    imagePath: extractCanvasPath(obj),
                     width: obj.width ?? data.width ?? 710,
                     height: obj.height ?? data.height ?? 550,
                 });
@@ -82,7 +108,12 @@ function SvgRenderer({ svgString }: { svgString: string }) {
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 export default function CanvasAnimation({ data }: { data: CanvasAnimationData }) {
-    const slides = parseSlides(data);
+    const slides = useMemo(() => parseSlides(data), [data]);
+    const imageUrls = useMemo(
+        () => slides.map((slide) => (slide.svgBackground ? '' : (slide.imagePath ? resolveEduUrl(slide.imagePath) : ''))),
+        [slides]
+    );
+    const { preparedUrls, isPreparing } = usePreparedImageSources(imageUrls);
     const [currentSlide, setCurrentSlide] = useState(0);
     const [isFullscreen, setIsFullscreen] = useState(false);
 
@@ -108,7 +139,18 @@ export default function CanvasAnimation({ data }: { data: CanvasAnimationData })
                             className="canvas-slide"
                             style={{ visibility: idx === currentSlide ? 'visible' : 'hidden', height: idx === currentSlide ? 'auto' : 0, overflow: 'hidden', display: 'flex', justifyContent: 'center' }}
                         >
-                            {slide.svgBackground && <SvgRenderer svgString={slide.svgBackground} />}
+                            {slide.svgBackground ? (
+                                <SvgRenderer svgString={slide.svgBackground} />
+                            ) : !isPreparing && preparedUrls[idx] ? (
+                                // eslint-disable-next-line @next/next/no-img-element
+                                <img
+                                    src={preparedUrls[idx]}
+                                    alt={`Canvas slide ${idx + 1}`}
+                                    className="max-w-full h-auto object-contain"
+                                />
+                            ) : idx === currentSlide ? (
+                                <div className="py-8 text-sm text-gray-400 italic">Preparing slide...</div>
+                            ) : null}
                         </div>
                     ))}
                 </div>

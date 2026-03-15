@@ -1,4 +1,8 @@
+"use client";
+
+import { useMemo } from "react";
 import { resolveEduUrl } from "@/utils/constants";
+import { usePreparedImageSource } from "@/utils/use-prepared-image";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -21,7 +25,8 @@ export interface ImageComponentData {
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function Image({ data }: { data: ImageComponentData }) {
-  const src = resolveEduUrl(data.path);
+  const resolvedSrc = useMemo(() => resolveEduUrl(data.path), [data.path]);
+  const src = usePreparedImageSource(resolvedSrc);
   const alt = data.metadata?.name ?? data.caption ?? "image";
 
   return (
