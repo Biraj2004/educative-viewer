@@ -37,6 +37,10 @@ import ChartComponent from "@/components/topic-details/Chart";
 import ButtonLink from "@/components/topic-details/ButtonLink";
 import CodeDrawing from "@/components/topic-details/CodeDrawing";
 import Adaptive from "@/components/topic-details/Adaptive";
+import HashTable from "@/components/topic-details/HashTable";
+import Mermaid from "@/components/topic-details/Mermaid";
+import MarkMap from "@/components/topic-details/MarkMap";
+import SequenceDiagrams from "@/components/topic-details/SequenceDiagrams";
 import "katex/dist/katex.min.css";
 
 // ─── Component Feature Flags ─────────────────────────────────────────────────
@@ -107,6 +111,10 @@ export const COMPONENT_REGISTRY: Record<string, RendererFn> = {
   ButtonLink:            (c) => <div data-component-type="ButtonLink">           <ButtonLink             data={c as any} /></div>,
   CodeDrawing:           (c) => <div data-component-type="CodeDrawing">          <CodeDrawing            data={c as any} /></div>,
   Adaptive:              (c) => <div data-component-type="Adaptive">             <Adaptive               data={c as any} /></div>,
+  SequenceDiagrams:      (c) => <div data-component-type="SequenceDiagrams">     <SequenceDiagrams       data={c as any} /></div>,
+  HashTable:             (c) => <div data-component-type="HashTable">            <HashTable              data={c as any} /></div>,
+  Mermaid:               (c) => <div data-component-type="Mermaid">              <Mermaid                data={c as any} /></div>,
+  MarkMap:               (c) => <div data-component-type="MarkMap">              <MarkMap                data={c as any} /></div>,
 };
 
 // ─── Lookup Helper ───────────────────────────────────────────────────────────

@@ -41,6 +41,10 @@ import Stack, { StackData } from '@/components/topic-details/Stack';
 import Matrix, { MatrixComponentData } from '@/components/topic-details/Matrix';
 import ButtonLink, { ButtonLinkData } from '@/components/topic-details/ButtonLink';
 import CodeTest, { CodeTestData } from '@/components/topic-details/CodeTest';
+import HashTable, { HashTableData } from '@/components/topic-details/HashTable';
+import Mermaid, { MermaidData } from '@/components/topic-details/Mermaid';
+import MarkMap, { MarkMapData } from '@/components/topic-details/MarkMap';
+import SequenceDiagrams, { SequenceDiagramData } from "@/components/topic-details/SequenceDiagrams";
 
 interface TestComponentRow {
   component_id: number;
@@ -108,6 +112,10 @@ const componentMapping: { [key: string]: React.ComponentType<any> } = {
     "Matrix": (props: { data: MatrixComponentData }) => <Matrix {...props} />,
     "ButtonLink": (props: { data: ButtonLinkData }) => <ButtonLink {...props} />,
     "CodeTest": (props: { data: CodeTestData }) => <CodeTest {...props} />,
+    "HashTable": (props: { data: HashTableData }) => <HashTable {...props} />,
+    "Mermaid": (props: { data: MermaidData }) => <Mermaid {...props} />,
+    "MarkMap": (props: { data: MarkMapData }) => <MarkMap {...props} />,
+    "SequenceDiagrams": (props: { data: SequenceDiagramData }) => <SequenceDiagrams {...props} />,
 };
 
 export default function ComponentTestPage() {
