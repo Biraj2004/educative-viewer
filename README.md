@@ -69,6 +69,13 @@ Install Obfuscator → Build Next.js App → Obfuscate JS Chunks → Configure .
 
 ---
 
+## 👤 Author
+
+- **Biraj** - [Biraj2004](https://github.com/Biraj2004)
+- **Anilabha** - [anilabhadatta](https://github.com/anilabhadatta)
+
+---
+
 ## 📜 License
 
 This project is for educational and development purposes.
