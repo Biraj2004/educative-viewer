@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
 import AppNavbar from "@/components/edu-viewer/AppNavbar";
 import UserMenu from "@/components/edu-viewer/UserMenu";
 import { useAuth } from "@/components/edu-viewer/AuthProvider";
@@ -41,15 +42,26 @@ function pathDisplayName(path: PathItem): string {
   return `${path.path_author_id}/${path.path_collection_id}`;
 }
 
+function parsePositiveInt(value: string | null): number | null {
+  if (!value) return null;
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed <= 0) return null;
+  return parsed;
+}
+
 export default function PathsPage() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const { user, loading } = useAuth();
+  const initialSelectedPathId = parsePositiveInt(searchParams.get("path"));
+
   const [paths, setPaths] = useState<PathItem[]>([]);
   const [pathsLoading, setPathsLoading] = useState(true);
   const [pathsError, setPathsError] = useState<string | null>(null);
 
-  const [selectedPathId, setSelectedPathId] = useState<number | null>(null);
+  const [selectedPathId, setSelectedPathId] = useState<number | null>(initialSelectedPathId);
   const [courses, setCourses] = useState<CourseItem[]>([]);
-  const [coursesLoading, setCoursesLoading] = useState(false);
+  const [coursesLoading, setCoursesLoading] = useState(initialSelectedPathId !== null);
   const [coursesError, setCoursesError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -158,6 +170,11 @@ export default function PathsPage() {
     setCourses([]);
     setCoursesError(null);
     setCoursesLoading(true);
+
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("path", String(pathId));
+    const query = params.toString();
+    router.replace(query ? `/dashboard/paths?${query}` : "/dashboard/paths", { scroll: false });
   }
 
   if (loading || !user) {
@@ -285,7 +302,8 @@ export default function PathsPage() {
                   {courses.map((course) => {
                     const title = course.title?.trim() || `Course ${course.id}`;
                     const slug = course.slug?.trim() || String(course.id);
-                    const href = `/dashboard/courses/${course.id}/${slug}`;
+                    const fromPath = selectedPath ? `/dashboard/paths?path=${selectedPath.id}` : "/dashboard/paths";
+                    const href = `/dashboard/courses/${course.id}/${slug}?from=${encodeURIComponent(fromPath)}`;
 
                     return (
                       <Link

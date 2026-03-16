@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { notFound } from "next/navigation";
 import AppNavbar from "@/components/edu-viewer/AppNavbar";
 import CourseDetailToc from "@/components/edu-viewer/CourseDetailToc";
@@ -14,12 +14,26 @@ const BACKEND = (process.env.NEXT_PUBLIC_BACKEND_API_BASE ?? "").replace(/\/$/, 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const inflightFetches = new Map<string, Promise<any>>();
 
+function safeFromPath(path: string | null): string | null {
+  if (!path) return null;
+  if (!path.startsWith("/") || path.startsWith("//")) return null;
+  return path;
+}
+
 export default function CourseDetailPage() {
   const params = useParams<{ id: string; slug: string }>();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const routeId = params?.id ?? "";
   const routeSlug = params?.slug ?? "";
   const courseId = Number(routeId);
+  const fromPath = safeFromPath(searchParams.get("from"));
+  const fromPathsPage = Boolean(fromPath?.startsWith("/dashboard/paths"));
+  const sectionCrumb = fromPathsPage
+    ? { label: "Paths", href: fromPath ?? "/dashboard/paths" }
+    : { label: "Courses", href: "/dashboard/courses" };
+  const backHref = fromPathsPage ? (fromPath ?? "/dashboard/paths") : "/dashboard/courses";
+  const backLabel = fromPathsPage ? "Paths" : "Courses";
 
   const [course, setCourse] = useState<CourseDetail | null>(null);
   const [progress, setProgress] = useState<ProgressData>({ course_order: [], completed: {} });
@@ -31,7 +45,8 @@ export default function CourseDetailPage() {
   useEffect(() => {
     if (isNaN(courseId)) { setMissing(true); setLoading(false); return; }
     let cancelled = false;
-    const nextPath = `/dashboard/courses/${routeId}/${routeSlug}`;
+    const basePath = `/dashboard/courses/${routeId}/${routeSlug}`;
+    const nextPath = fromPath ? `${basePath}?from=${encodeURIComponent(fromPath)}` : basePath;
     const hadToken = Boolean(getAuthToken());
 
     getUser()
@@ -94,7 +109,7 @@ export default function CourseDetailPage() {
     return () => {
       cancelled = true;
     };
-  }, [courseId, routeId, routeSlug, router]);
+  }, [courseId, routeId, routeSlug, router, fromPath]);
 
   if (loading) {
     return (
@@ -102,11 +117,11 @@ export default function CourseDetailPage() {
         <AppNavbar
           crumbs={[
             { label: "Dashboard", href: "/dashboard" },
-            { label: "Courses", href: "/dashboard/courses" },
+            sectionCrumb,
             { label: "…" }
           ]}
-          backHref="/dashboard/courses"
-          backLabel="Courses"
+          backHref={backHref}
+          backLabel={backLabel}
           actions={<UserMenu />}
         />
         <div className="border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900">
@@ -168,11 +183,11 @@ export default function CourseDetailPage() {
       <AppNavbar
         crumbs={[
           { label: "Dashboard", href: "/dashboard" },
-          { label: "Courses", href: "/dashboard/courses" },
+          sectionCrumb,
           { label: course.title },
         ]}
-        backHref="/dashboard/courses"
-        backLabel="Courses"
+        backHref={backHref}
+        backLabel={backLabel}
         actions={<UserMenu />}
       />
       <div className="border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900">
@@ -222,7 +237,13 @@ export default function CourseDetailPage() {
         </div>
       </div>
       <div className="max-w-5xl mx-auto px-6 py-8">
-        <CourseDetailToc toc={course.toc} courseId={courseId} slug={course.slug} completedTopicIndices={completedTopicIndices} />
+        <CourseDetailToc
+          toc={course.toc}
+          courseId={courseId}
+          slug={course.slug}
+          fromPath={fromPath}
+          completedTopicIndices={completedTopicIndices}
+        />
       </div>
     </main>
   );

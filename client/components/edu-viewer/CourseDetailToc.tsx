@@ -23,6 +23,7 @@ interface Props {
   toc: TocEntry[];
   courseId: number;
   slug: string;
+  fromPath?: string | null;
   /** Set of topic_index values the user has completed */
   completedTopicIndices?: Set<number>;
 }
@@ -60,7 +61,19 @@ function ClearIcon() {
   );
 }
 
-export default function CourseDetailToc({ toc, courseId, slug, completedTopicIndices }: Props) {
+function buildTopicHref(
+  courseId: number,
+  slug: string,
+  topicIndex: number,
+  topicSlug: string,
+  fromPath?: string | null
+): string {
+  const base = `/dashboard/courses/${courseId}/${slug}/topics/${topicIndex}/${topicSlug}`;
+  if (!fromPath || !fromPath.startsWith("/") || fromPath.startsWith("//")) return base;
+  return `${base}?from=${encodeURIComponent(fromPath)}`;
+}
+
+export default function CourseDetailToc({ toc, courseId, slug, fromPath, completedTopicIndices }: Props) {
   const [q, setQ] = useState("");
 
   const normalised = q.toLowerCase().trim();
@@ -172,7 +185,7 @@ export default function CourseDetailToc({ toc, courseId, slug, completedTopicInd
                           }
                         >
                           <Link
-                            href={`/dashboard/courses/${courseId}/${slug}/topics/${topic.index}/${topic.slug}`}
+                            href={buildTopicHref(courseId, slug, topic.index, topic.slug, fromPath)}
                             prefetch={false}
                             className={[
                               "flex items-center gap-3 px-4 py-2.5 text-sm transition-colors border-l-2",
@@ -212,7 +225,7 @@ export default function CourseDetailToc({ toc, courseId, slug, completedTopicInd
                   className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden"
                 >
                   <Link
-                    href={`/dashboard/courses/${courseId}/${slug}/topics/${entry.index}/${entry.slug}`}
+                    href={buildTopicHref(courseId, slug, entry.index, entry.slug, fromPath)}
                     prefetch={false}
                     className={[
                       "flex items-center gap-3 px-4 py-2.5 text-sm transition-colors border-l-2",

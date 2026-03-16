@@ -55,13 +55,14 @@ interface CourseDetail {
 interface Props {
   courseId: number;
   slug: string;
+  fromPath?: string | null;
   course: CourseDetail | null;
   topic: TopicDetail;
   /** topic_index values that the user has already completed */
   initialCompleted?: number[];
 }
 
-export default function TopicLayoutClient({ courseId, slug, course, topic, initialCompleted = [] }: Props) {
+export default function TopicLayoutClient({ courseId, slug, fromPath, course, topic, initialCompleted = [] }: Props) {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [currentTopic, setCurrentTopic] = useState<TopicDetail>(topic);
   const [topicChanging, setTopicChanging] = useState(false);
@@ -69,6 +70,15 @@ export default function TopicLayoutClient({ courseId, slug, course, topic, initi
   const [isCompleted, setIsCompleted] = useState(() => new Set(initialCompleted).has(topic.topic_index));
   const navigatingRef = useRef(false);
   const completedRef = useRef<Set<number>>(new Set(initialCompleted));
+  const validFromPath = fromPath && fromPath.startsWith("/") && !fromPath.startsWith("//") ? fromPath : null;
+  const fromPathsPage = Boolean(validFromPath?.startsWith("/dashboard/paths"));
+  const sectionCrumb = fromPathsPage
+    ? { label: "Paths", href: validFromPath ?? "/dashboard/paths" }
+    : { label: "Courses", href: "/dashboard/courses" };
+  const courseBaseHref = `/dashboard/courses/${courseId}/${slug}`;
+  const courseHref = validFromPath
+    ? `${courseBaseHref}?from=${encodeURIComponent(validFromPath)}`
+    : courseBaseHref;
 
   // Keep completedRef current (also updated synchronously below when mutating state)
   useEffect(() => { completedRef.current = completed; }, [completed]);
@@ -91,6 +101,11 @@ export default function TopicLayoutClient({ courseId, slug, course, topic, initi
   const currentPos = allTopics.findIndex((t) => t.index === currentTopic.topic_index);
   const prev = currentPos > 0 ? allTopics[currentPos - 1] : null;
   const next = currentPos < allTopics.length - 1 ? allTopics[currentPos + 1] : null;
+
+  const buildTopicHref = useCallback((topicIndex: number, topicSlug: string) => {
+    const base = `/dashboard/courses/${courseId}/${slug}/topics/${topicIndex}/${topicSlug}`;
+    return validFromPath ? `${base}?from=${encodeURIComponent(validFromPath)}` : base;
+  }, [courseId, slug, validFromPath]);
 
   // Mark this topic as visited on every topic change (best-effort, don't block UI)
   // (Removed per user request: only mark complete on explicit interaction)
@@ -150,7 +165,7 @@ export default function TopicLayoutClient({ courseId, slug, course, topic, initi
       if (m) {
         const idx = Number(m[1]);
         if (idx !== currentTopic.topic_index) {
-          handleTopicNav(window.location.pathname, idx);
+          handleTopicNav(`${window.location.pathname}${window.location.search}`, idx);
         }
       }
     };
@@ -165,13 +180,13 @@ export default function TopicLayoutClient({ courseId, slug, course, topic, initi
       <AppNavbar
         crumbs={[
           { label: "Dashboard", href: "/dashboard" },
-          { label: "Courses", href: "/dashboard/courses" },
+          sectionCrumb,
           ...(course
-            ? [{ label: course.title, href: `/dashboard/courses/${courseId}/${slug}` }]
+            ? [{ label: course.title, href: courseHref }]
             : []),
           { label: currentTopic.topic_name },
         ]}
-        backHref={`/dashboard/courses/${courseId}/${slug}`}
+        backHref={courseHref}
         backLabel="Topics"
         mobileMenuTrigger={
           course ? (
@@ -204,6 +219,7 @@ export default function TopicLayoutClient({ courseId, slug, course, topic, initi
               toc={course.toc}
               currentTopicIndex={currentTopic.topic_index}
               completedTopicIndices={completed}
+              fromPath={validFromPath}
               asideClassName="w-72 shrink-0 flex flex-col h-full"
               onClose={() => setDrawerOpen(false)}
               onTopicClick={(href, destIdx) => { setDrawerOpen(false); handleTopicNav(href, destIdx); }}
@@ -224,6 +240,7 @@ export default function TopicLayoutClient({ courseId, slug, course, topic, initi
             toc={course.toc}
             currentTopicIndex={currentTopic.topic_index}
             completedTopicIndices={completed}
+            fromPath={validFromPath}
             onTopicClick={(href, destIdx) => handleTopicNav(href, destIdx)}
           />
         )}
@@ -287,7 +304,7 @@ export default function TopicLayoutClient({ courseId, slug, course, topic, initi
                     });
                     recordTopicVisit(courseId, currentTopic.topic_index, true).catch(() => {});
                   }
-                  handleTopicNav(`/dashboard/courses/${courseId}/${slug}/topics/${prev.index}/${prev.slug}`, prev.index);
+                  handleTopicNav(buildTopicHref(prev.index, prev.slug), prev.index);
                 }}
                 className="flex items-center gap-2 px-4 py-2.5 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-sm text-gray-700 dark:text-gray-300 hover:border-indigo-400 dark:hover:border-indigo-600 hover:text-indigo-700 dark:hover:text-indigo-400 transition-colors max-w-xs cursor-pointer"
               >
@@ -309,7 +326,7 @@ export default function TopicLayoutClient({ courseId, slug, course, topic, initi
                     });
                     recordTopicVisit(courseId, currentTopic.topic_index, true).catch(() => {});
                   }
-                  handleTopicNav(`/dashboard/courses/${courseId}/${slug}/topics/${next.index}/${next.slug}`, next.index);
+                  handleTopicNav(buildTopicHref(next.index, next.slug), next.index);
                 }}
                 className="flex items-center gap-2 px-4 py-2.5 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-sm text-gray-700 dark:text-gray-300 hover:border-indigo-400 dark:hover:border-indigo-600 hover:text-indigo-700 dark:hover:text-indigo-400 transition-colors max-w-xs cursor-pointer"
               >

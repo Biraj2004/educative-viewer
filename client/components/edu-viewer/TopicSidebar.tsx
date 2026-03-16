@@ -25,6 +25,7 @@ interface TopicSidebarProps {
     courseTitle: string;
     toc: TocEntry[];
     currentTopicIndex: number;
+    fromPath?: string | null;
     /** Set of topic_index values the user has completed */
     completedTopicIndices?: Set<number>;
     asideClassName?: string;
@@ -38,12 +39,19 @@ export default function TopicSidebar({
     courseSlug,
     toc,
     currentTopicIndex,
+    fromPath,
     completedTopicIndices,
     asideClassName,
     onClose,
     onTopicClick,
 }: TopicSidebarProps) {
     const activeRef = useRef<HTMLAnchorElement>(null);
+    const validFromPath = fromPath && fromPath.startsWith("/") && !fromPath.startsWith("//") ? fromPath : null;
+
+    const buildTopicHref = (topicIndex: number, topicSlug: string): string => {
+        const base = `/dashboard/courses/${courseId}/${courseSlug}/topics/${topicIndex}/${topicSlug}`;
+        return validFromPath ? `${base}?from=${encodeURIComponent(validFromPath)}` : base;
+    };
 
     useEffect(() => {
         if (activeRef.current) {
@@ -77,16 +85,17 @@ export default function TopicSidebar({
                                             {entry.topics.map((topic) => {
                                                 const isActive = topic.index === currentTopicIndex;
                                                 const isDone = !isActive && completedTopicIndices?.has(topic.index);
+                                                const topicHref = buildTopicHref(topic.index, topic.slug);
                                                 return (
                                                     <li key={topic.index}>
                                                         <Link
                                                             ref={isActive ? activeRef : null}
-                                                            href={`/dashboard/courses/${courseId}/${courseSlug}/topics/${topic.index}/${topic.slug}`}
+                                                            href={topicHref}
                                                             prefetch={false}
                                                             onClick={(e) => {
                                                                 if (onTopicClick) {
                                                                     e.preventDefault();
-                                                                    onTopicClick(`/dashboard/courses/${courseId}/${courseSlug}/topics/${topic.index}/${topic.slug}`, topic.index);
+                                                                    onTopicClick(topicHref, topic.index);
                                                                 }
                                                                 onClose?.();
                                                             }}
@@ -124,17 +133,18 @@ export default function TopicSidebar({
                             } else {
                                 const isActive = entry.index === currentTopicIndex;
                                 const isDone = !isActive && completedTopicIndices?.has(entry.index);
+                                const topicHref = buildTopicHref(entry.index, entry.slug);
                                 return (
                                     <ul key={i}>
                                         <li>
                                             <Link
                                                 ref={isActive ? activeRef : null}
-                                                href={`/dashboard/courses/${courseId}/${courseSlug}/topics/${entry.index}/${entry.slug}`}
+                                                href={topicHref}
                                                 prefetch={false}
                                                 onClick={(e) => {
                                                     if (onTopicClick) {
                                                         e.preventDefault();
-                                                        onTopicClick(`/dashboard/courses/${courseId}/${courseSlug}/topics/${entry.index}/${entry.slug}`, entry.index);
+                                                        onTopicClick(topicHref, entry.index);
                                                     }
                                                     onClose?.();
                                                 }}

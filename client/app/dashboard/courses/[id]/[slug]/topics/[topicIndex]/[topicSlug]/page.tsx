@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { notFound } from "next/navigation";
 import TopicLayoutClient from "@/components/edu-viewer/TopicLayoutClient";
 import AppNavbar from "@/components/edu-viewer/AppNavbar";
@@ -12,6 +12,12 @@ const BACKEND = (process.env.NEXT_PUBLIC_BACKEND_API_BASE ?? "").replace(/\/$/, 
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const inflightFetches = new Map<string, Promise<any>>();
+
+function safeFromPath(path: string | null): string | null {
+  if (!path) return null;
+  if (!path.startsWith("/") || path.startsWith("//")) return null;
+  return path;
+}
 
 interface Component {
   type: string;
@@ -56,12 +62,20 @@ interface CourseDetail {
 export default function TopicDetailPage() {
   const params = useParams<{ id: string; slug: string; topicIndex: string; topicSlug: string }>();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const routeId = params?.id ?? "";
   const routeSlug = params?.slug ?? "";
   const routeTopicIndex = params?.topicIndex ?? "";
   const routeTopicSlug = params?.topicSlug ?? "";
   const courseId = Number(routeId);
   const topicIdx = Number(routeTopicIndex);
+  const fromPath = safeFromPath(searchParams.get("from"));
+  const fromPathsPage = Boolean(fromPath?.startsWith("/dashboard/paths"));
+  const sectionCrumb = fromPathsPage
+    ? { label: "Paths", href: fromPath ?? "/dashboard/paths" }
+    : { label: "Courses", href: "/dashboard/courses" };
+  const courseBaseHref = `/dashboard/courses/${routeId}/${routeSlug}`;
+  const courseHref = fromPath ? `${courseBaseHref}?from=${encodeURIComponent(fromPath)}` : courseBaseHref;
 
   const [topic, setTopic] = useState<TopicDetail | null>(null);
   const [course, setCourse] = useState<CourseDetail | null>(null);
@@ -72,7 +86,8 @@ export default function TopicDetailPage() {
   useEffect(() => {
     if (isNaN(courseId) || isNaN(topicIdx)) { setMissing(true); setLoading(false); return; } // eslint-disable-line
     let cancelled = false;
-    const nextPath = `/dashboard/courses/${routeId}/${routeSlug}/topics/${routeTopicIndex}/${routeTopicSlug}`;
+    const basePath = `/dashboard/courses/${routeId}/${routeSlug}/topics/${routeTopicIndex}/${routeTopicSlug}`;
+    const nextPath = fromPath ? `${basePath}?from=${encodeURIComponent(fromPath)}` : basePath;
     const hadToken = Boolean(getAuthToken());
 
     getUser()
@@ -150,7 +165,7 @@ export default function TopicDetailPage() {
     return () => {
       cancelled = true;
     };
-  }, [courseId, topicIdx, routeId, routeSlug, routeTopicIndex, routeTopicSlug, router]);
+  }, [courseId, topicIdx, routeId, routeSlug, routeTopicIndex, routeTopicSlug, router, fromPath]);
 
   if (loading) {
     return (
@@ -158,10 +173,10 @@ export default function TopicDetailPage() {
         <AppNavbar
           crumbs={[
             { label: "Dashboard", href: "/dashboard" },
-            { label: "Courses", href: "/dashboard/courses" },
+            sectionCrumb,
             { label: "…" }
           ]}
-          backHref={`/dashboard/courses/${routeId}/${routeSlug}`}
+          backHref={courseHref}
           backLabel="Topics"
           actions={<UserMenu />}
         />
@@ -204,6 +219,7 @@ export default function TopicDetailPage() {
     <TopicLayoutClient
       courseId={courseId}
       slug={routeSlug}
+      fromPath={fromPath}
       course={course}
       topic={topic}
       initialCompleted={initialCompleted}

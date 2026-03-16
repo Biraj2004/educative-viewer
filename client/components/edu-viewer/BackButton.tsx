@@ -16,6 +16,11 @@ function isAuthPath(path: string): boolean {
   return path === "/auth" || path.startsWith("/auth/") || path.startsWith("/auth?");
 }
 
+function isTopicDetailPath(path: string | null): boolean {
+  if (!path) return false;
+  return /\/dashboard\/courses\/[^/]+\/[^/]+\/topics\/\d+\/[^/]+$/.test(path);
+}
+
 function labelFromPath(path: string): string {
   const bare = path.split("?")[0];
   if (bare.includes("/topics/")) return "Topic";
@@ -74,6 +79,13 @@ export default function BackButton({
   }, [label, previousPath]);
 
   const handleBack = () => {
+    // Topic pages can add in-page history entries when navigating between topics.
+    // For navbar back there, users expect to jump straight to the course page.
+    if (isTopicDetailPath(pathname) && href && href !== "back" && !isAuthPath(href)) {
+      router.push(href);
+      return;
+    }
+
     if (canUseHistoryTarget && typeof window !== "undefined" && window.history.length > 1) {
       router.back();
       return;
