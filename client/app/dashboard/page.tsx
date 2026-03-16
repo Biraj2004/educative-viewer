@@ -23,10 +23,10 @@ const sections = [
     tags: ["Text-first", "Interactive", "Sandboxes"],
   },
   {
-    href: "#",
+    href: "/dashboard/paths",
     label: "Paths",
     accent: "violet",
-    available: false,
+    available: true,
     desc: "Curated skill paths that sequence multiple courses into a guided learning journey toward a specific goal.",
     icon: (
       <svg className="w-7 h-7" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round">

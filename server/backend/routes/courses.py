@@ -22,6 +22,78 @@ def _require(payload: dict[str, Any], *keys: str) -> None:
 def create_courses_blueprint(auth_service: AuthService, db_manager: DBManager) -> Blueprint:
     bp = Blueprint("courses_api", __name__, url_prefix="/api")
 
+    @bp.route("/paths", methods=["GET"])
+    def get_all_paths():
+        user, _ = auth_service.resolve_user(require_full=True)
+        if not user:
+            abort(401, description="Authentication required")
+
+        conn = db_manager.get_course_connection()
+        try:
+            rows = conn.execute(
+                """
+                SELECT
+                    p.id,
+                    p.path_author_id,
+                    p.path_collection_id,
+                    p.path_url_slug,
+                    p.path_title,
+                    p.scraped_at,
+                    COUNT(c.id) AS course_count
+                FROM paths p
+                LEFT JOIN courses c ON c.path_id = p.id
+                GROUP BY
+                    p.id,
+                    p.path_author_id,
+                    p.path_collection_id,
+                    p.path_url_slug,
+                    p.path_title,
+                    p.scraped_at
+                ORDER BY p.id
+                """
+            ).fetchall()
+            return jsonify(_rows_to_list(rows))
+        finally:
+            conn.close()
+
+    @bp.route("/paths/<int:path_id>/courses", methods=["GET"])
+    def get_courses_by_path(path_id: int):
+        user, _ = auth_service.resolve_user(require_full=True)
+        if not user:
+            abort(401, description="Authentication required")
+
+        conn = db_manager.get_course_connection()
+        try:
+            path_row = conn.execute(
+                "SELECT id, path_title FROM paths WHERE id = ?",
+                (path_id,),
+            ).fetchone()
+
+            if not path_row:
+                abort(404, description=f"Path id={path_id} not found")
+
+            course_rows = conn.execute(
+                """
+                SELECT id, slug, title, type, path_id
+                FROM courses
+                WHERE path_id = ?
+                ORDER BY id
+                """,
+                (path_id,),
+            ).fetchall()
+
+            return jsonify(
+                {
+                    "path": {
+                        "id": path_row["id"],
+                        "path_title": path_row["path_title"],
+                    },
+                    "courses": _rows_to_list(course_rows),
+                }
+            )
+        finally:
+            conn.close()
+
     @bp.route("/courses", methods=["GET"])
     def get_all_courses():
         user, _ = auth_service.resolve_user(require_full=True)

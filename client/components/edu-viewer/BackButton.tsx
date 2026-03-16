@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo } from "react";
 import { usePathname, useRouter } from "next/navigation";
 
 const PREV_PATH_KEY = "ev_prev_path";
@@ -21,6 +21,7 @@ function labelFromPath(path: string): string {
   if (bare.includes("/topics/")) return "Topic";
   if (/^\/dashboard\/courses\/[^/]+\/[^/]+$/.test(bare)) return "Course";
   if (bare.startsWith("/dashboard/courses")) return "Courses";
+  if (bare.startsWith("/dashboard/paths")) return "Paths";
   if (bare.startsWith("/dashboard/profile")) return "Profile";
   if (bare.startsWith("/dashboard/test")) return "Test";
   if (bare === "/") return "Home";
@@ -50,19 +51,18 @@ export default function BackButton({
 }) {
   const router = useRouter();
   const pathname = usePathname();
-  const [previousPath, setPreviousPath] = useState<string | null>(null);
+  const previousPath = useMemo(() => {
+    if (typeof window === "undefined") return null;
+    try {
+      const stored = window.sessionStorage.getItem(PREV_PATH_KEY);
+      return sanitizePath(stored, pathname ?? "");
+    } catch {
+      return null;
+    }
+  }, [pathname]);
 
   const buttonCls =
     "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 hover:border-indigo-300 dark:hover:border-indigo-700 hover:text-indigo-700 dark:hover:text-indigo-400 text-xs font-medium transition-all";
-
-  useEffect(() => {
-    try {
-      const stored = window.sessionStorage.getItem(PREV_PATH_KEY);
-      setPreviousPath(sanitizePath(stored, pathname ?? ""));
-    } catch {
-      setPreviousPath(null);
-    }
-  }, [pathname]);
 
   const canUseHistoryTarget = Boolean(previousPath && !isAuthPath(previousPath));
 
