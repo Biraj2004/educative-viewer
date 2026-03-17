@@ -9,3 +9,4 @@ server/users.db
 .vscode/settings.json
 Wallet_personal*
 __pycache__
+*db*

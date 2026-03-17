@@ -7,6 +7,7 @@ import AppNavbar from "@/components/edu-viewer/AppNavbar";
 import UserMenu from "@/components/edu-viewer/UserMenu";
 import { useAuth } from "@/components/edu-viewer/AuthProvider";
 import { clearAuthToken, getAuthToken } from "@/utils/authClient";
+import ActiveToggle from "@/components/edu-viewer/ActiveToggle";
 
 const BACKEND = (process.env.NEXT_PUBLIC_BACKEND_API_BASE ?? "").replace(/\/$/, "");
 
@@ -22,6 +23,7 @@ interface ProjectItem {
   course_slug: string | null;
   course_title: string | null;
   course_type: string | null;
+  is_active?: number | boolean;
 }
 
 function projectDisplayName(project: ProjectItem): string {
@@ -40,6 +42,8 @@ function parsePositiveInt(value: string | null): number | null {
 export default function ProjectsPage() {
   const searchParams = useSearchParams();
   const { user, loading } = useAuth();
+  const isAdmin = user?.role === "admin";
+  const authToken = getAuthToken() ?? "";
 
   const [projects, setProjects] = useState<ProjectItem[]>([]);
   const [projectsLoading, setProjectsLoading] = useState(true);
@@ -178,6 +182,7 @@ export default function ProjectsPage() {
               const courseTitle = project.course_title?.trim() || `Course ${project.course_id}`;
               const fromPath = `/dashboard/projects?project=${project.id}`;
               const href = `/dashboard/courses/${project.course_id}/${courseSlug}?from=${encodeURIComponent(fromPath)}`;
+              const projectActive = project.is_active === undefined ? true : Boolean(project.is_active);
 
               return (
                 <Link
@@ -188,10 +193,21 @@ export default function ProjectsPage() {
                     active
                       ? "border-indigo-400 dark:border-indigo-700 ring-2 ring-indigo-100 dark:ring-indigo-900/50"
                       : "border-gray-200 dark:border-gray-800 hover:border-indigo-300 dark:hover:border-indigo-700",
+                    !projectActive && isAdmin ? "opacity-60" : "",
                   ].join(" ")}
                 >
-                  <div className="inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-semibold bg-emerald-50 dark:bg-emerald-950/50 text-emerald-600 dark:text-emerald-400">
-                    Project ID: {project.id}
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-semibold bg-emerald-50 dark:bg-emerald-950/50 text-emerald-600 dark:text-emerald-400">
+                      Project ID: {project.id}
+                    </div>
+                    {isAdmin && (
+                      <ActiveToggle
+                        entity="project"
+                        entityId={project.id}
+                        isActive={projectActive}
+                        authToken={authToken}
+                      />
+                    )}
                   </div>
                   <h2 className="mt-3 text-base font-bold text-gray-900 dark:text-gray-100">
                     {projectDisplayName(project)}

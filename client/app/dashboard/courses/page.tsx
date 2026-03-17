@@ -5,6 +5,7 @@ import AppNavbar from "@/components/edu-viewer/AppNavbar";
 import CoursesListClient from "@/components/edu-viewer/CoursesListClient";
 import UserMenu from "@/components/edu-viewer/UserMenu";
 import { getAuthToken, clearAuthToken, getProgress, getUser } from "@/utils/authClient";
+import { useAuth } from "@/components/edu-viewer/AuthProvider";
 import type { ProgressData } from "@/utils/authClient";
 import ScrollToTop from "@/components/edu-viewer/ScrollToTop";
 
@@ -37,6 +38,9 @@ export default function CoursesPage() {
   const [progress, setProgress] = useState<ProgressData>({ course_order: [], completed: {} });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const { user } = useAuth();
+  const isAdmin = user?.role === "admin";
+  const authToken = getAuthToken() ?? "";
 
   useEffect(() => {
     let cancelled = false;
@@ -159,6 +163,8 @@ export default function CoursesPage() {
         courses={courses}
         courseOrder={progress.course_order}
         error={error ?? undefined}
+        isAdmin={isAdmin}
+        authToken={authToken}
       />
       <ScrollToTop />
     </div>

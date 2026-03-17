@@ -7,6 +7,7 @@ import AppNavbar from "@/components/edu-viewer/AppNavbar";
 import UserMenu from "@/components/edu-viewer/UserMenu";
 import { useAuth } from "@/components/edu-viewer/AuthProvider";
 import { clearAuthToken, getAuthToken } from "@/utils/authClient";
+import ActiveToggle from "@/components/edu-viewer/ActiveToggle";
 
 const BACKEND = (process.env.NEXT_PUBLIC_BACKEND_API_BASE ?? "").replace(/\/$/, "");
 
@@ -18,6 +19,7 @@ interface PathItem {
   path_title: string | null;
   scraped_at: string;
   course_count: number;
+  is_active?: number | boolean;
 }
 
 interface CourseItem {
@@ -26,6 +28,7 @@ interface CourseItem {
   title: string | null;
   type: string | null;
   path_id: number;
+  is_active?: number | boolean;
 }
 
 interface PathCoursesResponse {
@@ -54,6 +57,8 @@ export default function PathsPage() {
   const searchParams = useSearchParams();
   const { user, loading } = useAuth();
   const initialSelectedPathId = parsePositiveInt(searchParams.get("path"));
+  const isAdmin = user?.role === "admin";
+  const authToken = getAuthToken() ?? "";
 
   const [paths, setPaths] = useState<PathItem[]>([]);
   const [pathsLoading, setPathsLoading] = useState(true);
@@ -248,20 +253,32 @@ export default function PathsPage() {
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {paths.map((path) => {
               const active = path.id === selectedPathId;
+              const pathActive = path.is_active === undefined ? true : Boolean(path.is_active);
               return (
                 <button
                   type="button"
                   key={path.id}
                   onClick={() => handleSelectPath(path.id)}
                   className={[
-                    "text-left rounded-xl border bg-white dark:bg-gray-900 p-5 transition-colors cursor-pointer",
+                    "relative text-left rounded-xl border bg-white dark:bg-gray-900 p-5 transition-colors cursor-pointer",
                     active
                       ? "border-indigo-400 dark:border-indigo-700 ring-2 ring-indigo-100 dark:ring-indigo-900/50"
                       : "border-gray-200 dark:border-gray-800 hover:border-indigo-300 dark:hover:border-indigo-700",
+                    !pathActive && isAdmin ? "opacity-60" : "",
                   ].join(" ")}
                 >
-                  <div className="inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-semibold bg-violet-50 dark:bg-violet-950/50 text-violet-600 dark:text-violet-400">
-                    {Number(path.course_count) || 0} course{Number(path.course_count) === 1 ? "" : "s"}
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-semibold bg-violet-50 dark:bg-violet-950/50 text-violet-600 dark:text-violet-400">
+                      {Number(path.course_count) || 0} course{Number(path.course_count) === 1 ? "" : "s"}
+                    </div>
+                    {isAdmin && (
+                      <ActiveToggle
+                        entity="path"
+                        entityId={path.id}
+                        isActive={pathActive}
+                        authToken={authToken}
+                      />
+                    )}
                   </div>
                   <h2 className="mt-3 text-base font-bold text-gray-900 dark:text-gray-100">
                     {pathDisplayName(path)}
@@ -309,7 +326,10 @@ export default function PathsPage() {
                       <Link
                         key={course.id}
                         href={href}
-                        className="flex items-center justify-between gap-3 rounded-lg border border-gray-200 dark:border-gray-800 px-3 py-2.5 hover:border-indigo-300 dark:hover:border-indigo-700 hover:bg-indigo-50/40 dark:hover:bg-indigo-950/20 transition-colors"
+                        className={[
+                          "flex items-center justify-between gap-3 rounded-lg border border-gray-200 dark:border-gray-800 px-3 py-2.5 hover:border-indigo-300 dark:hover:border-indigo-700 hover:bg-indigo-50/40 dark:hover:bg-indigo-950/20 transition-colors",
+                          !(course.is_active === undefined ? true : Boolean(course.is_active)) && isAdmin ? "opacity-50" : "",
+                        ].join(" ")}
                       >
                         <div className="min-w-0">
                           <p className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">{title}</p>
@@ -318,10 +338,20 @@ export default function PathsPage() {
                             {course.type ? ` · ${course.type}` : ""}
                           </p>
                         </div>
-                        <svg className="w-4 h-4 shrink-0 text-gray-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-                          <path d="M5 12h14" />
-                          <path d="m12 5 7 7-7 7" />
-                        </svg>
+                        <div className="flex items-center gap-2 shrink-0">
+                          {isAdmin && (
+                            <ActiveToggle
+                              entity="course"
+                              entityId={course.id}
+                              isActive={course.is_active === undefined ? true : Boolean(course.is_active)}
+                              authToken={authToken}
+                            />
+                          )}
+                          <svg className="w-4 h-4 shrink-0 text-gray-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M5 12h14" />
+                            <path d="m12 5 7 7-7 7" />
+                          </svg>
+                        </div>
                       </Link>
                     );
                   })}

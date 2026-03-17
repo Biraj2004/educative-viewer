@@ -13,6 +13,7 @@ from __future__ import annotations
 from backend.auth_service import AuthService
 from backend.db.manager import DBManager
 from backend.routes.admin.components import register_test_component_routes
+from backend.routes.admin.status import register_status_routes
 from flask import Blueprint
 
 
@@ -22,6 +23,7 @@ def create_admin_blueprint(auth_service: AuthService, db_manager: DBManager) -> 
 
     # ── Sub-modules ───────────────────────────────────────────────────────────
     register_test_component_routes(bp, auth_service, db_manager)
+    register_status_routes(bp, auth_service, db_manager)
     # Add future admin modules here: register_user_routes(bp, ...), etc.
 
     return bp

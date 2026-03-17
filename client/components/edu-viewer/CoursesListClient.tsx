@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import CourseSearchInput from "./CourseSearchInput";
+import ActiveToggle from "./ActiveToggle";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -18,6 +19,7 @@ interface Course {
   lessons?: number;
   chapters?: number;
   rating?: number;
+  is_active?: number | boolean;
   [key: string]: unknown;
 }
 
@@ -87,12 +89,16 @@ interface Props {
   /** Course IDs sorted by most-recently-visited first (from backend) */
   courseOrder?: number[];
   error?: string;
+  isAdmin?: boolean;
+  authToken?: string;
 }
 
 export default function CoursesListClient({
   courses,
   courseOrder = [],
   error,
+  isAdmin = false,
+  authToken = "",
 }: Props) {
   const searchParams = useSearchParams();
   const [q, setQ] = useState(() => searchParams.get("q") ?? "");
@@ -182,12 +188,16 @@ export default function CoursesListClient({
               const href = `/dashboard/courses/${course.id}/${course.slug ?? course.id}`;
               const inProgress = orderMap.has(Number(course.id));
               const globalIndex = (page - 1) * ITEMS_PER_PAGE + idx;
+              const isActive = course.is_active === undefined ? true : Boolean(course.is_active);
               return (
                 <Link
                   key={course.id}
                   href={href}
                   prefetch={false}
-                  className="group flex items-center gap-4 px-5 py-4 hover:bg-gray-50/70 dark:hover:bg-gray-800/50 transition-colors"
+                  className={[
+                    "group flex items-center gap-4 px-5 py-4 hover:bg-gray-50/70 dark:hover:bg-gray-800/50 transition-colors",
+                    !isActive && isAdmin ? "opacity-50" : "",
+                  ].join(" ")}
                 >
                   {/* Index number */}
                   <span className="w-6 text-right text-xs font-medium text-gray-400 dark:text-gray-600 shrink-0 tabular-nums">
@@ -299,18 +309,28 @@ export default function CoursesListClient({
                     </div>
                   </div>
 
-                  {/* Arrow */}
-                  <svg
-                    className="w-4 h-4 text-gray-300 dark:text-gray-700 group-hover:text-indigo-400 transition-colors shrink-0"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth={2.5}
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  >
-                    <path d="m9 18 6-6-6-6" />
-                  </svg>
+                  {/* Arrow + Admin toggle */}
+                  <div className="flex items-center gap-2 shrink-0">
+                    {isAdmin && (
+                      <ActiveToggle
+                        entity="course"
+                        entityId={course.id}
+                        isActive={isActive}
+                        authToken={authToken}
+                      />
+                    )}
+                    <svg
+                      className="w-4 h-4 text-gray-300 dark:text-gray-700 group-hover:text-indigo-400 transition-colors shrink-0"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth={2.5}
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      <path d="m9 18 6-6-6-6" />
+                    </svg>
+                  </div>
                 </Link>
               );
             })}

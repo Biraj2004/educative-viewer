@@ -19,35 +19,21 @@ def _require(payload: dict[str, Any], *keys: str) -> None:
         abort(400, description=f"Missing required field(s): {', '.join(missing)}")
 
 
-def _table_columns(conn: Any, table_name: str) -> set[str]:
+def _is_admin(user: dict[str, Any]) -> bool:
+    return user.get("role") == "admin"
+
+
+def _ensure_is_active_column(conn, table: str) -> None:
+    """Lazily add is_active column with default 1 (idempotent)."""
     try:
-        rows = conn.execute(f"PRAGMA table_info({table_name})").fetchall()
+        conn.execute(
+            f"ALTER TABLE {table} ADD COLUMN is_active INTEGER NOT NULL DEFAULT 1"
+        )
+        conn.commit()
     except Exception:
-        return set()
-
-    columns: set[str] = set()
-    for row in rows:
-        try:
-            name = str(row["name"]).strip().lower()
-        except Exception:
-            name = str(row[1]).strip().lower() if len(row) > 1 else ""
-        if name:
-            columns.add(name)
-
-    return columns
+        pass  # Column already exists
 
 
-def _activity_column(conn: Any, table_name: str) -> str | None:
-    columns = _table_columns(conn, table_name)
-    if "state" in columns:
-        return "state"
-    if "status" in columns:
-        return "status"
-    return None
-
-
-def _not_inactive_clause(table_alias: str, column_name: str) -> str:
-    return f"COALESCE(LOWER(TRIM({table_alias}.{column_name})), 'active') <> 'inactive'"
 
 
 def create_courses_blueprint(auth_service: AuthService, db_manager: DBManager) -> Blueprint:
@@ -59,21 +45,12 @@ def create_courses_blueprint(auth_service: AuthService, db_manager: DBManager) -
         if not user:
             abort(401, description="Authentication required")
 
+        admin = _is_admin(user)
+
         conn = db_manager.get_course_connection()
         try:
-            path_activity_column = _activity_column(conn, "paths")
-            course_activity_column = _activity_column(conn, "courses")
-
-            join_conditions = ["c.path_id = p.id"]
-            if course_activity_column:
-                join_conditions.append(_not_inactive_clause("c", course_activity_column))
-
-            where_clause = (
-                f"WHERE {_not_inactive_clause('p', path_activity_column)}"
-                if path_activity_column
-                else ""
-            )
-
+            _ensure_is_active_column(conn, "paths")
+            active_filter = "" if admin else "WHERE p.is_active = 1"
             rows = conn.execute(
                 f"""
                 SELECT
@@ -83,17 +60,19 @@ def create_courses_blueprint(auth_service: AuthService, db_manager: DBManager) -
                     p.path_url_slug,
                     p.path_title,
                     p.scraped_at,
+                    p.is_active,
                     COUNT(c.id) AS course_count
                 FROM paths p
-                LEFT JOIN courses c ON {' AND '.join(join_conditions)}
-                {where_clause}
+                LEFT JOIN courses c ON c.path_id = p.id
+                {active_filter}
                 GROUP BY
                     p.id,
                     p.path_author_id,
                     p.path_collection_id,
                     p.path_url_slug,
                     p.path_title,
-                    p.scraped_at
+                    p.scraped_at,
+                    p.is_active
                 ORDER BY p.id
                 """
             ).fetchall()
@@ -107,33 +86,29 @@ def create_courses_blueprint(auth_service: AuthService, db_manager: DBManager) -
         if not user:
             abort(401, description="Authentication required")
 
+        admin = _is_admin(user)
+
         conn = db_manager.get_course_connection()
         try:
-            path_activity_column = _activity_column(conn, "paths")
-            course_activity_column = _activity_column(conn, "courses")
-
-            path_sql = "SELECT p.id, p.path_title FROM paths p WHERE p.id = ?"
-            if path_activity_column:
-                path_sql += f" AND {_not_inactive_clause('p', path_activity_column)}"
-
+            _ensure_is_active_column(conn, "courses")
             path_row = conn.execute(
-                path_sql,
+                "SELECT id, path_title FROM paths WHERE id = ?",
                 (path_id,),
             ).fetchone()
 
             if not path_row:
                 abort(404, description=f"Path id={path_id} not found")
 
-            courses_sql = """
-                SELECT c.id, c.slug, c.title, c.type, c.path_id
+            active_filter = "" if admin else "AND c.is_active = 1"
+            course_rows = conn.execute(
+                f"""
+                SELECT id, slug, title, type, path_id, is_active
                 FROM courses c
-                WHERE c.path_id = ?
-            """
-            if course_activity_column:
-                courses_sql += f"\n  AND {_not_inactive_clause('c', course_activity_column)}"
-            courses_sql += "\nORDER BY c.id"
-
-            course_rows = conn.execute(courses_sql, (path_id,)).fetchall()
+                WHERE path_id = ? {active_filter}
+                ORDER BY id
+                """,
+                (path_id,),
+            ).fetchall()
 
             return jsonify(
                 {
@@ -153,19 +128,12 @@ def create_courses_blueprint(auth_service: AuthService, db_manager: DBManager) -
         if not user:
             abort(401, description="Authentication required")
 
+        admin = _is_admin(user)
+
         conn = db_manager.get_course_connection()
         try:
-            project_activity_column = _activity_column(conn, "projects")
-            course_activity_column = _activity_column(conn, "courses")
-
-            where_parts: list[str] = []
-            if project_activity_column:
-                where_parts.append(_not_inactive_clause("p", project_activity_column))
-            if course_activity_column:
-                where_parts.append(_not_inactive_clause("c", course_activity_column))
-
-            where_clause = f"WHERE {' AND '.join(where_parts)}" if where_parts else ""
-
+            _ensure_is_active_column(conn, "projects")
+            active_filter = "" if admin else "AND p.is_active = 1"
             rows = conn.execute(
                 f"""
                 SELECT
@@ -177,12 +145,13 @@ def create_courses_blueprint(auth_service: AuthService, db_manager: DBManager) -
                     p.project_title,
                     p.project_url_slug,
                     p.scraped_at,
+                    p.is_active,
                     c.slug AS course_slug,
                     c.title AS course_title,
                     c.type AS course_type
                 FROM projects p
                 JOIN courses c ON c.id = p.course_id
-                {where_clause}
+                WHERE 1=1 {active_filter}
                 ORDER BY p.id
                 """
             ).fetchall()
@@ -259,20 +228,19 @@ def create_courses_blueprint(auth_service: AuthService, db_manager: DBManager) -
         if not user:
             abort(401, description="Authentication required")
 
+        admin = _is_admin(user)
+
         conn = db_manager.get_course_connection()
         try:
-            course_activity_column = _activity_column(conn, "courses")
-
-            where_parts = ["COALESCE(LOWER(TRIM(c.type)), '') NOT IN ('path', 'project')"]
-            if course_activity_column:
-                where_parts.append(_not_inactive_clause("c", course_activity_column))
-
+            _ensure_is_active_column(conn, "courses")
+            active_filter = "" if admin else "AND is_active = 1"
             rows = conn.execute(
                 f"""
-                SELECT c.id, c.slug, c.title, c.type
-                FROM courses c
-                WHERE {' AND '.join(where_parts)}
-                ORDER BY c.id
+                SELECT id, slug, title, type, is_active
+                FROM courses
+                WHERE COALESCE(LOWER(TRIM(type)), '') NOT IN ('path', 'project')
+                {active_filter}
+                ORDER BY id
                 """
             ).fetchall()
             return jsonify(_rows_to_list(rows))
