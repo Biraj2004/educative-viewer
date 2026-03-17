@@ -23,8 +23,16 @@ def _is_admin(user: dict[str, Any]) -> bool:
     return user.get("role") == "admin"
 
 
+# Tables that have already had is_active added in this process lifetime.
+# Avoids the ALTER TABLE overhead on every single request.
+_migrated_tables: set[str] = set()
+
+
 def _ensure_is_active_column(conn, table: str) -> None:
-    """Lazily add is_active column with default 1 (idempotent)."""
+    """Lazily add is_active column with default 1 (idempotent, cached)."""
+    global _migrated_tables
+    if table in _migrated_tables:
+        return
     try:
         conn.execute(
             f"ALTER TABLE {table} ADD COLUMN is_active INTEGER NOT NULL DEFAULT 1"
@@ -32,6 +40,7 @@ def _ensure_is_active_column(conn, table: str) -> None:
         conn.commit()
     except Exception:
         pass  # Column already exists
+    _migrated_tables.add(table)
 
 
 
@@ -256,17 +265,15 @@ def create_courses_blueprint(auth_service: AuthService, db_manager: DBManager) -
         payload = request.get_json(force=True, silent=True) or {}
         _require(payload, "course_id")
         course_id = int(payload["course_id"])
+        admin = _is_admin(user)
 
         conn = db_manager.get_course_connection(course_id)
         try:
-            course_activity_column = _activity_column(conn, "courses")
-
-            course_sql = "SELECT c.id, c.slug, c.title, c.type, c.toc_json FROM courses c WHERE c.id = ?"
-            if course_activity_column:
-                course_sql += f" AND {_not_inactive_clause('c', course_activity_column)}"
+            _ensure_is_active_column(conn, "courses")
+            active_filter = "" if admin else "AND c.is_active = 1"
 
             row = conn.execute(
-                course_sql,
+                f"SELECT c.id, c.slug, c.title, c.type, c.toc_json FROM courses c WHERE c.id = ? {active_filter}",
                 (course_id,),
             ).fetchone()
 
@@ -290,35 +297,27 @@ def create_courses_blueprint(auth_service: AuthService, db_manager: DBManager) -
 
         course_id = int(payload["course_id"])
         topic_index = int(payload["topic_index"])
+        admin = _is_admin(user)
 
         conn = db_manager.get_course_connection(course_id)
         try:
-            course_activity_column = _activity_column(conn, "courses")
-            topic_activity_column = _activity_column(conn, "topics")
+            _ensure_is_active_column(conn, "courses")
 
-            if course_activity_column:
+            # Non-admins cannot access topics of a hidden course
+            if not admin:
                 active_course = conn.execute(
-                    (
-                        "SELECT c.id FROM courses c "
-                        "WHERE c.id = ? AND "
-                        f"{_not_inactive_clause('c', course_activity_column)}"
-                    ),
+                    "SELECT id FROM courses WHERE id = ? AND is_active = 1",
                     (course_id,),
                 ).fetchone()
-
                 if not active_course:
                     abort(404, description=f"Course id={course_id} not found or inactive")
 
-            topic_sql = """
+            topic = conn.execute(
+                """
                 SELECT t.topic_name, t.topic_slug, t.topic_url, t.api_url, t.status
                 FROM topics t
                 WHERE t.course_id = ? AND t.topic_index = ?
-            """
-            if topic_activity_column:
-                topic_sql += f"\n  AND {_not_inactive_clause('t', topic_activity_column)}"
-
-            topic = conn.execute(
-                topic_sql,
+                """,
                 (course_id, topic_index),
             ).fetchone()
 
@@ -326,7 +325,7 @@ def create_courses_blueprint(auth_service: AuthService, db_manager: DBManager) -
                 abort(
                     404,
                     description=(
-                        f"Topic course_id={course_id} topic_index={topic_index} not found or inactive"
+                        f"Topic course_id={course_id} topic_index={topic_index} not found"
                     ),
                 )
 
