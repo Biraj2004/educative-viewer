@@ -10,8 +10,7 @@ import ScrollToTop from "@/components/edu-viewer/ScrollToTop";
 
 const BACKEND = (process.env.NEXT_PUBLIC_BACKEND_API_BASE ?? "").replace(/\/$/, "");
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const inflightFetches = new Map<string, Promise<any>>();
+const inflightFetches = new Map<string, Promise<Course[]>>();
 
 interface Course {
   id: number | string;

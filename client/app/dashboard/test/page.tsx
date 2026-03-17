@@ -75,6 +75,7 @@ function SectionHeader({ name, note, action }: { name: string; note?: string; ac
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const componentMapping: { [key: string]: React.ComponentType<any> } = {
     "CanvasAnimation": (props: { data: LazyLoadPlaceholderData }) => <LazyLoadPlaceholder {...props} />,
+    "LazyLoadPlaceholder": (props: { data: LazyLoadPlaceholderData }) => <LazyLoadPlaceholder {...props} />,
     "Latex": Latex,
     "MarkdownEditor": MarkdownEditor,
     "Code": Code,
