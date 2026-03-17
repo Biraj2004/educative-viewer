@@ -13,14 +13,14 @@ interface Explanation {
 interface QuestionOption {
   correct: boolean;
   explanation: Explanation;
-  id: string;
+  id?: string;  // API may omit this field; we generate a fallback when absent
   mdHtml: string;
   text: string;
 }
 
 interface Question {
-  id: string;
-  multipleAnswers: boolean;
+  id?: string;
+  multipleAnswers?: boolean;
   questionOptions: QuestionOption[];
   questionText: string;
   questionTextHtml: string;
@@ -272,16 +272,23 @@ export default function Quiz({ data }: { data: QuizData }) {
 
           {/* Options */}
           <div className="space-y-3">
-            {question.questionOptions.map((option, idx) => (
-              <OptionCard
-                key={option.id}
-                option={option}
-                label={OPTION_LABELS[idx]}
-                isSelected={state.selected.includes(option.id)}
-                submitted={state.submitted}
-                onClick={() => handleOptionClick(option.id)}
-              />
-            ))}
+            {question.questionOptions.map((option, idx) => {
+              // The API sometimes omits option.id entirely (value is undefined).
+              // When all option IDs are undefined, state.selected.includes(undefined)
+              // returns true for every option simultaneously — "all selected" bug.
+              // Fix: guarantee a unique, stable ID per option using its position.
+              const optionId = option.id ?? `q${currentIndex}-o${idx}`;
+              return (
+                <OptionCard
+                  key={optionId}
+                  option={option}
+                  label={OPTION_LABELS[idx]}
+                  isSelected={state.selected.includes(optionId)}
+                  submitted={state.submitted}
+                  onClick={() => handleOptionClick(optionId)}
+                />
+              );
+            })}
           </div>
         </div>
 
