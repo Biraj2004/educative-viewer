@@ -19,6 +19,37 @@ def _require(payload: dict[str, Any], *keys: str) -> None:
         abort(400, description=f"Missing required field(s): {', '.join(missing)}")
 
 
+def _table_columns(conn: Any, table_name: str) -> set[str]:
+    try:
+        rows = conn.execute(f"PRAGMA table_info({table_name})").fetchall()
+    except Exception:
+        return set()
+
+    columns: set[str] = set()
+    for row in rows:
+        try:
+            name = str(row["name"]).strip().lower()
+        except Exception:
+            name = str(row[1]).strip().lower() if len(row) > 1 else ""
+        if name:
+            columns.add(name)
+
+    return columns
+
+
+def _activity_column(conn: Any, table_name: str) -> str | None:
+    columns = _table_columns(conn, table_name)
+    if "state" in columns:
+        return "state"
+    if "status" in columns:
+        return "status"
+    return None
+
+
+def _not_inactive_clause(table_alias: str, column_name: str) -> str:
+    return f"COALESCE(LOWER(TRIM({table_alias}.{column_name})), 'active') <> 'inactive'"
+
+
 def create_courses_blueprint(auth_service: AuthService, db_manager: DBManager) -> Blueprint:
     bp = Blueprint("courses_api", __name__, url_prefix="/api")
 
@@ -30,8 +61,21 @@ def create_courses_blueprint(auth_service: AuthService, db_manager: DBManager) -
 
         conn = db_manager.get_course_connection()
         try:
+            path_activity_column = _activity_column(conn, "paths")
+            course_activity_column = _activity_column(conn, "courses")
+
+            join_conditions = ["c.path_id = p.id"]
+            if course_activity_column:
+                join_conditions.append(_not_inactive_clause("c", course_activity_column))
+
+            where_clause = (
+                f"WHERE {_not_inactive_clause('p', path_activity_column)}"
+                if path_activity_column
+                else ""
+            )
+
             rows = conn.execute(
-                """
+                f"""
                 SELECT
                     p.id,
                     p.path_author_id,
@@ -41,7 +85,8 @@ def create_courses_blueprint(auth_service: AuthService, db_manager: DBManager) -
                     p.scraped_at,
                     COUNT(c.id) AS course_count
                 FROM paths p
-                LEFT JOIN courses c ON c.path_id = p.id
+                LEFT JOIN courses c ON {' AND '.join(join_conditions)}
+                {where_clause}
                 GROUP BY
                     p.id,
                     p.path_author_id,
@@ -64,23 +109,31 @@ def create_courses_blueprint(auth_service: AuthService, db_manager: DBManager) -
 
         conn = db_manager.get_course_connection()
         try:
+            path_activity_column = _activity_column(conn, "paths")
+            course_activity_column = _activity_column(conn, "courses")
+
+            path_sql = "SELECT p.id, p.path_title FROM paths p WHERE p.id = ?"
+            if path_activity_column:
+                path_sql += f" AND {_not_inactive_clause('p', path_activity_column)}"
+
             path_row = conn.execute(
-                "SELECT id, path_title FROM paths WHERE id = ?",
+                path_sql,
                 (path_id,),
             ).fetchone()
 
             if not path_row:
                 abort(404, description=f"Path id={path_id} not found")
 
-            course_rows = conn.execute(
-                """
-                SELECT id, slug, title, type, path_id
-                FROM courses
-                WHERE path_id = ?
-                ORDER BY id
-                """,
-                (path_id,),
-            ).fetchall()
+            courses_sql = """
+                SELECT c.id, c.slug, c.title, c.type, c.path_id
+                FROM courses c
+                WHERE c.path_id = ?
+            """
+            if course_activity_column:
+                courses_sql += f"\n  AND {_not_inactive_clause('c', course_activity_column)}"
+            courses_sql += "\nORDER BY c.id"
+
+            course_rows = conn.execute(courses_sql, (path_id,)).fetchall()
 
             return jsonify(
                 {
@@ -102,8 +155,19 @@ def create_courses_blueprint(auth_service: AuthService, db_manager: DBManager) -
 
         conn = db_manager.get_course_connection()
         try:
+            project_activity_column = _activity_column(conn, "projects")
+            course_activity_column = _activity_column(conn, "courses")
+
+            where_parts: list[str] = []
+            if project_activity_column:
+                where_parts.append(_not_inactive_clause("p", project_activity_column))
+            if course_activity_column:
+                where_parts.append(_not_inactive_clause("c", course_activity_column))
+
+            where_clause = f"WHERE {' AND '.join(where_parts)}" if where_parts else ""
+
             rows = conn.execute(
-                """
+                f"""
                 SELECT
                     p.id,
                     p.course_id,
@@ -118,6 +182,7 @@ def create_courses_blueprint(auth_service: AuthService, db_manager: DBManager) -
                     c.type AS course_type
                 FROM projects p
                 JOIN courses c ON c.id = p.course_id
+                {where_clause}
                 ORDER BY p.id
                 """
             ).fetchall()
@@ -133,8 +198,17 @@ def create_courses_blueprint(auth_service: AuthService, db_manager: DBManager) -
 
         conn = db_manager.get_course_connection()
         try:
+            project_activity_column = _activity_column(conn, "projects")
+            course_activity_column = _activity_column(conn, "courses")
+
+            where_parts = ["p.id = ?"]
+            if project_activity_column:
+                where_parts.append(_not_inactive_clause("p", project_activity_column))
+            if course_activity_column:
+                where_parts.append(_not_inactive_clause("c", course_activity_column))
+
             row = conn.execute(
-                """
+                f"""
                 SELECT
                     p.id,
                     p.project_author_id,
@@ -149,7 +223,7 @@ def create_courses_blueprint(auth_service: AuthService, db_manager: DBManager) -
                     c.type AS course_type
                 FROM projects p
                 JOIN courses c ON c.id = p.course_id
-                WHERE p.id = ?
+                WHERE {' AND '.join(where_parts)}
                 """,
                 (project_id,),
             ).fetchone()
@@ -187,12 +261,18 @@ def create_courses_blueprint(auth_service: AuthService, db_manager: DBManager) -
 
         conn = db_manager.get_course_connection()
         try:
+            course_activity_column = _activity_column(conn, "courses")
+
+            where_parts = ["COALESCE(LOWER(TRIM(c.type)), '') NOT IN ('path', 'project')"]
+            if course_activity_column:
+                where_parts.append(_not_inactive_clause("c", course_activity_column))
+
             rows = conn.execute(
-                """
-                SELECT id, slug, title, type
-                FROM courses
-                WHERE COALESCE(LOWER(TRIM(type)), '') NOT IN ('path', 'project')
-                ORDER BY id
+                f"""
+                SELECT c.id, c.slug, c.title, c.type
+                FROM courses c
+                WHERE {' AND '.join(where_parts)}
+                ORDER BY c.id
                 """
             ).fetchall()
             return jsonify(_rows_to_list(rows))
@@ -211,13 +291,19 @@ def create_courses_blueprint(auth_service: AuthService, db_manager: DBManager) -
 
         conn = db_manager.get_course_connection(course_id)
         try:
+            course_activity_column = _activity_column(conn, "courses")
+
+            course_sql = "SELECT c.id, c.slug, c.title, c.type, c.toc_json FROM courses c WHERE c.id = ?"
+            if course_activity_column:
+                course_sql += f" AND {_not_inactive_clause('c', course_activity_column)}"
+
             row = conn.execute(
-                "SELECT id, slug, title, type, toc_json FROM courses WHERE id = ?",
+                course_sql,
                 (course_id,),
             ).fetchone()
 
             if not row:
-                abort(404, description=f"Course id={course_id} not found")
+                abort(404, description=f"Course id={course_id} not found or inactive")
 
             data = dict(row)
             data["toc"] = json.loads(data.pop("toc_json") or "[]")
@@ -239,12 +325,32 @@ def create_courses_blueprint(auth_service: AuthService, db_manager: DBManager) -
 
         conn = db_manager.get_course_connection(course_id)
         try:
+            course_activity_column = _activity_column(conn, "courses")
+            topic_activity_column = _activity_column(conn, "topics")
+
+            if course_activity_column:
+                active_course = conn.execute(
+                    (
+                        "SELECT c.id FROM courses c "
+                        "WHERE c.id = ? AND "
+                        f"{_not_inactive_clause('c', course_activity_column)}"
+                    ),
+                    (course_id,),
+                ).fetchone()
+
+                if not active_course:
+                    abort(404, description=f"Course id={course_id} not found or inactive")
+
+            topic_sql = """
+                SELECT t.topic_name, t.topic_slug, t.topic_url, t.api_url, t.status
+                FROM topics t
+                WHERE t.course_id = ? AND t.topic_index = ?
+            """
+            if topic_activity_column:
+                topic_sql += f"\n  AND {_not_inactive_clause('t', topic_activity_column)}"
+
             topic = conn.execute(
-                """
-                SELECT topic_name, topic_slug, topic_url, api_url, status
-                FROM topics
-                WHERE course_id = ? AND topic_index = ?
-                """,
+                topic_sql,
                 (course_id, topic_index),
             ).fetchone()
 
@@ -252,7 +358,7 @@ def create_courses_blueprint(auth_service: AuthService, db_manager: DBManager) -
                 abort(
                     404,
                     description=(
-                        f"Topic course_id={course_id} topic_index={topic_index} not found"
+                        f"Topic course_id={course_id} topic_index={topic_index} not found or inactive"
                     ),
                 )
 
@@ -287,34 +393,6 @@ def create_courses_blueprint(auth_service: AuthService, db_manager: DBManager) -
                     "components": components,
                 }
             )
-        finally:
-            conn.close()
-
-    @bp.route("/test_components", methods=["GET"])
-    def get_test_components():
-        user, _ = auth_service.resolve_user(require_full=True)
-        if not user:
-            abort(401, description="Authentication required")
-
-        conn = db_manager.get_course_connection()
-        try:
-            conn.execute(
-                """
-                CREATE TABLE IF NOT EXISTS test_components (
-                    component_id INTEGER PRIMARY KEY,
-                    component_type TEXT,
-                    content_json TEXT,
-                    topic_url TEXT
-                )
-                """
-            )
-            conn.commit()
-
-            rows = conn.execute(
-                "SELECT component_id, component_type, content_json, topic_url "
-                "FROM test_components ORDER BY component_id"
-            ).fetchall()
-            return jsonify(_rows_to_list(rows))
         finally:
             conn.close()
 
