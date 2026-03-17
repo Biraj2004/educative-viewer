@@ -7,6 +7,7 @@ from flask import Flask, jsonify, request
 from backend.auth_service import AuthService
 from backend.config import AppConfig, load_config
 from backend.db.manager import DBManager
+from backend.routes.admin import create_admin_blueprint
 from backend.routes.auth import create_auth_blueprint
 from backend.routes.courses import create_courses_blueprint
 
@@ -53,6 +54,7 @@ def create_app(
 
     app.register_blueprint(create_courses_blueprint(auth_service, db_manager))
     app.register_blueprint(create_auth_blueprint(auth_service, db_manager))
+    app.register_blueprint(create_admin_blueprint(auth_service, db_manager))
 
     if initialize_db:
         db_manager.init_auth_db()

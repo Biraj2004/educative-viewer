@@ -119,8 +119,11 @@ const componentMapping: { [key: string]: React.ComponentType<any> } = {
     "SequenceDiagrams": (props: { data: SequenceDiagramData }) => <SequenceDiagrams {...props} />,
 };
 
+type FetchStatus = "idle" | "loading" | "forbidden" | "empty" | "ok" | "error";
+
 export default function ComponentTestPage() {
   const [components, setComponents] = useState<TestComponentRow[]>([]);
+  const [fetchStatus, setFetchStatus] = useState<FetchStatus>("idle");
   const { authToken, user, loading } = useAuth();
 
   useEffect(() => {
@@ -132,18 +135,28 @@ export default function ComponentTestPage() {
   useEffect(() => {
     if (!authToken) return;
     const fetchComponents = async () => {
+      setFetchStatus("loading");
       try {
         const BACKEND = (process.env.NEXT_PUBLIC_BACKEND_API_BASE ?? "").replace(/\/$/, "");
-        const API = `${BACKEND}/api`;
-        const response = await fetch(`${API}/test_components`, {
+        const API = `${BACKEND}/api/admin`;
+        const response = await fetch(`${API}/test-components`, {
           headers: { Authorization: `Bearer ${authToken}` },
         });
+        if (response.status === 403 || response.status === 401) {
+          setFetchStatus("forbidden");
+          return;
+        }
         if (response.ok) {
           const data: unknown = await response.json();
-          setComponents(Array.isArray(data) ? (data as TestComponentRow[]) : []);
+          const rows = Array.isArray(data) ? (data as TestComponentRow[]) : [];
+          setComponents(rows);
+          setFetchStatus(rows.length === 0 ? "empty" : "ok");
+        } else {
+          setFetchStatus("error");
         }
       } catch (error) {
         console.error("Error fetching test components:", error);
+        setFetchStatus("error");
       }
     };
     fetchComponents();
@@ -170,7 +183,80 @@ export default function ComponentTestPage() {
 
       <div className="overflow-x-hidden">
         <div className="max-w-5xl mx-auto px-4 sm:px-6 py-10 space-y-10">
-          {components.map((component) => {
+
+          {/* ── Loading skeleton ──────────────────────────────────────────── */}
+          {fetchStatus === "loading" && (
+            <div className="space-y-6">
+              {[1, 2].map((i) => (
+                <div key={i} className="rounded-xl border border-gray-200 dark:border-gray-800 overflow-hidden">
+                  <div className="h-8 w-56 m-4 rounded-md bg-gray-100 dark:bg-gray-800 animate-pulse" />
+                  <div className="h-40 bg-gray-50 dark:bg-gray-900/60 animate-pulse" />
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* ── Forbidden ─────────────────────────────────────────────────── */}
+          {fetchStatus === "forbidden" && (
+            <div className="flex flex-col items-center justify-center py-24 gap-5 text-center">
+              <div className="w-16 h-16 rounded-2xl flex items-center justify-center bg-red-50 dark:bg-red-950/50 border border-red-200 dark:border-red-800">
+                <svg className="w-8 h-8 text-red-500 dark:text-red-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+                  <line x1="12" y1="8" x2="12" y2="12" />
+                  <line x1="12" y1="16" x2="12.01" y2="16" />
+                </svg>
+              </div>
+              <div>
+                <p className="text-base font-semibold text-gray-900 dark:text-gray-100">Access Restricted</p>
+                <p className="text-sm text-gray-500 dark:text-gray-400 mt-1 max-w-xs">
+                  This page is only available to admins. Your account does not have the required role.
+                </p>
+              </div>
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-red-50 dark:bg-red-950/60 border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 text-xs font-mono font-semibold">
+                403 Forbidden
+              </span>
+            </div>
+          )}
+
+          {/* ── Empty ─────────────────────────────────────────────────────── */}
+          {fetchStatus === "empty" && (
+            <div className="flex flex-col items-center justify-center py-24 gap-5 text-center">
+              <div className="w-16 h-16 rounded-2xl flex items-center justify-center bg-indigo-50 dark:bg-indigo-950/50 border border-indigo-200 dark:border-indigo-800">
+                <svg className="w-8 h-8 text-indigo-400 dark:text-indigo-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M9 3H5a2 2 0 0 0-2 2v4m6-6h10a2 2 0 0 1 2 2v4M9 3v11m0 0H5a2 2 0 0 0-2 2v4m6-6h10m0 0h-4a2 2 0 0 0-2 2v4m6-6V5" />
+                </svg>
+              </div>
+              <div>
+                <p className="text-base font-semibold text-gray-900 dark:text-gray-100">No components yet</p>
+                <p className="text-sm text-gray-500 dark:text-gray-400 mt-1 max-w-xs">
+                  The test page is empty. Use the admin API to pin components here for testing.
+                </p>
+              </div>
+              <code className="text-xs text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/60 border border-indigo-200 dark:border-indigo-800 px-3 py-1.5 rounded-md font-mono">
+                POST /api/admin/test-components
+              </code>
+            </div>
+          )}
+
+          {/* ── Error ─────────────────────────────────────────────────────── */}
+          {fetchStatus === "error" && (
+            <div className="flex flex-col items-center justify-center py-24 gap-4 text-center">
+              <div className="w-16 h-16 rounded-2xl flex items-center justify-center bg-amber-50 dark:bg-amber-950/50 border border-amber-200 dark:border-amber-800">
+                <svg className="w-8 h-8 text-amber-500 dark:text-amber-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="12" cy="12" r="10" />
+                  <line x1="12" y1="8" x2="12" y2="12" />
+                  <line x1="12" y1="16" x2="12.01" y2="16" />
+                </svg>
+              </div>
+              <div>
+                <p className="text-base font-semibold text-gray-900 dark:text-gray-100">Failed to load</p>
+                <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Something went wrong while fetching components.</p>
+              </div>
+            </div>
+          )}
+
+          {/* ── Components list ───────────────────────────────────────────── */}
+          {fetchStatus === "ok" && components.map((component) => {
             const Component = componentMapping[component.component_type];
             if (!Component) {
               return (
