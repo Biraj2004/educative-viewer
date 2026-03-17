@@ -29,11 +29,18 @@ export default function CourseDetailPage() {
   const courseId = Number(routeId);
   const fromPath = safeFromPath(searchParams.get("from"));
   const fromPathsPage = Boolean(fromPath?.startsWith("/dashboard/paths"));
+  const fromProjectsPage = Boolean(fromPath?.startsWith("/dashboard/projects"));
   const sectionCrumb = fromPathsPage
     ? { label: "Paths", href: fromPath ?? "/dashboard/paths" }
-    : { label: "Courses", href: "/dashboard/courses" };
-  const backHref = fromPathsPage ? (fromPath ?? "/dashboard/paths") : "/dashboard/courses";
-  const backLabel = fromPathsPage ? "Paths" : "Courses";
+    : fromProjectsPage
+      ? { label: "Projects", href: fromPath ?? "/dashboard/projects" }
+      : { label: "Courses", href: "/dashboard/courses" };
+  const backHref = fromPathsPage
+    ? (fromPath ?? "/dashboard/paths")
+    : fromProjectsPage
+      ? (fromPath ?? "/dashboard/projects")
+      : "/dashboard/courses";
+  const backLabel = fromPathsPage ? "Paths" : fromProjectsPage ? "Projects" : "Courses";
 
   const [course, setCourse] = useState<CourseDetail | null>(null);
   const [progress, setProgress] = useState<ProgressData>({ course_order: [], completed: {} });

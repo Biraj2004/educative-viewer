@@ -20,6 +20,7 @@ function backLabelFromPath(path: string | null): string {
   if (/^\/dashboard\/courses\/[^/]+\/[^/]+$/.test(path)) return "Course";
   if (path.startsWith("/dashboard/courses")) return "Courses";
   if (path.startsWith("/dashboard/paths")) return "Paths";
+  if (path.startsWith("/dashboard/projects")) return "Projects";
   if (path.startsWith("/dashboard/test")) return "Test";
   if (path === "/") return "Home";
   if (path.startsWith("/dashboard")) return "Dashboard";

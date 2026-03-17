@@ -27,6 +27,12 @@ interface Course {
   [key: string]: unknown;
 }
 
+function isBrowsableCourseType(type: unknown): boolean {
+  if (typeof type !== "string") return true;
+  const normalized = type.trim().toLowerCase();
+  return normalized !== "path" && normalized !== "project";
+}
+
 export default function CoursesPage() {
   const [courses, setCourses] = useState<Course[]>([]);
   const [progress, setProgress] = useState<ProgressData>({ course_order: [], completed: {} });
@@ -65,7 +71,7 @@ export default function CoursesPage() {
         Promise.all([coursesPromise, getProgress()])
           .then(([data, prog]) => {
             if (cancelled) return;
-            setCourses(data);
+            setCourses(data.filter((course) => isBrowsableCourseType(course.type)));
             setProgress(prog);
             setLoading(false);
           })

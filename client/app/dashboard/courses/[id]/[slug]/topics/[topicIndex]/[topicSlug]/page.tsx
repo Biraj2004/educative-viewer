@@ -71,8 +71,11 @@ export default function TopicDetailPage() {
   const topicIdx = Number(routeTopicIndex);
   const fromPath = safeFromPath(searchParams.get("from"));
   const fromPathsPage = Boolean(fromPath?.startsWith("/dashboard/paths"));
+  const fromProjectsPage = Boolean(fromPath?.startsWith("/dashboard/projects"));
   const sectionCrumb = fromPathsPage
     ? { label: "Paths", href: fromPath ?? "/dashboard/paths" }
+    : fromProjectsPage
+      ? { label: "Projects", href: fromPath ?? "/dashboard/projects" }
     : { label: "Courses", href: "/dashboard/courses" };
   const courseBaseHref = `/dashboard/courses/${routeId}/${routeSlug}`;
   const courseHref = fromPath ? `${courseBaseHref}?from=${encodeURIComponent(fromPath)}` : courseBaseHref;

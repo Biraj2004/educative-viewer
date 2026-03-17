@@ -39,10 +39,10 @@ const sections = [
     tags: ["Multi-course", "Skill paths", "Certificates"],
   },
   {
-    href: "#",
+    href: "/dashboard/projects",
     label: "Projects",
     accent: "emerald",
-    available: false,
+    available: true,
     desc: "Hands-on projects with step-by-step guided implementation. Build real things you can show off.",
     icon: (
       <svg className="w-7 h-7" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round">

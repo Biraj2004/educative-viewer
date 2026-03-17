@@ -281,9 +281,9 @@ export default function PathsPage() {
               <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
                 {selectedPath ? pathDisplayName(selectedPath) : `Path ${selectedPathId}`}
               </h3>
-              <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+              {/* <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
                 Courses linked by courses.path_id = {selectedPathId}
-              </p>
+              </p> */}
             </div>
 
             <div className="p-4">

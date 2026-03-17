@@ -72,8 +72,11 @@ export default function TopicLayoutClient({ courseId, slug, fromPath, course, to
   const completedRef = useRef<Set<number>>(new Set(initialCompleted));
   const validFromPath = fromPath && fromPath.startsWith("/") && !fromPath.startsWith("//") ? fromPath : null;
   const fromPathsPage = Boolean(validFromPath?.startsWith("/dashboard/paths"));
+  const fromProjectsPage = Boolean(validFromPath?.startsWith("/dashboard/projects"));
   const sectionCrumb = fromPathsPage
     ? { label: "Paths", href: validFromPath ?? "/dashboard/paths" }
+    : fromProjectsPage
+      ? { label: "Projects", href: validFromPath ?? "/dashboard/projects" }
     : { label: "Courses", href: "/dashboard/courses" };
   const courseBaseHref = `/dashboard/courses/${courseId}/${slug}`;
   const courseHref = validFromPath

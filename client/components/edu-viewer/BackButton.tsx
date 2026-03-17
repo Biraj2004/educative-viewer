@@ -21,12 +21,26 @@ function isTopicDetailPath(path: string | null): boolean {
   return /\/dashboard\/courses\/[^/]+\/[^/]+\/topics\/\d+\/[^/]+$/.test(path);
 }
 
+function isCourseDetailPath(path: string | null): boolean {
+  if (!path) return false;
+  return /^\/dashboard\/courses\/[^/]+\/[^/]+$/.test(path);
+}
+
+function isParentRouteTarget(currentPath: string | null, targetPath: string): boolean {
+  if (!currentPath || !targetPath.startsWith("/")) return false;
+  const bareCurrent = currentPath.split("?")[0];
+  const bareTarget = targetPath.split("?")[0];
+  if (!bareTarget || bareTarget === "/") return false;
+  return bareCurrent !== bareTarget && bareCurrent.startsWith(`${bareTarget}/`);
+}
+
 function labelFromPath(path: string): string {
   const bare = path.split("?")[0];
   if (bare.includes("/topics/")) return "Topic";
   if (/^\/dashboard\/courses\/[^/]+\/[^/]+$/.test(bare)) return "Course";
   if (bare.startsWith("/dashboard/courses")) return "Courses";
   if (bare.startsWith("/dashboard/paths")) return "Paths";
+  if (bare.startsWith("/dashboard/projects")) return "Projects";
   if (bare.startsWith("/dashboard/profile")) return "Profile";
   if (bare.startsWith("/dashboard/test")) return "Test";
   if (bare === "/") return "Home";
@@ -82,6 +96,26 @@ export default function BackButton({
     // Topic pages can add in-page history entries when navigating between topics.
     // For navbar back there, users expect to jump straight to the course page.
     if (isTopicDetailPath(pathname) && href && href !== "back" && !isAuthPath(href)) {
+      router.push(href);
+      return;
+    }
+
+    // Returning from a topic to its course detail should not bounce back into
+    // topic history. Honor the explicit section back target instead.
+    if (
+      isCourseDetailPath(pathname) &&
+      isTopicDetailPath(previousPath?.split("?")[0] ?? null) &&
+      href &&
+      href !== "back" &&
+      !isAuthPath(href)
+    ) {
+      router.push(href);
+      return;
+    }
+
+    // For explicit parent-route targets (e.g. /dashboard from /dashboard/paths),
+    // go directly to the provided target instead of stepping into history.
+    if (href && href !== "back" && !isAuthPath(href) && isParentRouteTarget(pathname, href)) {
       router.push(href);
       return;
     }

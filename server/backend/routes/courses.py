@@ -94,6 +94,91 @@ def create_courses_blueprint(auth_service: AuthService, db_manager: DBManager) -
         finally:
             conn.close()
 
+    @bp.route("/projects", methods=["GET"])
+    def get_all_projects():
+        user, _ = auth_service.resolve_user(require_full=True)
+        if not user:
+            abort(401, description="Authentication required")
+
+        conn = db_manager.get_course_connection()
+        try:
+            rows = conn.execute(
+                """
+                SELECT
+                    p.id,
+                    p.course_id,
+                    p.project_author_id,
+                    p.project_collection_id,
+                    p.project_work_id,
+                    p.project_title,
+                    p.project_url_slug,
+                    p.scraped_at,
+                    c.slug AS course_slug,
+                    c.title AS course_title,
+                    c.type AS course_type
+                FROM projects p
+                JOIN courses c ON c.id = p.course_id
+                ORDER BY p.id
+                """
+            ).fetchall()
+            return jsonify(_rows_to_list(rows))
+        finally:
+            conn.close()
+
+    @bp.route("/projects/<int:project_id>/course", methods=["GET"])
+    def get_course_by_project(project_id: int):
+        user, _ = auth_service.resolve_user(require_full=True)
+        if not user:
+            abort(401, description="Authentication required")
+
+        conn = db_manager.get_course_connection()
+        try:
+            row = conn.execute(
+                """
+                SELECT
+                    p.id,
+                    p.project_author_id,
+                    p.project_collection_id,
+                    p.project_work_id,
+                    p.project_title,
+                    p.project_url_slug,
+                    p.scraped_at,
+                    c.id AS course_id,
+                    c.slug AS course_slug,
+                    c.title AS course_title,
+                    c.type AS course_type
+                FROM projects p
+                JOIN courses c ON c.id = p.course_id
+                WHERE p.id = ?
+                """,
+                (project_id,),
+            ).fetchone()
+
+            if not row:
+                abort(404, description=f"Project id={project_id} not found")
+
+            return jsonify(
+                {
+                    "project": {
+                        "id": row["id"],
+                        "project_author_id": row["project_author_id"],
+                        "project_collection_id": row["project_collection_id"],
+                        "project_work_id": row["project_work_id"],
+                        "project_title": row["project_title"],
+                        "project_url_slug": row["project_url_slug"],
+                        "scraped_at": row["scraped_at"],
+                    },
+                    "course": {
+                        "id": row["course_id"],
+                        "slug": row["course_slug"],
+                        "title": row["course_title"],
+                        "type": row["course_type"],
+                    },
+                }
+            )
+        finally:
+            conn.close()
+
     @bp.route("/courses", methods=["GET"])
     def get_all_courses():
         user, _ = auth_service.resolve_user(require_full=True)
@@ -103,7 +188,12 @@ def create_courses_blueprint(auth_service: AuthService, db_manager: DBManager) -
         conn = db_manager.get_course_connection()
         try:
             rows = conn.execute(
-                "SELECT id, slug, title, type FROM courses ORDER BY id"
+                """
+                SELECT id, slug, title, type
+                FROM courses
+                WHERE COALESCE(LOWER(TRIM(type)), '') NOT IN ('path', 'project')
+                ORDER BY id
+                """
             ).fetchall()
             return jsonify(_rows_to_list(rows))
         finally:
