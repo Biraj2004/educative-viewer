@@ -10,3 +10,5 @@ server/users.db
 Wallet_personal*
 __pycache__
 *db*
+auth.sqlite3
+.env

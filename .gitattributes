@@ -1,0 +1,27 @@
+# Normalize all text files to LF on commit (Unix-style)
+# Git will convert CRLF -> LF when staging, keeping the repo consistent.
+* text=auto eol=lf
+
+# Explicitly force LF for web source files
+*.ts   text eol=lf
+*.tsx  text eol=lf
+*.js   text eol=lf
+*.jsx  text eol=lf
+*.css  text eol=lf
+*.json text eol=lf
+*.md   text eol=lf
+*.html text eol=lf
+*.py   text eol=lf
+*.yaml text eol=lf
+*.yml  text eol=lf
+*.env* text eol=lf
+
+# Binary files — never mangle
+*.png  binary
+*.jpg  binary
+*.jpeg binary
+*.webp binary
+*.ico  binary
+*.woff binary
+*.woff2 binary
+*.sqlite3 binary
