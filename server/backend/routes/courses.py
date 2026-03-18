@@ -99,14 +99,21 @@ def create_courses_blueprint(auth_service: AuthService, db_manager: DBManager) -
 
         conn = db_manager.get_course_connection()
         try:
+            _ensure_is_active_column(conn, "paths")
             _ensure_is_active_column(conn, "courses")
+
+            # Fetch path with its active status so we can gate non-admins
             path_row = conn.execute(
-                "SELECT id, path_title FROM paths WHERE id = ?",
+                "SELECT id, path_title, is_active FROM paths WHERE id = ?",
                 (path_id,),
             ).fetchone()
 
             if not path_row:
                 abort(404, description=f"Path id={path_id} not found")
+
+            # Non-admins cannot access a hidden path or its courses
+            if not admin and not path_row["is_active"]:
+                abort(404, description=f"Path id={path_id} not found or inactive")
 
             active_filter = "" if admin else "AND c.is_active = 1"
             course_rows = conn.execute(
@@ -142,7 +149,10 @@ def create_courses_blueprint(auth_service: AuthService, db_manager: DBManager) -
         conn = db_manager.get_course_connection()
         try:
             _ensure_is_active_column(conn, "projects")
-            active_filter = "" if admin else "AND p.is_active = 1"
+            _ensure_is_active_column(conn, "courses")
+            # Non-admins: hide projects that are hidden themselves OR whose
+            # parent course is hidden (parent-cascade rule)
+            active_filter = "" if admin else "AND p.is_active = 1 AND c.is_active = 1"
             rows = conn.execute(
                 f"""
                 SELECT
@@ -174,16 +184,15 @@ def create_courses_blueprint(auth_service: AuthService, db_manager: DBManager) -
         if not user:
             abort(401, description="Authentication required")
 
+        admin = _is_admin(user)
+
         conn = db_manager.get_course_connection()
         try:
-            project_activity_column = _activity_column(conn, "projects")
-            course_activity_column = _activity_column(conn, "courses")
+            _ensure_is_active_column(conn, "projects")
+            _ensure_is_active_column(conn, "courses")
 
-            where_parts = ["p.id = ?"]
-            if project_activity_column:
-                where_parts.append(_not_inactive_clause("p", project_activity_column))
-            if course_activity_column:
-                where_parts.append(_not_inactive_clause("c", course_activity_column))
+            # Non-admins: both project AND its parent course must be active
+            active_filter = "" if admin else "AND p.is_active = 1 AND c.is_active = 1"
 
             row = conn.execute(
                 f"""
@@ -201,13 +210,13 @@ def create_courses_blueprint(auth_service: AuthService, db_manager: DBManager) -
                     c.type AS course_type
                 FROM projects p
                 JOIN courses c ON c.id = p.course_id
-                WHERE {' AND '.join(where_parts)}
+                WHERE p.id = ? {active_filter}
                 """,
                 (project_id,),
             ).fetchone()
 
             if not row:
-                abort(404, description=f"Project id={project_id} not found")
+                abort(404, description=f"Project id={project_id} not found or inactive")
 
             return jsonify(
                 {
@@ -273,14 +282,26 @@ def create_courses_blueprint(auth_service: AuthService, db_manager: DBManager) -
             active_filter = "" if admin else "AND c.is_active = 1"
 
             row = conn.execute(
-                f"SELECT c.id, c.slug, c.title, c.type, c.toc_json FROM courses c WHERE c.id = ? {active_filter}",
+                f"SELECT c.id, c.slug, c.title, c.type, c.toc_json, c.path_id FROM courses c WHERE c.id = ? {active_filter}",
                 (course_id,),
             ).fetchone()
 
             if not row:
                 abort(404, description=f"Course id={course_id} not found or inactive")
 
+            # Parent-cascade: if this course belongs to a path, non-admins
+            # cannot access it when the parent path is hidden
+            if not admin and row["path_id"] is not None:
+                _ensure_is_active_column(conn, "paths")
+                path_row = conn.execute(
+                    "SELECT is_active FROM paths WHERE id = ?",
+                    (row["path_id"],),
+                ).fetchone()
+                if path_row and not path_row["is_active"]:
+                    abort(404, description=f"Course id={course_id} not found or inactive")
+
             data = dict(row)
+            data.pop("path_id", None)  # don't expose internal FK
             data["toc"] = json.loads(data.pop("toc_json") or "[]")
             return jsonify(data)
         finally:
@@ -303,14 +324,24 @@ def create_courses_blueprint(auth_service: AuthService, db_manager: DBManager) -
         try:
             _ensure_is_active_column(conn, "courses")
 
-            # Non-admins cannot access topics of a hidden course
+            # Non-admins cannot access topics of a hidden course, or a course
+            # whose parent path is hidden (parent-cascade rule)
             if not admin:
-                active_course = conn.execute(
-                    "SELECT id FROM courses WHERE id = ? AND is_active = 1",
+                course_row = conn.execute(
+                    "SELECT id, path_id FROM courses WHERE id = ? AND is_active = 1",
                     (course_id,),
                 ).fetchone()
-                if not active_course:
+                if not course_row:
                     abort(404, description=f"Course id={course_id} not found or inactive")
+                # Also block if the parent path is hidden
+                if course_row["path_id"] is not None:
+                    _ensure_is_active_column(conn, "paths")
+                    path_row = conn.execute(
+                        "SELECT is_active FROM paths WHERE id = ?",
+                        (course_row["path_id"],),
+                    ).fetchone()
+                    if path_row and not path_row["is_active"]:
+                        abort(404, description=f"Course id={course_id} not found or inactive")
 
             topic = conn.execute(
                 """
