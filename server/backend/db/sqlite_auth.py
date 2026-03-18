@@ -61,6 +61,7 @@ class SQLiteAuthDatabase:
                     username TEXT,
                     avatar TEXT,
                     role_id INTEGER NOT NULL DEFAULT 1 REFERENCES roles(id),
+                    is_active INTEGER NOT NULL DEFAULT 1,
                     two_factor_enabled INTEGER NOT NULL DEFAULT 0,
                     login_ip_log TEXT,
                     theme TEXT NOT NULL DEFAULT 'light',
@@ -112,6 +113,45 @@ class SQLiteAuthDatabase:
             conn.close()
 
         log.info("SQLite auth DB ready (path=%s)", self.db_path)
+
+    def ensure_is_active_column(self) -> None:
+        """Lazily add is_active column to users table if it doesn't exist."""
+        conn = self.get_connection()
+        try:
+            conn.execute("ALTER TABLE users ADD COLUMN is_active INTEGER NOT NULL DEFAULT 1")
+            conn.commit()
+        except sqlite3.OperationalError:
+            pass  # Already exists
+        finally:
+            conn.close()
+
+    def get_all_users(self) -> list[sqlite3.Row]:
+        self.ensure_is_active_column()
+        conn = self.get_connection()
+        try:
+            return conn.execute(
+                """
+                SELECT u.id, u.email, u.name, u.username, u.role_id, r.name as role_name, u.is_active, u.created_at
+                FROM users u
+                JOIN roles r ON u.role_id = r.id
+                ORDER BY u.id
+                """
+            ).fetchall()
+        finally:
+            conn.close()
+
+    def update_user_status(self, user_id: int, is_active: bool) -> bool:
+        self.ensure_is_active_column()
+        conn = self.get_connection()
+        try:
+            cur = conn.execute(
+                "UPDATE users SET is_active = ? WHERE id = ?",
+                (1 if is_active else 0, user_id),
+            )
+            conn.commit()
+            return cur.rowcount > 0
+        finally:
+            conn.close()
 
     def is_integrity_error(self, exc: Exception) -> bool:
         return isinstance(exc, sqlite3.IntegrityError)

@@ -20,7 +20,7 @@ log = logging.getLogger(__name__)
 
 _USER_JOIN = """
     SELECT u.id, u.email, u.name, u.username, u.avatar,
-           r.name AS role,
+           r.name AS role, u.is_active,
            u.role_id, u.two_factor_enabled, u.login_ip_log, u.theme, u.created_at,
            s.password_hash, s.two_factor_secret, s.two_factor_confirmed,
            s.session_id, s.last_login_ip, s.last_login_at, s.current_token
@@ -218,6 +218,10 @@ class AuthService:
 
         if not user:
             return None, payload
+
+        # Admins bypass "active" check; regular users must be active.
+        if user.get("role") != "admin" and not user.get("is_active", True):
+            abort(403, description="Account is deactivated. Please contact an administrator.")
 
         if not payload.get("partial"):
             if payload.get("sessionId") != user.get("session_id"):

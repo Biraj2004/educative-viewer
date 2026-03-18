@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useCallback } from "react";
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import AppNavbar from "@/components/edu-viewer/AppNavbar";
 import UserMenu from "@/components/edu-viewer/UserMenu";
 import { useAuth } from "@/components/edu-viewer/AuthProvider";
@@ -53,7 +53,6 @@ function parsePositiveInt(value: string | null): number | null {
 }
 
 export default function PathsPage() {
-  const router = useRouter();
   const searchParams = useSearchParams();
   const { user, loading } = useAuth();
   const initialSelectedPathId = parsePositiveInt(searchParams.get("path"));
@@ -176,11 +175,24 @@ export default function PathsPage() {
     setCoursesError(null);
     setCoursesLoading(true);
 
+    // Use history.replaceState to update the URL without triggering
+    // Next.js route navigation (which would show the loading bar)
     const params = new URLSearchParams(searchParams.toString());
     params.set("path", String(pathId));
-    const query = params.toString();
-    router.replace(query ? `/dashboard/paths?${query}` : "/dashboard/paths", { scroll: false });
+    window.history.replaceState(null, "", `/dashboard/paths?${params.toString()}`);
   }
+
+  const handlePathToggle = useCallback((pathId: number, newValue: boolean) => {
+    setPaths((prev) =>
+      prev.map((p) => (p.id === pathId ? { ...p, is_active: newValue } : p))
+    );
+  }, []);
+
+  const handleCourseToggle = useCallback((courseId: number, newValue: boolean) => {
+    setCourses((prev) =>
+      prev.map((c) => (c.id === courseId ? { ...c, is_active: newValue } : c))
+    );
+  }, []);
 
   if (loading || !user) {
     return (
@@ -255,10 +267,12 @@ export default function PathsPage() {
               const active = path.id === selectedPathId;
               const pathActive = path.is_active === undefined ? true : Boolean(path.is_active);
               return (
-                <button
-                  type="button"
+                <div
                   key={path.id}
+                  role="button"
+                  tabIndex={0}
                   onClick={() => handleSelectPath(path.id)}
+                  onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") handleSelectPath(path.id); }}
                   className={[
                     "relative text-left rounded-xl border bg-white dark:bg-gray-900 p-5 transition-colors cursor-pointer",
                     active
@@ -277,6 +291,7 @@ export default function PathsPage() {
                         entityId={path.id}
                         isActive={pathActive}
                         authToken={authToken}
+                        onToggle={(v) => handlePathToggle(path.id, v)}
                       />
                     )}
                   </div>
@@ -286,7 +301,7 @@ export default function PathsPage() {
                   <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
                     Path ID: {path.id}
                   </p>
-                </button>
+                </div>
               );
             })}
           </div>
@@ -345,6 +360,7 @@ export default function PathsPage() {
                               entityId={course.id}
                               isActive={course.is_active === undefined ? true : Boolean(course.is_active)}
                               authToken={authToken}
+                              onToggle={(v) => handleCourseToggle(course.id, v)}
                             />
                           )}
                           <svg className="w-4 h-4 shrink-0 text-gray-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">

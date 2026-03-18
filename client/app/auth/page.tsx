@@ -66,7 +66,7 @@ function TwoFAStep({
         await verify2FA(digits);
       }
       onSuccess();
-    } catch (err) {
+    } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Invalid code");
     } finally {
       setLoading(false);
@@ -134,7 +134,14 @@ function TwoFAStep({
         </div>
 
         {error && (
-          <p className="text-xs text-red-600 dark:text-red-400 text-center">{error}</p>
+          <div className="flex flex-col gap-2">
+            <p className="text-xs text-red-600 dark:text-red-400 text-center">{error}</p>
+            {error.toLowerCase().includes("deactivated") && (
+              <Link href="/contact" className="text-[11px] text-indigo-600 dark:text-indigo-400 hover:underline text-center font-medium">
+                Contact an administrator to regain access
+              </Link>
+            )}
+          </div>
         )}
 
         <button type="submit" disabled={loading || code.length !== 6} className={btnPrimary}>
@@ -420,7 +427,7 @@ function LoginForm({
         return;
       }
       window.location.href = AUTH_SUCCESS_REDIRECT;
-    } catch (err) {
+    } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Login failed");
     } finally {
       setLoading(false);
@@ -484,6 +491,13 @@ function LoginForm({
       {error && (
         <div className="rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 px-3 py-2.5 text-xs text-red-700 dark:text-red-400">
           {error}
+          {error.toLowerCase().includes("deactivated") && (
+            <div className="mt-2 border-t border-red-100 dark:border-red-800/50 pt-2">
+              <Link href="/contact" className="text-indigo-600 dark:text-indigo-400 hover:underline font-bold">
+                Contact Support →
+              </Link>
+            </div>
+          )}
         </div>
       )}
 
@@ -524,7 +538,7 @@ function SignupForm({ onShow2FASetup }: { onShow2FASetup: (qrUrl: string) => voi
       }
       // If no 2FA required (shouldn't happen in this flow but handle gracefully)
       onShow2FASetup("");
-    } catch (err) {
+    } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Sign up failed");
     } finally {
       setLoading(false);
@@ -887,19 +901,32 @@ function AuthPageInner() {
         </div>
 
         {/* Back to home — hidden during 2FA / forgot-password (go-back inside card replaces it) */}
-        {!showTwoFA && !showForgot && (
-        <div className="mt-6 flex justify-center">
-          <Link
-            href="/"
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 hover:border-indigo-300 dark:hover:border-indigo-700 hover:text-indigo-700 dark:hover:text-indigo-400 text-xs font-medium transition-all"
-          >
-            <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">
-              <path d="m15 18-6-6 6-6" />
-            </svg>
-            Back to home
-          </Link>
+        <div className="mt-8 flex flex-col items-center gap-4">
+          <div className="flex items-center gap-4">
+            <Link
+              href="/"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 hover:border-indigo-300 dark:hover:border-indigo-700 hover:text-indigo-700 dark:hover:text-indigo-400 text-xs font-medium transition-all"
+            >
+              <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">
+                <path d="m15 18-6-6 6-6" />
+              </svg>
+              Back to home
+            </Link>
+            <Link
+              href="/contact"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 hover:border-indigo-300 dark:hover:border-indigo-700 hover:text-indigo-700 dark:hover:text-indigo-400 text-xs font-medium transition-all"
+            >
+              <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">
+                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+              </svg>
+              Contact Support
+            </Link>
+          </div>
+          
+          <p className="text-[11px] text-gray-400 dark:text-gray-600">
+            Powered by <span className="font-bold text-gray-500">Edu-Viewer PRO</span>
+          </p>
         </div>
-        )}
       </div>
     </div>
   );

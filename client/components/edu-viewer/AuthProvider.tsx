@@ -2,7 +2,7 @@
 
 import { createContext, useContext, useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
-import { getUser, logout as logoutApi, getAuthToken, setUnauthorizedHandler, clearAuthToken } from "@/utils/authClient";
+import { getUser, logout as logoutApi, getAuthToken, setUnauthorizedHandler, setForbiddenHandler, clearAuthToken } from "@/utils/authClient";
 import type { AuthUser } from "@/utils/authClient";
 
 // ─── Context ──────────────────────────────────────────────────────────────────
@@ -45,8 +45,15 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
       clearAuthToken();
       window.location.replace("/auth?reason=session_expired");
     };
+    const handle403 = () => {
+      window.location.replace("/deactivated");
+    };
     setUnauthorizedHandler(handle401);
-    return () => setUnauthorizedHandler(null);
+    setForbiddenHandler(handle403);
+    return () => {
+      setUnauthorizedHandler(null);
+      setForbiddenHandler(null);
+    };
   }, []);
 
   // Re-run /me on every client-side navigation to verify the session is still valid.
@@ -57,7 +64,11 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
     setAuthToken(getAuthToken());
     getUser()
       .then((u) => { if (!cancelled) setUser(u); })
-      .catch(() => { if (!cancelled) setUser(null); })
+      .catch(() => { 
+        if (!cancelled) {
+          setUser(null);
+        }
+      })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
   }, [pathname]);

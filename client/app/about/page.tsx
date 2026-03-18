@@ -1,3 +1,5 @@
+"use client";
+
 import React from "react";
 import Image from "next/image";
 import AppNavbar from "@/components/edu-viewer/AppNavbar";
@@ -261,6 +263,37 @@ export default function AboutPage() {
           </div>
         </section>
 
+        {/* ── Contact Section ────────────────────────────────────────────── */}
+        <section className="py-24 border-t border-gray-100 dark:border-gray-900 bg-gray-50/50 dark:bg-gray-950/50">
+          <div className="max-w-4xl mx-auto px-6 text-center">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-50 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 text-xs font-bold uppercase tracking-wider mb-6 border border-indigo-100 dark:border-indigo-500/20">
+              Get in Touch
+            </div>
+            <h2 className="text-3xl md:text-4xl font-bold text-gray-900 dark:text-white mb-6">Have Questions or Feedback?</h2>
+            <p className="text-lg text-gray-600 dark:text-gray-400 mb-10 leading-relaxed max-w-2xl mx-auto">
+              We&apos;re constantly evolving Edu-Viewer PRO based on community input. 
+              Whether you&apos;ve found a bug, have a feature idea, or just want to say hi, we&apos;re all ears.
+            </p>
+            <div className="flex flex-wrap justify-center gap-4">
+              <button 
+                onClick={() => window.location.href = "/contact"}
+                className="px-8 py-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold transition-all shadow-lg shadow-indigo-500/25 active:scale-95 flex items-center gap-2 cursor-pointer"
+              >
+                Contact Support
+                <IconExternal />
+              </button>
+              <a 
+                href="https://github.com/Biraj2004/EducativeViewer" 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="px-8 py-4 bg-white dark:bg-gray-900 text-gray-900 dark:text-white border border-gray-200 dark:border-gray-800 rounded-xl font-bold transition-all hover:border-indigo-300 dark:hover:border-indigo-700 active:scale-95 flex items-center gap-2 cursor-pointer"
+              >
+                View on GitHub
+                <IconGitHub />
+              </a>
+            </div>
+          </div>
+        </section>
       </div>
     </HomeAuthProvider>
   );

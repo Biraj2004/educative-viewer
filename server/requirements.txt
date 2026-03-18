@@ -8,3 +8,4 @@ pyotp>=2.9.0
 segno>=1.6.0
 oracledb>=2.0.0
 cryptography>=42.0.0
+requests>=2.31.0

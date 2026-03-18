@@ -122,6 +122,7 @@ class OracleAuthDatabase:
                         username           VARCHAR2(255 CHAR),
                         avatar             VARCHAR2(1000 CHAR),
                         role_id            NUMBER DEFAULT 1 NOT NULL REFERENCES roles(id),
+                        is_active          NUMBER(1,0) DEFAULT 1 NOT NULL,
                         two_factor_enabled NUMBER(1,0) DEFAULT 0 NOT NULL,
                         login_ip_log       CLOB,
                         theme              VARCHAR2(20 CHAR) DEFAULT 'light' NOT NULL,
@@ -182,3 +183,61 @@ class OracleAuthDatabase:
 
     def is_integrity_error(self, exc: Exception) -> bool:
         return isinstance(exc, oracledb.IntegrityError)
+
+    def ensure_is_active_column(self) -> None:
+        """Lazily add is_active column to users table if it doesn't exist."""
+        if not self.is_configured:
+            return
+        conn = self.get_connection()
+        try:
+            cursor = conn.cursor()
+            try:
+                cursor.execute("ALTER TABLE users ADD is_active NUMBER(1,0) DEFAULT 1 NOT NULL")
+                conn.commit()
+            except oracledb.DatabaseError as exc:
+                (err,) = exc.args
+                # ORA-01430: column being added already exists in table
+                if err.code != 1430:
+                    raise
+            finally:
+                cursor.close()
+        finally:
+            conn.close()
+
+    def get_all_users(self) -> list[dict]:
+        self.ensure_is_active_column()
+        conn = self.get_connection()
+        try:
+            cursor = conn.cursor()
+            try:
+                cursor.execute(
+                    """
+                    SELECT u.id, u.email, u.name, u.username, u.role_id, r.name as role_name, u.is_active, u.created_at
+                    FROM users u
+                    JOIN roles r ON u.role_id = r.id
+                    ORDER BY u.id
+                    """
+                )
+                columns = [col[0].lower() for col in cursor.description]
+                return [dict(zip(columns, row)) for row in cursor.fetchall()]
+            finally:
+                cursor.close()
+        finally:
+            conn.close()
+
+    def update_user_status(self, user_id: int, is_active: bool) -> bool:
+        self.ensure_is_active_column()
+        conn = self.get_connection()
+        try:
+            cursor = conn.cursor()
+            try:
+                cursor.execute(
+                    "UPDATE users SET is_active = :1 WHERE id = :2",
+                    (1 if is_active else 0, user_id),
+                )
+                conn.commit()
+                return cursor.rowcount > 0
+            finally:
+                cursor.close()
+        finally:
+            conn.close()

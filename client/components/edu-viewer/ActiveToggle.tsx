@@ -14,7 +14,7 @@ import { useState } from "react";
 
 const BACKEND = (process.env.NEXT_PUBLIC_BACKEND_API_BASE ?? "").replace(/\/$/, "");
 
-type Entity = "course" | "path" | "project";
+type Entity = "course" | "path" | "project" | "user";
 
 interface Props {
   entity: Entity;
@@ -22,6 +22,7 @@ interface Props {
   isActive: boolean;
   authToken: string;
   onToggle?: (newValue: boolean) => void;
+  disabled?: boolean;
 }
 
 export default function ActiveToggle({
@@ -30,6 +31,7 @@ export default function ActiveToggle({
   isActive,
   authToken,
   onToggle,
+  disabled = false,
 }: Props) {
   const [active, setActive] = useState(isActive);
   const [pending, setPending] = useState(false);
@@ -44,7 +46,8 @@ export default function ActiveToggle({
     setPending(true);
 
     try {
-      const res = await fetch(`${BACKEND}/api/admin/set-course-status`, {
+      const endpoint = entity === "user" ? "/api/admin/set-user-status" : "/api/admin/set-course-status";
+      const res = await fetch(`${BACKEND}${endpoint}`, {
         method: "PATCH",
         headers: {
           "Content-Type": "application/json",
@@ -67,15 +70,16 @@ export default function ActiveToggle({
 
   return (
     <button
-      type="button"
+      //type="button"
       role="switch"
       aria-checked={active}
       aria-label={active ? "Visible to users — click to hide" : "Hidden from users — click to show"}
-      title={active ? "Visible to users — click to hide" : "Hidden from users — click to show"}
+      title={disabled ? (active ? "Admin account — visibility cannot be changed" : "") : (active ? "Visible to users — click to hide" : "Hidden from users — click to show")}
       onClick={handleToggle}
-      disabled={pending}
+      disabled={pending || disabled}
       className={[
-        "group relative inline-flex items-center gap-2 rounded-full px-1.5 py-0.5 text-[10px] font-semibold select-none cursor-pointer transition-all duration-300",
+        "group relative inline-flex items-center gap-2 rounded-full px-1.5 py-0.5 text-[10px] font-semibold select-none transition-all duration-300",
+        disabled ? "cursor-not-allowed opacity-60 grayscale-[0.5]" : "cursor-pointer",
         "focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-indigo-500",
         pending ? "cursor-wait" : "",
       ].join(" ")}

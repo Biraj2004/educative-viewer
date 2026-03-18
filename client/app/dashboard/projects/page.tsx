@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useCallback } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import AppNavbar from "@/components/edu-viewer/AppNavbar";
@@ -48,6 +48,12 @@ export default function ProjectsPage() {
   const [projects, setProjects] = useState<ProjectItem[]>([]);
   const [projectsLoading, setProjectsLoading] = useState(true);
   const [projectsError, setProjectsError] = useState<string | null>(null);
+
+  const handleProjectToggle = useCallback((projectId: number, newValue: boolean) => {
+    setProjects((prev) =>
+      prev.map((p) => (p.id === projectId ? { ...p, is_active: newValue } : p))
+    );
+  }, []);
 
   const selectedProjectId = parsePositiveInt(searchParams.get("project"));
 
@@ -206,6 +212,7 @@ export default function ProjectsPage() {
                         entityId={project.id}
                         isActive={projectActive}
                         authToken={authToken}
+                        onToggle={(v) => handleProjectToggle(project.id, v)}
                       />
                     )}
                   </div>

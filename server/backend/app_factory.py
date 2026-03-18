@@ -10,6 +10,7 @@ from backend.db.manager import DBManager
 from backend.routes.admin import create_admin_blueprint
 from backend.routes.auth import create_auth_blueprint
 from backend.routes.courses import create_courses_blueprint
+from backend.routes.contact import create_contact_blueprint
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 log = logging.getLogger(__name__)
@@ -55,6 +56,7 @@ def create_app(
     app.register_blueprint(create_courses_blueprint(auth_service, db_manager))
     app.register_blueprint(create_auth_blueprint(auth_service, db_manager))
     app.register_blueprint(create_admin_blueprint(auth_service, db_manager))
+    app.register_blueprint(create_contact_blueprint())
 
     if initialize_db:
         db_manager.init_auth_db()

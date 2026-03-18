@@ -88,9 +88,14 @@ async function _encryptPassword(password: string): Promise<string> {
 
 type UnauthorizedHandler = () => void | Promise<void>;
 let _unauthorizedHandler: UnauthorizedHandler | null = null;
+let _forbiddenHandler: UnauthorizedHandler | null = null;
 
 export function setUnauthorizedHandler(fn: UnauthorizedHandler | null): void {
   _unauthorizedHandler = fn;
+}
+
+export function setForbiddenHandler(fn: UnauthorizedHandler | null): void {
+  _forbiddenHandler = fn;
 }
 
 /** Called internally whenever a protected fetch returns 401. */
@@ -98,9 +103,17 @@ async function _handleUnauthorized(): Promise<void> {
   if (_unauthorizedHandler) {
     await _unauthorizedHandler();
   } else {
-    // Fallback if AuthProvider hasn't mounted yet (e.g. SSR or early client render).
     clearAuthToken();
     if (IS_BROWSER) window.location.replace("/auth?reason=session_expired");
+  }
+}
+
+/** Called internally whenever an API call returns 403. */
+async function _handleForbidden(): Promise<void> {
+  if (_forbiddenHandler) {
+    await _forbiddenHandler();
+  } else {
+    if (IS_BROWSER) window.location.replace("/deactivated");
   }
 }
 
@@ -188,12 +201,12 @@ async function apiPost<T>(
   });
   const data = await res.json().catch(() => ({}));
   if (res.status === 401 && token) {
-    // A 401 on a call that had a token means session is invalid/superseded.
     await _handleUnauthorized();
-    throw new ApiError(
-      data?.error ?? "Session expired. Please sign in again.",
-      401,
-    );
+    throw new ApiError(data?.error ?? "Session expired.", 401);
+  }
+  if (res.status === 403) {
+    await _handleForbidden();
+    throw new ApiError(data?.error ?? data?.message ?? "Access denied", 403);
   }
   if (!res.ok) {
     throw new ApiError(
@@ -220,10 +233,11 @@ async function apiGet<T>(path: string): Promise<T> {
       const data = await res.json().catch(() => ({}));
       if (res.status === 401 && token) {
         await _handleUnauthorized();
-        throw new ApiError(
-          data?.error ?? "Session expired. Please sign in again.",
-          401,
-        );
+        throw new ApiError(data?.error ?? "Session expired.", 401);
+      }
+      if (res.status === 403) {
+        await _handleForbidden();
+        throw new ApiError(data?.error ?? data?.message ?? "Access denied", 403);
       }
       if (!res.ok) {
         throw new ApiError(
@@ -414,10 +428,11 @@ async function apiFetch(path: string, init: RequestInit): Promise<void> {
     const data = await res.json().catch(() => ({}));
     if (res.status === 401) {
       await _handleUnauthorized();
-      throw new ApiError(
-        data?.error ?? "Session expired. Please sign in again.",
-        401,
-      );
+      throw new ApiError(data?.error ?? "Session expired.", 401);
+    }
+    if (res.status === 403) {
+      await _handleForbidden();
+      throw new ApiError(data?.error ?? data?.message ?? "Access denied", 403);
     }
     throw new ApiError(
       data?.error ?? `Request failed (${res.status})`,

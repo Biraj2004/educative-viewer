@@ -128,6 +128,25 @@ export default function UserMenu() {
 
           {/* Menu items */}
           <div className="py-1">
+            {user.role === "admin" && (
+              <>
+                <Link
+                  href="/dashboard/admin/users"
+                  onClick={() => setOpen(false)}
+                  className="flex items-center gap-2.5 px-4 py-2.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 hover:text-indigo-700 dark:hover:text-indigo-400 transition-colors cursor-pointer"
+                >
+                  <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+                    <circle cx="9" cy="7" r="4" />
+                    <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
+                    <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+                  </svg>
+                  <span className="text-xs font-medium">User Management</span>
+                </Link>
+                <div className="h-px bg-gray-100 dark:bg-gray-800 my-1" />
+              </>
+            )}
+
             <Link
               href={profileHref}
               onClick={() => setOpen(false)}

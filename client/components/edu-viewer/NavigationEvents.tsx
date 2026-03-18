@@ -46,6 +46,13 @@ export default function NavigationEvents() {
       const anchor = (e.target as HTMLElement).closest("a");
       if (!anchor) return;
 
+      // If the actual click target is a button/input/select/textarea (or is
+      // contained within one) that sits INSIDE the anchor, do NOT start the
+      // progress bar — the interactive child has already called stopPropagation
+      // on the React synthetic event, meaning no navigation will happen.
+      const interactiveChild = (e.target as HTMLElement).closest("button, input, select, textarea");
+      if (interactiveChild && anchor.contains(interactiveChild)) return;
+
       const href = anchor.getAttribute("href");
       if (
         !href ||
