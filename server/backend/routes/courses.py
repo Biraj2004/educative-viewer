@@ -157,7 +157,7 @@ def create_courses_blueprint(auth_service: AuthService, db_manager: DBManager) -
                 f"""
                 SELECT
                     p.id,
-                    p.course_id,
+                    c.id AS course_id,
                     p.project_author_id,
                     p.project_collection_id,
                     p.project_work_id,
@@ -169,7 +169,7 @@ def create_courses_blueprint(auth_service: AuthService, db_manager: DBManager) -
                     c.title AS course_title,
                     c.type AS course_type
                 FROM projects p
-                JOIN courses c ON c.id = p.course_id
+                LEFT JOIN courses c ON c.project_id = p.id
                 WHERE 1=1 {active_filter}
                 ORDER BY p.id
                 """
@@ -209,7 +209,7 @@ def create_courses_blueprint(auth_service: AuthService, db_manager: DBManager) -
                     c.title AS course_title,
                     c.type AS course_type
                 FROM projects p
-                JOIN courses c ON c.id = p.course_id
+                JOIN courses c ON c.project_id = p.id
                 WHERE p.id = ? {active_filter}
                 """,
                 (project_id,),
