@@ -61,7 +61,7 @@ summary,
 .no-scrollbar::-webkit-scrollbar { display: none; }
 
 /* ─── Dark mode image filter ─────────────────────────────────────────────── */
-.dark img,
+.dark img:not(.no-dark-invert),
 .dark .canvas-slide-area {
   filter: invert(0.867) hue-rotate(180deg);
 }

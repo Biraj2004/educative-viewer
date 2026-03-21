@@ -45,8 +45,10 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
       clearAuthToken();
       window.location.replace("/auth?reason=session_expired");
     };
-    const handle403 = () => {
-      window.location.replace("/deactivated");
+    const handle403 = (message?: string) => {
+      if ((message ?? "").toLowerCase().includes("deactivated")) {
+        window.location.replace("/deactivated");
+      }
     };
     setUnauthorizedHandler(handle401);
     setForbiddenHandler(handle403);

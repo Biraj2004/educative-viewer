@@ -4,6 +4,8 @@ import "./globals.css";
 import { getTheme } from "@/utils/theme";
 import NavigationEvents from "@/components/edu-viewer/NavigationEvents";
 import NavProgressBar from "@/components/edu-viewer/NavProgressBar";
+// import AuthFlowGuard from "@/components/edu-viewer/AuthFlowGuard";
+import { BRAND_ICON_URL } from "@/utils/branding";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -18,7 +20,15 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Edu-Viewer PRO",
   description: "An interactive content viewer for code-first learning.",
-  icons: { icon: "/icon-96.png" },
+  icons: {
+    icon: [
+      { url: BRAND_ICON_URL, sizes: "16x16", type: "image/png" },
+      { url: BRAND_ICON_URL, sizes: "32x32", type: "image/png" },
+      { url: BRAND_ICON_URL, sizes: "96x96", type: "image/png" },
+    ],
+    shortcut: [{ url: BRAND_ICON_URL }],
+    apple: [{ url: BRAND_ICON_URL, sizes: "180x180", type: "image/png" }],
+  },
 };
 
 export default async function RootLayout({
@@ -34,6 +44,7 @@ export default async function RootLayout({
       suppressHydrationWarning
     >
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
+        {/* <AuthFlowGuard /> */}
         <NavigationEvents />
         <NavProgressBar />
         {children}

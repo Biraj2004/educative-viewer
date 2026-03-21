@@ -1,6 +1,7 @@
 import Link from "next/link";
 import DarkModeToggle from "./DarkModeToggle";
 import BackButton from "@/components/edu-viewer/BackButton";
+import { BRAND_ICON_URL } from "@/utils/branding";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -64,9 +65,17 @@ export default function AppNavbar({
           )}
           {/* Logo */}
           <Link href="/" className="flex items-center gap-2 group shrink-0">
-            <span className="w-7 h-7 rounded-md bg-indigo-600 group-hover:bg-indigo-700 transition-colors flex items-center justify-center select-none">
-              <span className="text-white font-bold text-[11px] tracking-tight">EV</span>
-            </span>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={BRAND_ICON_URL}
+              alt="Edu-Viewer logo"
+              width={28}
+              height={28}
+              className="no-dark-invert w-7 h-7 bg-transparent object-contain group-hover:opacity-90 transition-opacity select-none"
+              style={{ filter: "none", background: "transparent" }}
+              loading="eager"
+              decoding="async"
+            />
             <span className="hidden sm:block font-semibold text-sm text-gray-800 dark:text-gray-200 group-hover:text-indigo-700 dark:group-hover:text-indigo-400 transition-colors whitespace-nowrap">
               Edu-Viewer{" "}
               <span className="text-indigo-600 dark:text-indigo-400 font-bold">PRO</span>

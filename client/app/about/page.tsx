@@ -99,7 +99,7 @@ export default function AboutPage() {
                         alt="Biraj Sarkar" 
                         width={64} 
                         height={64} 
-                        className="object-cover"
+                        className="object-cover no-dark-invert"
                         unoptimized
                       />
                     </div>
@@ -191,7 +191,7 @@ export default function AboutPage() {
                          alt="Anilabha Datta" 
                          width={64} 
                          height={64} 
-                         className="object-cover"
+                         className="object-cover no-dark-invert"
                          unoptimized
                        />
                     </div>

@@ -43,7 +43,7 @@ export default function Image({ data }: { data: ImageComponentData }) {
           <img
             src={src}
             alt={alt}
-            className="max-w-full h-auto block dark:brightness-90 dark:contrast-95"
+            className="max-w-full no-dark-invert h-auto block dark:brightness-90 dark:contrast-95"
           />
         </div>
         {data.caption && (
