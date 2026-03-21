@@ -6,7 +6,6 @@ import Link from "next/link";
 interface Topic {
   api_url: string;
   course_id: number;
-  index: number;
   slug: string;
   title: string;
   topic_index: number;
@@ -174,7 +173,7 @@ export default function CourseDetailToc({ toc, courseId, slug, fromPath, complet
                   {/* Topics list */}
                   <ul>
                     {entry.topics.map((topic, j) => {
-                      const isDone = completedTopicIndices?.has(topic.index);
+                      const isDone = completedTopicIndices?.has(topic.topic_index);
                       return (
                         <li
                           key={j}
@@ -185,7 +184,7 @@ export default function CourseDetailToc({ toc, courseId, slug, fromPath, complet
                           }
                         >
                           <Link
-                            href={buildTopicHref(courseId, slug, topic.index, topic.slug, fromPath)}
+                            href={buildTopicHref(courseId, slug, topic.topic_index, topic.slug, fromPath)}
                             prefetch={false}
                             className={[
                               "flex items-center gap-3 px-4 py-2.5 text-sm transition-colors border-l-2",
@@ -200,7 +199,7 @@ export default function CourseDetailToc({ toc, courseId, slug, fromPath, complet
                               </svg>
                             ) : (
                               <span className="text-[11px] font-mono text-gray-300 dark:text-gray-600 w-5 text-right shrink-0">
-                                {topic.index + 1}
+                                {topic.topic_index + 1}
                               </span>
                             )}
                             <span className="leading-snug">
@@ -218,14 +217,14 @@ export default function CourseDetailToc({ toc, courseId, slug, fromPath, complet
                 </div>
               );
             } else {
-              const isDone = completedTopicIndices?.has(entry.index);
+              const isDone = completedTopicIndices?.has(entry.topic_index);
               return (
                 <div
                   key={i}
                   className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden"
                 >
                   <Link
-                    href={buildTopicHref(courseId, slug, entry.index, entry.slug, fromPath)}
+                    href={buildTopicHref(courseId, slug, entry.topic_index, entry.slug, fromPath)}
                     prefetch={false}
                     className={[
                       "flex items-center gap-3 px-4 py-2.5 text-sm transition-colors border-l-2",
@@ -240,7 +239,7 @@ export default function CourseDetailToc({ toc, courseId, slug, fromPath, complet
                       </svg>
                     ) : (
                       <span className="text-[11px] font-mono text-gray-300 dark:text-gray-600 w-5 text-right shrink-0">
-                        {entry.index + 1}
+                        {entry.topic_index + 1}
                       </span>
                     )}
                     <span className="leading-snug">

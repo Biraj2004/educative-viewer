@@ -31,7 +31,6 @@ interface TopicDetail {
 interface Topic {
   api_url: string;
   course_id: number;
-  index: number;
   slug: string;
   title: string;
   topic_index: number;
@@ -101,7 +100,7 @@ export default function TopicLayoutClient({ courseId, slug, fromPath, course, to
   const allTopics = course ? course.toc.flatMap((entry) =>
     'topics' in entry ? entry.topics : [entry as Topic]
   ) : [];
-  const currentPos = allTopics.findIndex((t) => t.index === currentTopic.topic_index);
+  const currentPos = allTopics.findIndex((t) => t.topic_index === currentTopic.topic_index);
   const prev = currentPos > 0 ? allTopics[currentPos - 1] : null;
   const next = currentPos < allTopics.length - 1 ? allTopics[currentPos + 1] : null;
 
@@ -307,7 +306,7 @@ export default function TopicLayoutClient({ courseId, slug, fromPath, course, to
                     });
                     recordTopicVisit(courseId, currentTopic.topic_index, true).catch(() => {});
                   }
-                  handleTopicNav(buildTopicHref(prev.index, prev.slug), prev.index);
+                  handleTopicNav(buildTopicHref(prev.topic_index, prev.slug), prev.topic_index);
                 }}
                 className="flex items-center gap-2 px-4 py-2.5 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-sm text-gray-700 dark:text-gray-300 hover:border-indigo-400 dark:hover:border-indigo-600 hover:text-indigo-700 dark:hover:text-indigo-400 transition-colors max-w-xs cursor-pointer"
               >
@@ -329,7 +328,7 @@ export default function TopicLayoutClient({ courseId, slug, fromPath, course, to
                     });
                     recordTopicVisit(courseId, currentTopic.topic_index, true).catch(() => {});
                   }
-                  handleTopicNav(buildTopicHref(next.index, next.slug), next.index);
+                  handleTopicNav(buildTopicHref(next.topic_index, next.slug), next.topic_index);
                 }}
                 className="flex items-center gap-2 px-4 py-2.5 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-sm text-gray-700 dark:text-gray-300 hover:border-indigo-400 dark:hover:border-indigo-600 hover:text-indigo-700 dark:hover:text-indigo-400 transition-colors max-w-xs cursor-pointer"
               >

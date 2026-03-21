@@ -6,7 +6,6 @@ import { useEffect, useRef } from "react";
 interface Topic {
     api_url: string;
     course_id: number;
-    index: number;
     slug: string;
     title: string;
     topic_index: number;
@@ -83,11 +82,11 @@ export default function TopicSidebar({
                                         {/* Topic list */}
                                         <ul>
                                             {entry.topics.map((topic) => {
-                                                const isActive = topic.index === currentTopicIndex;
-                                                const isDone = !isActive && completedTopicIndices?.has(topic.index);
-                                                const topicHref = buildTopicHref(topic.index, topic.slug);
+                                                const isActive = topic.topic_index === currentTopicIndex;
+                                                const isDone = !isActive && completedTopicIndices?.has(topic.topic_index);
+                                                const topicHref = buildTopicHref(topic.topic_index, topic.slug);
                                                 return (
-                                                    <li key={topic.index}>
+                                                    <li key={topic.topic_index}>
                                                         <Link
                                                             ref={isActive ? activeRef : null}
                                                             href={topicHref}
@@ -95,7 +94,7 @@ export default function TopicSidebar({
                                                             onClick={(e) => {
                                                                 if (onTopicClick) {
                                                                     e.preventDefault();
-                                                                    onTopicClick(topicHref, topic.index);
+                                                                    onTopicClick(topicHref, topic.topic_index);
                                                                 }
                                                                 onClose?.();
                                                             }}
@@ -119,7 +118,7 @@ export default function TopicSidebar({
                                                                         isActive ? "text-indigo-400 dark:text-indigo-400" : "text-gray-300 dark:text-gray-600",
                                                                     ].join(" ")}
                                                                 >
-                                                                    {topic.index + 1}
+                                                                    {topic.topic_index + 1}
                                                                 </span>
                                                             )}
                                                             <span className="leading-snug">{topic.title}</span>
@@ -131,9 +130,9 @@ export default function TopicSidebar({
                                     </div>
                                 );
                             } else {
-                                const isActive = entry.index === currentTopicIndex;
-                                const isDone = !isActive && completedTopicIndices?.has(entry.index);
-                                const topicHref = buildTopicHref(entry.index, entry.slug);
+                                const isActive = entry.topic_index === currentTopicIndex;
+                                const isDone = !isActive && completedTopicIndices?.has(entry.topic_index);
+                                const topicHref = buildTopicHref(entry.topic_index, entry.slug);
                                 return (
                                     <ul key={i}>
                                         <li>
@@ -144,7 +143,7 @@ export default function TopicSidebar({
                                                 onClick={(e) => {
                                                     if (onTopicClick) {
                                                         e.preventDefault();
-                                                        onTopicClick(topicHref, entry.index);
+                                                        onTopicClick(topicHref, entry.topic_index);
                                                     }
                                                     onClose?.();
                                                 }}
@@ -168,7 +167,7 @@ export default function TopicSidebar({
                                                             isActive ? "text-indigo-400 dark:text-indigo-400" : "text-gray-300 dark:text-gray-600",
                                                         ].join(" ")}
                                                     >
-                                                        {entry.index + 1}
+                                                        {entry.topic_index + 1}
                                                     </span>
                                                 )}
                                                 <span className="leading-snug">{entry.title}</span>

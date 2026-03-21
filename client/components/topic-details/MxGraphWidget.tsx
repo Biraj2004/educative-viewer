@@ -5,6 +5,7 @@ import { resolveEduUrl } from "@/utils/constants";
 import { isTransparentColor, isWhiteColor } from "@/utils/color-helpers";
 import { prepareSvg } from "@/utils/svg-helpers";
 import { usePreparedImageSources } from "@/utils/use-prepared-image";
+import { normalizeText } from "@/utils/text";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -66,6 +67,13 @@ export default function MxGraphWidget({ data }: { data: MxGraphWidgetData }) {
   const hasPath = pathValue.length > 0;
   const svgValue = data.svg ?? "";
   const hasSvg = svgValue.trim().length > 0;
+  const captionText = normalizeText(data.caption);
+  const pathLabel = useMemo(() => {
+    if (!hasPath) return null;
+    const fileName = pathValue.split("/").pop() ?? "";
+    return normalizeText(fileName);
+  }, [hasPath, pathValue]);
+  const altText = captionText ?? pathLabel ?? "diagram";
 
   const resolvedSrc = useMemo(() => (hasPath ? resolveEduUrl(pathValue) : ""), [hasPath, pathValue]);
   const { preparedUrls, isPreparing } = usePreparedImageSources(hasPath ? [resolvedSrc] : []);
@@ -84,7 +92,7 @@ export default function MxGraphWidget({ data }: { data: MxGraphWidgetData }) {
           // eslint-disable-next-line @next/next/no-img-element
           <img
             src={preparedSrc}
-            alt={data.caption ?? "diagram"}
+            alt={altText}
             className="max-w-full h-auto object-contain"
           />
         )
@@ -97,8 +105,8 @@ export default function MxGraphWidget({ data }: { data: MxGraphWidgetData }) {
         <div className="text-sm text-gray-400 italic py-6">No diagram available.</div>
       )}
 
-      {data.caption && (
-        <p className="text-center text-sm text-gray-500 mt-2">{data.caption}</p>
+      {captionText && (
+        <p className="text-center text-sm text-gray-500 mt-2">{captionText}</p>
       )}
     </div>
   );

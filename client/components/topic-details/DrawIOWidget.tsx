@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { resolveEduUrl } from "@/utils/constants";
 import { usePreparedImageSource, usePreparedImageSources } from "@/utils/use-prepared-image";
+import { normalizeText } from "@/utils/text";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -40,7 +41,7 @@ function SlidesViewer({ data }: { data: DrawIOWidgetData }) {
   }
 
   const safeIdx = Math.min(idx, Math.max(0, total - 1));
-  const caption = captions[safeIdx] ?? data.caption ?? "";
+  const caption = normalizeText(captions[safeIdx]) ?? normalizeText(data.caption);
   const activeSrc = preparedUrls[safeIdx] ?? resolvedUrls[safeIdx] ?? "";
 
   return (
@@ -58,7 +59,7 @@ function SlidesViewer({ data }: { data: DrawIOWidgetData }) {
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={activeSrc}
-              alt={caption || `Slide ${idx + 1}`}
+              alt={caption ?? `Slide ${idx + 1}`}
               className="max-w-full h-auto object-contain dark:brightness-90"
               style={{ maxHeight: imgHeight }}
             />
@@ -119,6 +120,8 @@ function SlidesViewer({ data }: { data: DrawIOWidgetData }) {
 function SingleImageViewer({ data }: { data: DrawIOWidgetData }) {
   const resolvedSrc = useMemo(() => resolveEduUrl(data.path ?? ""), [data.path]);
   const preparedSrc = usePreparedImageSource(resolvedSrc);
+  const captionText = normalizeText(data.caption);
+  const altText = captionText ?? "diagram";
 
   return (
     <div className="max-w-4xl mx-auto px-6 py-2">
@@ -126,13 +129,13 @@ function SingleImageViewer({ data }: { data: DrawIOWidgetData }) {
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src={preparedSrc}
-          alt={data.caption || "diagram"}
+          alt={altText}
           width={data.width || undefined}
           height={data.height || undefined}
           className="max-w-full h-auto object-contain"
         />
-        {data.caption && (
-          <p className="text-center text-sm text-gray-500">{data.caption}</p>
+        {captionText && (
+          <p className="text-center text-sm text-gray-500">{captionText}</p>
         )}
       </div>
     </div>

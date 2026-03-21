@@ -3,6 +3,7 @@
 import { useMemo } from "react";
 import { resolveEduUrl } from "@/utils/constants";
 import { usePreparedImageSource } from "@/utils/use-prepared-image";
+import { normalizeText } from "@/utils/text";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -27,7 +28,9 @@ export interface ImageComponentData {
 export default function Image({ data }: { data: ImageComponentData }) {
   const resolvedSrc = useMemo(() => resolveEduUrl(data.path), [data.path]);
   const src = usePreparedImageSource(resolvedSrc);
-  const alt = data.metadata?.name ?? data.caption ?? "image";
+  const nameText = normalizeText(data.metadata?.name);
+  const captionText = normalizeText(data.caption);
+  const alt = nameText ?? captionText ?? "image";
 
   return (
     <div className="max-w-6xl mx-auto px-6 py-2">
@@ -46,8 +49,8 @@ export default function Image({ data }: { data: ImageComponentData }) {
             className="max-w-full no-dark-invert h-auto block dark:brightness-90 dark:contrast-95"
           />
         </div>
-        {data.caption && (
-          <p className="text-sm text-gray-500 dark:text-gray-400 text-center">{data.caption}</p>
+        {captionText && (
+          <p className="text-sm text-gray-500 dark:text-gray-400 text-center">{captionText}</p>
         )}
       </div>
     </div>

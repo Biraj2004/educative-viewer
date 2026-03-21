@@ -260,7 +260,6 @@ export default function CourseDetailPage() {
 interface Topic {
   api_url: string;
   course_id: number;
-  index: number;
   slug: string;
   title: string;
   topic_index: number;
