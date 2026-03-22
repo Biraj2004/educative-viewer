@@ -12,3 +12,4 @@ __pycache__
 *db*
 auth.sqlite3
 .env
+temp.json

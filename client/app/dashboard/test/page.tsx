@@ -14,6 +14,7 @@ import APIWidget from '@/components/topic-details/APIWidget';
 import SpoilerEditor from '@/components/topic-details/SpoilerEditor';
 import TabbedCode from '@/components/topic-details/TabbedCode';
 import Table from '@/components/topic-details/Table';
+import TableHTML from '@/components/topic-details/TableHTML';
 import EducativeArray from '@/components/topic-details/EducativeArray';
 import MatchTheAnswers from '@/components/topic-details/MatchTheAnswers';
 import Permutation from '@/components/topic-details/Permutation';
@@ -84,6 +85,8 @@ const componentMapping: { [key: string]: React.ComponentType<any> } = {
     "EditorCode": (props: { data: EditorCodeComponentData }) => <EditorCode {...props} />,
     "Columns": Columns,
     "Table": Table,
+    "TableHTML": TableHTML,
+    "TableV2": TableHTML,
     "SlateHTML": SlateHTML,
     "SpoilerEditor": SpoilerEditor,
     "DrawIOWidget": DrawIOWidget,

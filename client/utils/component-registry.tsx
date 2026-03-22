@@ -4,6 +4,7 @@ import DrawIOWidget from "@/components/topic-details/DrawIOWidget";
 import Code from "@/components/topic-details/Code";
 import TabbedCode from "@/components/topic-details/TabbedCode";
 import Table from "@/components/topic-details/Table";
+import TableHTML from "@/components/topic-details/TableHTML";
 import SpoilerEditor from "@/components/topic-details/SpoilerEditor";
 import SlateHTML from "@/components/topic-details/SlateHTML";
 import Latex from "@/components/topic-details/Latex";
@@ -77,6 +78,8 @@ export const COMPONENT_REGISTRY: Record<string, RendererFn> = {
   Code:                  (c) => <div data-component-type="Code">                 <Code                   data={c as any} /></div>,
   TabbedCode:            (c) => <div data-component-type="TabbedCode">           <TabbedCode             data={c as any} /></div>,
   Table:                 (c) => <div data-component-type="Table">                <Table                  data={c as any} /></div>,
+  TableHTML:             (c) => <div data-component-type="TableHTML">            <TableHTML              data={c as any} /></div>,
+  TableV2:               (c) => <div data-component-type="TableV2">              <TableHTML              data={c as any} /></div>,
   SpoilerEditor:         (c) => <div data-component-type="SpoilerEditor">        <SpoilerEditor          data={c as any} /></div>,
   SlateHTML:             (c) => <div data-component-type="SlateHTML">            <SlateHTML              data={c as any} /></div>,
   Latex:                 (c) => <div data-component-type="Latex">                <Latex                  data={c as any} /></div>,
