@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import Editor from "@monaco-editor/react";
+import { resolveMonacoLanguage } from "@/utils/monaco-language";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -24,11 +25,6 @@ export interface TabbedCodeData {
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
-
-function monacoLang(lang: string) {
-  const map: Record<string, string> = { "c++": "cpp" };
-  return map[lang.toLowerCase()] ?? lang.toLowerCase();
-}
 
 // Language icon: a small "G" style C++ logo look-alike using plain SVG
 function LangIcon() {
@@ -145,7 +141,7 @@ export default function TabbedCode({ data }: { data: TabbedCodeData }) {
         <div className={isFullscreen ? "flex-1 overflow-hidden" : ""}>
           <Editor
             height={isFullscreen ? "100%" : editorHeight}
-            language={monacoLang(active.language)}
+            language={resolveMonacoLanguage(active.language, active.content)}
             value={active.content}
             theme="vs-dark"
             onMount={(editor) => { editorRef.current = editor; }}

@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import Editor from "@monaco-editor/react";
+import { resolveMonacoLanguage } from "@/utils/monaco-language";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -31,15 +32,12 @@ const LANG_DISPLAY: Record<string, string> = {
   javascript: "JavaScript", typescript: "TypeScript", go: "Go",
   rust: "Rust", ruby: "Ruby", kotlin: "Kotlin", swift: "Swift",
   sql: "SQL", bash: "Bash", shell: "Shell",
+  js: "JavaScript", node: "JavaScript", "javascript-es2024": "JavaScript",
+  ts: "TypeScript", "typescript-esnext": "TypeScript", sh: "Shell",
 };
 
 function langLabel(lang: string) {
   return LANG_DISPLAY[lang.toLowerCase()] ?? lang.toUpperCase();
-}
-
-function monacoLang(lang: string) {
-  const map: Record<string, string> = { "c++": "cpp" };
-  return map[lang.toLowerCase()] ?? lang.toLowerCase();
 }
 
 // ─── File icon ────────────────────────────────────────────────────────────────
@@ -228,7 +226,7 @@ export default function Code({ data }: { data: CodeComponentData }) {
           <div className={isFullscreen ? "flex-1 overflow-hidden" : ""}>
             <Editor
               height={isFullscreen ? "100%" : editorHeight}
-              language={monacoLang(data.language)}
+              language={resolveMonacoLanguage(data.language, activeFile.content)}
               value={activeFile.content}
               theme="vs-dark"
               onMount={(editor) => { editorRef.current = editor; }}
