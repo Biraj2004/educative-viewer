@@ -46,6 +46,7 @@ export default function TopicSidebar({
 }: TopicSidebarProps) {
     const activeRef = useRef<HTMLAnchorElement>(null);
     const validFromPath = fromPath && fromPath.startsWith("/") && !fromPath.startsWith("//") ? fromPath : null;
+    const tocEntries = Array.isArray(toc) ? toc : [];
 
     const buildTopicHref = (topicIndex: number, topicSlug: string): string => {
         const base = `/dashboard/courses/${courseId}/${courseSlug}/topics/${topicIndex}/${topicSlug}`;
@@ -69,8 +70,9 @@ export default function TopicSidebar({
                 {/* Scrollable TOC */}
                 <div className="flex-1 overflow-y-auto bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-700">
                     <nav aria-label="Course table of contents">
-                        {toc.map((entry, i) => {
+                        {tocEntries.map((entry, i) => {
                             if ('topics' in entry) {
+                                const entryTopics = Array.isArray(entry.topics) ? entry.topics : [];
                                 return (
                                     <div key={i}>
                                         {/* Chapter heading */}
@@ -81,7 +83,7 @@ export default function TopicSidebar({
                                         </div>
                                         {/* Topic list */}
                                         <ul>
-                                            {entry.topics.map((topic) => {
+                                            {entryTopics.map((topic) => {
                                                 const isActive = topic.topic_index === currentTopicIndex;
                                                 const isDone = !isActive && completedTopicIndices?.has(topic.topic_index);
                                                 const topicHref = buildTopicHref(topic.topic_index, topic.slug);

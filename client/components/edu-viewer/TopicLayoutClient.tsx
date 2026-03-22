@@ -72,6 +72,7 @@ export default function TopicLayoutClient({ courseId, slug, fromPath, course, to
   const validFromPath = fromPath && fromPath.startsWith("/") && !fromPath.startsWith("//") ? fromPath : null;
   const fromPathsPage = Boolean(validFromPath?.startsWith("/dashboard/paths"));
   const fromProjectsPage = Boolean(validFromPath?.startsWith("/dashboard/projects"));
+  const currentComponents = Array.isArray(currentTopic.components) ? currentTopic.components : [];
   const sectionCrumb = fromPathsPage
     ? { label: "Paths", href: validFromPath ?? "/dashboard/paths" }
     : fromProjectsPage
@@ -97,9 +98,11 @@ export default function TopicLayoutClient({ courseId, slug, fromPath, course, to
     }
   }, [topicChanging]);
 
-  const allTopics = course ? course.toc.flatMap((entry) =>
-    'topics' in entry ? entry.topics : [entry as Topic]
-  ) : [];
+  const allTopics = course
+    ? (Array.isArray(course.toc) ? course.toc : []).flatMap((entry) =>
+        "topics" in entry ? (Array.isArray(entry.topics) ? entry.topics : []) : [entry as Topic]
+      )
+    : [];
   const currentPos = allTopics.findIndex((t) => t.topic_index === currentTopic.topic_index);
   const prev = currentPos > 0 ? allTopics[currentPos - 1] : null;
   const next = currentPos < allTopics.length - 1 ? allTopics[currentPos + 1] : null;
@@ -252,7 +255,7 @@ export default function TopicLayoutClient({ courseId, slug, fromPath, course, to
 
           {/* Components */}
         <div className="max-w-6xl mx-auto px-6 py-8 space-y-6">
-          {currentTopic.components.map((comp, i) => {
+          {currentComponents.map((comp, i) => {
             const renderer = getRenderer(comp.type);
             const subType =
               typeof comp.content?.type === "string" ? comp.content.type : undefined;
