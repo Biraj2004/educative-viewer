@@ -3,6 +3,7 @@
 import React, { useState } from "react";
 import AppNavbar from "@/components/edu-viewer/AppNavbar";
 import { useAuth } from "@/components/edu-viewer/AuthProvider";
+import { getBackendApiBase } from "@/utils/runtime-config";
 
 // ─── Icons ────────────────────────────────────────────────────────────────────
 
@@ -50,7 +51,7 @@ export default function ContactPage() {
     setError(null);
 
     try {
-      const apiBase = process.env.NEXT_PUBLIC_BACKEND_API_BASE?.replace(/\/$/, "") || "";
+      const apiBase = getBackendApiBase();
       const res = await fetch(`${apiBase}/api/contact`, {
         method: "POST",
         headers: {

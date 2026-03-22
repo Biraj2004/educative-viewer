@@ -7,8 +7,9 @@ import UserMenu from "@/components/edu-viewer/UserMenu";
 import { getRenderer, UnknownRenderer } from "@/utils/component-registry";
 import ComponentBadge from "@/components/edu-viewer/ComponentBadge";
 import { recordTopicVisit, getAuthToken, clearAuthToken } from "@/utils/authClient";
+import { getBackendApiBase } from "@/utils/runtime-config";
 
-const BACKEND = (process.env.NEXT_PUBLIC_BACKEND_API_BASE ?? "").replace(/\/$/, "");
+const BACKEND = getBackendApiBase();
 
 interface Component {
   type: string;

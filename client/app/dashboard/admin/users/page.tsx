@@ -6,6 +6,7 @@ import UserMenu from "@/components/edu-viewer/UserMenu";
 import { useAuth } from "@/components/edu-viewer/AuthProvider";
 import { getAuthToken } from "@/utils/authClient";
 import ActiveToggle from "@/components/edu-viewer/ActiveToggle";
+import { getBackendApiBase } from "@/utils/runtime-config";
 
 // ─── Icons ────────────────────────────────────────────────────────────────────
 
@@ -64,7 +65,7 @@ function AlertIcon({ className }: { className?: string }) {
   );
 }
 
-const BACKEND = (process.env.NEXT_PUBLIC_BACKEND_API_BASE ?? "").replace(/\/$/, "");
+const BACKEND = getBackendApiBase();
 
 interface UserAccount {
   id: number;

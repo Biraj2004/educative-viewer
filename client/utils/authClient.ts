@@ -10,10 +10,9 @@
  *   backend on the very next API call → the global 401 handler fires → sign-in page.
  */
 
-const BACKEND = (process.env.NEXT_PUBLIC_BACKEND_API_BASE ?? "").replace(
-  /\/$/,
-  "",
-);
+import { getBackendApiBase, getRsaPublicKey } from "@/utils/runtime-config";
+
+const BACKEND = getBackendApiBase();
 const API = `${BACKEND}/api/auth`;
 const LS_KEY = "ev_token";
 const IS_BROWSER = typeof window !== "undefined";
@@ -56,7 +55,7 @@ async function _importPem(pem: string): Promise<CryptoKey> {
 async function _getPublicKey(): Promise<CryptoKey> {
   if (_cachedPublicKey) return _cachedPublicKey;
 
-  const baked = process.env.NEXT_PUBLIC_RSA_PUBLIC_KEY;
+  const baked = getRsaPublicKey();
   if (baked) {
     _cachedPublicKey = await _importPem(baked);
     return _cachedPublicKey;

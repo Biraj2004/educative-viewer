@@ -45,6 +45,7 @@ import HashTable, { HashTableData } from '@/components/topic-details/HashTable';
 import Mermaid, { MermaidData } from '@/components/topic-details/Mermaid';
 import MarkMap, { MarkMapData } from '@/components/topic-details/MarkMap';
 import SequenceDiagrams, { SequenceDiagramData } from "@/components/topic-details/SequenceDiagrams";
+import { getBackendApiBase } from "@/utils/runtime-config";
 
 interface TestComponentRow {
   component_id: number;
@@ -137,7 +138,7 @@ export default function ComponentTestPage() {
     const fetchComponents = async () => {
       setFetchStatus("loading");
       try {
-        const BACKEND = (process.env.NEXT_PUBLIC_BACKEND_API_BASE ?? "").replace(/\/$/, "");
+        const BACKEND = getBackendApiBase();
         const API = `${BACKEND}/api/admin`;
         const response = await fetch(`${API}/test-components`, {
           headers: { Authorization: `Bearer ${authToken}` },

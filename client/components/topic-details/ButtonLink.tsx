@@ -2,6 +2,7 @@
 
 import React, { useState } from "react";
 import { getAuthToken } from "@/utils/authClient";
+import { getBackendApiBase } from "@/utils/runtime-config";
 
 export interface ButtonLinkData {
   comp_id: string;
@@ -28,7 +29,7 @@ export default function ButtonLink({ data }: { data: ButtonLinkData }) {
         if (token) headers["Authorization"] = `Bearer ${token}`;
 
         // Fallback to absolute backend URL if needed, depending on mapping
-        const backendBase = process.env.NEXT_PUBLIC_BACKEND_API_BASE || "";
+        const backendBase = getBackendApiBase();
         const targetUrl = data.url.startsWith("/") ? `${backendBase}${data.url}` : data.url;
 
         const res = await fetch(targetUrl, { headers });

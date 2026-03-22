@@ -6,6 +6,10 @@ import NavigationEvents from "@/components/edu-viewer/NavigationEvents";
 import NavProgressBar from "@/components/edu-viewer/NavProgressBar";
 // import AuthFlowGuard from "@/components/edu-viewer/AuthFlowGuard";
 import { BRAND_ICON_URL } from "@/utils/branding";
+import {
+  RUNTIME_PUBLIC_ENV_KEYS,
+  type RuntimePublicEnvMap,
+} from "@/utils/runtime-config";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -37,6 +41,12 @@ export default async function RootLayout({
   children: React.ReactNode;
 }) {
   const theme = await getTheme();
+  const runtimeConfig = RUNTIME_PUBLIC_ENV_KEYS.reduce((acc, key) => {
+    acc[key] = process.env[key] ?? "";
+    return acc;
+  }, {} as RuntimePublicEnvMap);
+  const runtimeConfigScript = `window.__EV_RUNTIME_CONFIG__=${JSON.stringify(runtimeConfig).replace(/</g, "\\u003c")};`;
+
   return (
     <html
       lang="en"
@@ -44,6 +54,7 @@ export default async function RootLayout({
       suppressHydrationWarning
     >
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
+        <script id="ev-runtime-config" dangerouslySetInnerHTML={{ __html: runtimeConfigScript }} />
         {/* <AuthFlowGuard /> */}
         <NavigationEvents />
         <NavProgressBar />

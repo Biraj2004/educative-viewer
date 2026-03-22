@@ -8,8 +8,9 @@ import UserMenu from "@/components/edu-viewer/UserMenu";
 import { useAuth } from "@/components/edu-viewer/AuthProvider";
 import { clearAuthToken, getAuthToken } from "@/utils/authClient";
 import ActiveToggle from "@/components/edu-viewer/ActiveToggle";
+import { getBackendApiBase } from "@/utils/runtime-config";
 
-const BACKEND = (process.env.NEXT_PUBLIC_BACKEND_API_BASE ?? "").replace(/\/$/, "");
+const BACKEND = getBackendApiBase();
 
 interface PathItem {
   id: number;

@@ -1,4 +1,6 @@
-export const EDU_BASE = process.env.NEXT_PUBLIC_STATIC_FILES_BASE ?? "";
+import { getStaticFilesBase } from "@/utils/runtime-config";
+
+export const EDU_BASE = getStaticFilesBase();
 
 /**
  * Always resolve a path through EDU_BASE.

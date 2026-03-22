@@ -3,8 +3,10 @@ export interface PreparedImageSource {
   shouldRevoke: boolean;
 }
 
-const STATIC_FILES_BASE = process.env.NEXT_PUBLIC_STATIC_FILES_BASE ?? "";
-const STATIC_BASIC_AUTH = process.env.NEXT_PUBLIC_STATIC_BASIC_AUTH ?? "";
+import { getStaticBasicAuth, getStaticFilesBase } from "@/utils/runtime-config";
+
+const STATIC_FILES_BASE = getStaticFilesBase();
+const STATIC_BASIC_AUTH = getStaticBasicAuth();
 
 function normalizeContentType(value: string | null): string {
   return (value ?? "").split(";")[0].trim().toLowerCase();

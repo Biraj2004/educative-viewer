@@ -8,8 +8,9 @@ import { getAuthToken, clearAuthToken, getProgress, getUser } from "@/utils/auth
 import { useAuth } from "@/components/edu-viewer/AuthProvider";
 import type { ProgressData } from "@/utils/authClient";
 import ScrollToTop from "@/components/edu-viewer/ScrollToTop";
+import { getBackendApiBase } from "@/utils/runtime-config";
 
-const BACKEND = (process.env.NEXT_PUBLIC_BACKEND_API_BASE ?? "").replace(/\/$/, "");
+const BACKEND = getBackendApiBase();
 
 const inflightFetches = new Map<string, Promise<Course[]>>();
 

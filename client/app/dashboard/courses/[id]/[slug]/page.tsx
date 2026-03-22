@@ -8,8 +8,9 @@ import CourseDetailToc from "@/components/edu-viewer/CourseDetailToc";
 import UserMenu from "@/components/edu-viewer/UserMenu";
 import { getAuthToken, clearAuthToken, getProgress, getUser, resetCourseProgress } from "@/utils/authClient";
 import type { ProgressData } from "@/utils/authClient";
+import { getBackendApiBase } from "@/utils/runtime-config";
 
-const BACKEND = (process.env.NEXT_PUBLIC_BACKEND_API_BASE ?? "").replace(/\/$/, "");
+const BACKEND = getBackendApiBase();
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const inflightFetches = new Map<string, Promise<any>>();

@@ -11,8 +11,9 @@
  */
 
 import { useState } from "react";
+import { getBackendApiBase } from "@/utils/runtime-config";
 
-const BACKEND = (process.env.NEXT_PUBLIC_BACKEND_API_BASE ?? "").replace(/\/$/, "");
+const BACKEND = getBackendApiBase();
 
 type Entity = "course" | "path" | "project" | "user";
 
