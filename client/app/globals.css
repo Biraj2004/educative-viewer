@@ -60,10 +60,27 @@ summary,
 .no-scrollbar { scrollbar-width: none; }
 .no-scrollbar::-webkit-scrollbar { display: none; }
 
-/* ─── Dark mode image filter ─────────────────────────────────────────────── */
-.dark img:not(.no-dark-invert),
-.dark .canvas-slide-area {
+/* ─── Dark mode media inversion policy ───────────────────────────────────── */
+/* Default: keep images/SVG/canvas slide content in original colours. */
+.dark img,
+.dark svg,
+.dark .canvas-slide-area,
+.dark img.no-dark-invert,
+.dark svg.no-dark-invert {
+  filter: none !important;
+}
+
+/* Opt-in inversion only when explicitly requested. */
+.dark img.dark-invert,
+.dark svg.dark-invert,
+.dark .canvas-slide-area.dark-invert {
   filter: invert(0.867) hue-rotate(180deg);
+}
+
+/* Blob-backed media marked as transparent by image preparation get a white backdrop
+  in dark mode so dark strokes/text remain readable without overriding opaque assets. */
+.dark img[src*="#transparent-bg"] {
+  background-color: #ffffff !important;
 }
 
 /* ─── KaTeX dark mode ────────────────────────────────────────────────────── */

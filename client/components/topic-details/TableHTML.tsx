@@ -280,6 +280,7 @@ export default function TableHTML({ data }: { data: TableHTMLData }) {
         .dark .table-html-wrapper th,
         .dark .table-html-wrapper td {
           border-color: #374151;
+          background-color: transparent !important;
         }
         .dark .table-html-wrapper th {
           background-color: #1f2937 !important;

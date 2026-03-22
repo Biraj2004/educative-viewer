@@ -82,7 +82,7 @@ export interface WebpackBinData {
   androidPackageName?: string;
   appUrl?: string;
   caption?: string;
-  codeContents: CodeContents;
+  codeContents: CodeContents | string | Record<string, unknown>;
   codePanelHeight?: string | number;
   comp_id?: string;
   dockerJob?: DockerJob;
@@ -103,6 +103,116 @@ export interface WebpackBinData {
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function normalizeFileData(raw: unknown): FileData | undefined {
+  if (!isRecord(raw)) return undefined;
+
+  const content = typeof raw.content === "string" ? raw.content : "";
+  const hidden = typeof raw.hidden === "boolean" ? raw.hidden : false;
+  const highlightedLines =
+    typeof raw.highlightedLines === "string" || raw.highlightedLines === null
+      ? (raw.highlightedLines as string | null)
+      : null;
+  const language = typeof raw.language === "string" ? raw.language : "plaintext";
+  const staticFile = typeof raw.staticFile === "boolean" ? raw.staticFile : false;
+
+  return { content, hidden, highlightedLines, language, staticFile };
+}
+
+function normalizeTreeNode(raw: unknown, fallbackId: number): TreeNode | null {
+  if (!isRecord(raw)) return null;
+
+  const id = typeof raw.id === "number" ? raw.id : fallbackId;
+  const moduleName =
+    typeof raw.module === "string"
+      ? raw.module
+      : typeof raw.fileName === "string"
+        ? raw.fileName
+        : `file-${id}`;
+  const parentId = typeof raw.parentId === "number" ? raw.parentId : 0;
+
+  const explicitLeaf = raw.leaf === true;
+  const rawChildren = Array.isArray(raw.children) ? raw.children : [];
+  const normalizedChildren = rawChildren
+    .map((child, idx) => normalizeTreeNode(child, id * 1000 + idx + 1))
+    .filter((node): node is TreeNode => node !== null);
+
+  // Support payloads where file fields are directly on node instead of node.data
+  const dataCandidate = normalizeFileData(raw.data) ?? normalizeFileData(raw);
+  const isLeaf = explicitLeaf || (!!dataCandidate && normalizedChildren.length === 0);
+
+  const base: TreeNode = {
+    id,
+    leaf: isLeaf,
+    module: moduleName,
+    parentId,
+  };
+
+  if (normalizedChildren.length > 0) {
+    base.children = normalizedChildren;
+  }
+  if (dataCandidate && isLeaf) {
+    base.data = dataCandidate;
+  }
+  if (typeof raw.readOnly === "boolean") {
+    base.readOnly = raw.readOnly;
+  }
+
+  return base;
+}
+
+function normalizeCodeContents(raw: unknown): CodeContents {
+  const fallback: CodeContents = {
+    children: [],
+    id: 0,
+    module: "/",
+    selectedId: 0,
+  };
+
+  const parsed =
+    typeof raw === "string"
+      ? (() => {
+          try {
+            return JSON.parse(raw) as unknown;
+          } catch {
+            return null;
+          }
+        })()
+      : raw;
+
+  if (!isRecord(parsed)) return fallback;
+
+  const rawChildren =
+    Array.isArray(parsed.children)
+      ? parsed.children
+      : isRecord(parsed.children)
+        ? Object.values(parsed.children)
+        : [];
+
+  const children = rawChildren
+    .map((node, idx) => normalizeTreeNode(node, idx + 1))
+    .filter((node): node is TreeNode => node !== null);
+
+  const selectedId =
+    typeof parsed.selectedId === "number"
+      ? parsed.selectedId
+      : children.find((n) => n.leaf)?.id ?? 0;
+
+  return {
+    canAddNpmPackages: typeof parsed.canAddNpmPackages === "boolean" ? parsed.canAddNpmPackages : undefined,
+    children,
+    foldersState: isRecord(parsed.foldersState) ? (parsed.foldersState as Record<string, boolean>) : undefined,
+    id: typeof parsed.id === "number" ? parsed.id : 0,
+    judge: isRecord(parsed.judge) ? (parsed.judge as JudgeConfig) : undefined,
+    maxId: typeof parsed.maxId === "number" ? parsed.maxId : undefined,
+    module: typeof parsed.module === "string" ? parsed.module : "/",
+    selectedId,
+  };
+}
 
 /** Parse "3-5,8,12-14" → array of 1-based line numbers for Monaco decorations. */
 function parseHighlightedLines(raw: string | null | undefined): number[] {
@@ -401,13 +511,15 @@ function TreeItem({ node, depth, allLeaves, activeLeafId, onSelectLeaf, onDownlo
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function WebpackBin({ data }: { data: WebpackBinData }) {
+  const codeContents = normalizeCodeContents(data.codeContents);
+
   // Flatten tree into a stable ordered array of visible leaf nodes
-  const allLeaves = collectLeaves(data.codeContents.children);
-  const nodeMap = buildNodeMap(data.codeContents.children);
+  const allLeaves = collectLeaves(codeContents.children);
+  const nodeMap = buildNodeMap(codeContents.children);
 
   const defaultIdx = Math.max(
     0,
-    allLeaves.findIndex((f) => f.id === data.codeContents.selectedId)
+    allLeaves.findIndex((f) => f.id === codeContents.selectedId)
   );
 
   const [activeIdx, setActiveIdx] = useState(defaultIdx);
@@ -417,13 +529,13 @@ export default function WebpackBin({ data }: { data: WebpackBinData }) {
   const [showInfo, setShowInfo] = useState(false);
   const [wordWrap, setWordWrap] = useState(false);
   const [expandedFolders, setExpandedFolders] = useState<Record<number, boolean>>(
-    () => initExpanded(data.codeContents.children)
+    () => initExpanded(codeContents.children)
   );
   const editorRef = useRef<MonacoEditor.IStandaloneCodeEditor | null>(null);
   const monacoRef = useRef<Monaco | null>(null);
 
   const activeFile = allLeaves[activeIdx];
-  const judge = data.codeContents.judge;
+  const judge = codeContents.judge;
   const docker = data.dockerJob;
   const activeLoaders = Object.values(data.loaders ?? {}).filter((l) => l.enabled);
 
@@ -680,7 +792,7 @@ export default function WebpackBin({ data }: { data: WebpackBinData }) {
               className="w-48 shrink-0 border-r border-[#3a3a4a] overflow-y-auto"
               style={{ background: "#1c1c28", height: "100%" }}
             >
-              {data.codeContents.children.map((node) => (
+              {codeContents.children.map((node) => (
                 <TreeItem
                   key={node.id}
                   node={node}

@@ -3,6 +3,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { prepareImageSource } from "@/utils/image-source";
 
+function revokeTarget(url: string): string {
+  const hashIndex = url.indexOf("#");
+  return hashIndex >= 0 ? url.slice(0, hashIndex) : url;
+}
+
 export function usePreparedImageSource(sourceUrl: string): string {
   const [prepared, setPrepared] = useState<{ inputUrl: string; outputUrl: string }>({
     inputUrl: sourceUrl,
@@ -27,12 +32,12 @@ export function usePreparedImageSource(sourceUrl: string): string {
       const result = await prepareImageSource(sourceUrl);
 
       if (cancelled) {
-        if (result.shouldRevoke) URL.revokeObjectURL(result.src);
+        if (result.shouldRevoke) URL.revokeObjectURL(revokeTarget(result.src));
         return;
       }
 
       if (currentObjectUrl.current && currentObjectUrl.current !== result.src) {
-        URL.revokeObjectURL(currentObjectUrl.current);
+        URL.revokeObjectURL(revokeTarget(currentObjectUrl.current));
         currentObjectUrl.current = null;
       }
 
@@ -54,7 +59,7 @@ export function usePreparedImageSource(sourceUrl: string): string {
   useEffect(() => {
     return () => {
       if (currentObjectUrl.current) {
-        URL.revokeObjectURL(currentObjectUrl.current);
+        URL.revokeObjectURL(revokeTarget(currentObjectUrl.current));
         currentObjectUrl.current = null;
       }
     };
@@ -102,7 +107,7 @@ export function usePreparedImageSources(sourceUrls: string[]): {
       );
 
       if (cancelled) {
-        revokeUrls.forEach((url) => URL.revokeObjectURL(url));
+        revokeUrls.forEach((url) => URL.revokeObjectURL(revokeTarget(url)));
         return;
       }
 
@@ -115,7 +120,7 @@ export function usePreparedImageSources(sourceUrls: string[]): {
 
     return () => {
       cancelled = true;
-      revokeUrls.forEach((url) => URL.revokeObjectURL(url));
+      revokeUrls.forEach((url) => URL.revokeObjectURL(revokeTarget(url)));
     };
   }, [keyedSourceUrls, sourceKey]);
 
