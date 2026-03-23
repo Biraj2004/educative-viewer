@@ -42,6 +42,10 @@ function defaultFileName(lang: string, provided?: string): string {
   return `main${ext}`;
 }
 
+function asString(value: unknown): string {
+  return typeof value === "string" ? value : "";
+}
+
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function EditorCode({ data }: { data: EditorCodeComponentData }) {
@@ -50,8 +54,13 @@ export default function EditorCode({ data }: { data: EditorCodeComponentData }) 
   const [isFullscreen, setIsFullscreen] = useState(false);
   const editorRef = useRef<any>(null);
 
-  const fileName = defaultFileName(data.language, data.entryFileName);
-  const lineCount = data.content.split("\n").length;
+  const safeLanguage = asString((data as unknown as Record<string, unknown>)?.language) || "text";
+  const safeContent = asString((data as unknown as Record<string, unknown>)?.content);
+  const safeEntryFileName = asString((data as unknown as Record<string, unknown>)?.entryFileName) || undefined;
+  const safeCaption = asString((data as unknown as Record<string, unknown>)?.caption);
+
+  const fileName = defaultFileName(safeLanguage, safeEntryFileName);
+  const lineCount = safeContent.split("\n").length;
   const editorHeight = Math.min(Math.max(lineCount, 5), 30) * 20 + 16;
 
   useEffect(() => {
@@ -62,7 +71,7 @@ export default function EditorCode({ data }: { data: EditorCodeComponentData }) 
   }, [isFullscreen]);
 
   const handleCopy = () => {
-    navigator.clipboard.writeText(data.content).then(() => {
+    navigator.clipboard.writeText(safeContent).then(() => {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     });
@@ -81,10 +90,10 @@ export default function EditorCode({ data }: { data: EditorCodeComponentData }) 
           </div>
           <div className="flex items-center gap-3">
             <span className="text-xs font-semibold text-blue-300 bg-blue-900/40 px-2 py-0.5 rounded">
-              {langLabel(data.language)}
+              {langLabel(safeLanguage)}
             </span>
             <button
-              onClick={() => { editorRef.current?.setValue(data.content); editorRef.current?.revealLine(1); }}
+              onClick={() => { editorRef.current?.setValue(safeContent); editorRef.current?.revealLine(1); }}
               title="Reset to original"
               className="text-gray-400 hover:text-white transition-colors cursor-pointer"
             >
@@ -132,8 +141,8 @@ export default function EditorCode({ data }: { data: EditorCodeComponentData }) 
         <div className={isFullscreen ? "flex-1 overflow-hidden" : ""}>
           <Editor
             height={isFullscreen ? "100%" : editorHeight}
-            language={resolveMonacoLanguage(data.language, data.content)}
-            value={data.content}
+            language={resolveMonacoLanguage(safeLanguage, safeContent)}
+            value={safeContent}
             theme="vs-dark"
             onMount={(editor) => { editorRef.current = editor; }}
             options={{
@@ -155,8 +164,8 @@ export default function EditorCode({ data }: { data: EditorCodeComponentData }) 
       </div>
 
       {/* Caption */}
-      {data.caption && !isFullscreen && (
-        <p className="text-center text-sm text-gray-500 mt-3">{data.caption}</p>
+      {safeCaption && !isFullscreen && (
+        <p className="text-center text-sm text-gray-500 mt-3">{safeCaption}</p>
       )}
     </div>
   );

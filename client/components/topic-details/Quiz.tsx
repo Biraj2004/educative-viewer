@@ -41,6 +41,84 @@ interface QuestionState {
   submitted: boolean;
 }
 
+// ─── Data guards / normalizer ────────────────────────────────────────────────
+
+function asRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" ? (value as Record<string, unknown>) : {};
+}
+
+function asString(value: unknown): string {
+  return typeof value === "string" ? value : "";
+}
+
+function asBool(value: unknown, fallback = false): boolean {
+  return typeof value === "boolean" ? value : fallback;
+}
+
+function asArray<T = unknown>(value: unknown): T[] {
+  return Array.isArray(value) ? (value as T[]) : [];
+}
+
+function normalizeExplanation(raw: unknown): Explanation {
+  // API variants seen: { mdHtml, mdText } OR plain string OR missing object.
+  if (typeof raw === "string") {
+    return { mdHtml: raw, mdText: raw };
+  }
+  const rec = asRecord(raw);
+  const mdHtml = asString(rec.mdHtml) || asString(rec.html) || asString(rec.text);
+  const mdText = asString(rec.mdText) || asString(rec.text) || mdHtml;
+  return { mdHtml, mdText };
+}
+
+function normalizeOption(raw: unknown, qIndex: number, oIndex: number): QuestionOption {
+  const rec = asRecord(raw);
+  const text = asString(rec.text) || asString(rec.label) || asString(rec.value);
+  const mdHtml = asString(rec.mdHtml) || asString(rec.textHtml) || text;
+  return {
+    correct: asBool(rec.correct),
+    explanation: normalizeExplanation(rec.explanation),
+    id: asString(rec.id) || `q${qIndex}-o${oIndex}`,
+    mdHtml,
+    text,
+  };
+}
+
+function normalizeQuestion(raw: unknown, qIndex: number): Question {
+  const rec = asRecord(raw);
+  const rawOptions = rec.questionOptions ?? rec.options ?? rec.answers ?? [];
+  const questionOptions = asArray(rawOptions).map((opt, oIndex) => normalizeOption(opt, qIndex, oIndex));
+  const questionText = asString(rec.questionText) || asString(rec.text) || asString(rec.prompt);
+  const questionTextHtml = asString(rec.questionTextHtml) || asString(rec.mdHtml) || questionText;
+  return {
+    id: asString(rec.id) || `q${qIndex}`,
+    multipleAnswers: asBool(rec.multipleAnswers),
+    questionOptions,
+    questionText,
+    questionTextHtml,
+  };
+}
+
+function normalizeQuizData(input: unknown): QuizData {
+  // Accept either direct quiz payload or wrapper shapes like { content: {...} }.
+  const root = asRecord(input);
+  const payload = asRecord(root.content);
+  const source = asArray(payload.questions).length > 0 ? payload : root;
+  const sourceRec = asRecord(source);
+
+  return {
+    comp_id: asString(sourceRec.comp_id),
+    dynamicQuestionsCount:
+      typeof sourceRec.dynamicQuestionsCount === "number" || sourceRec.dynamicQuestionsCount === null
+        ? (sourceRec.dynamicQuestionsCount as number | null)
+        : null,
+    questions: asArray(sourceRec.questions).map((q, i) => normalizeQuestion(q, i)),
+    renderMode: asString(sourceRec.renderMode),
+    title: asString(sourceRec.title),
+    titleMdHtml: asString(sourceRec.titleMdHtml) || asString(sourceRec.title) || "Quiz",
+    version: asString(sourceRec.version),
+  };
+}
+
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const OPTION_LABELS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
@@ -195,16 +273,17 @@ function OptionCard({
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export default function Quiz({ data }: { data: QuizData }) {
+  const safeData = normalizeQuizData(data);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [states, setStates] = useState<QuestionState[]>(
-    data.questions.map(() => ({ selected: [], submitted: false }))
+    safeData.questions.map(() => ({ selected: [], submitted: false }))
   );
   const [helpful, setHelpful] = useState<"up" | "down" | null>(null);
 
-  const question = data.questions[currentIndex];
-  const state = states[currentIndex];
-  const isLastQuestion = currentIndex === data.questions.length - 1;
-  const totalQuestions = data.questions.length;
+  const question = safeData.questions[currentIndex];
+  const state = states[currentIndex] ?? { selected: [], submitted: false };
+  const isLastQuestion = currentIndex === safeData.questions.length - 1;
+  const totalQuestions = safeData.questions.length;
 
   const updateState = (index: number, patch: Partial<QuestionState>) => {
     setStates((prev) =>
@@ -213,7 +292,7 @@ export default function Quiz({ data }: { data: QuizData }) {
   };
 
   const handleOptionClick = (optionId: string) => {
-    if (state.submitted) return;
+    if (!question || state.submitted) return;
     if (question.multipleAnswers) {
       const next = state.selected.includes(optionId)
         ? state.selected.filter((id) => id !== optionId)
@@ -230,7 +309,7 @@ export default function Quiz({ data }: { data: QuizData }) {
   };
 
   const handleReset = () => {
-    setStates(data.questions.map(() => ({ selected: [], submitted: false })));
+    setStates(safeData.questions.map(() => ({ selected: [], submitted: false })));
     setCurrentIndex(0);
     setHelpful(null);
   };
@@ -247,6 +326,16 @@ export default function Quiz({ data }: { data: QuizData }) {
   const canGoPrev = currentIndex > 0;
   const showHelpful = isLastQuestion && state.submitted;
 
+  if (!question) {
+    return (
+      <div className="max-w-4xl mx-auto px-4 py-4">
+        <div className="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 px-6 py-5 text-sm text-gray-600 dark:text-gray-300">
+          No quiz questions available for this component.
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="max-w-4xl mx-auto px-4 py-4">
       {/* Card */}
@@ -255,7 +344,7 @@ export default function Quiz({ data }: { data: QuizData }) {
         <div className="bg-indigo-50 dark:bg-indigo-950/50 border-b border-gray-200 dark:border-gray-700 px-6 py-3">
           <div
             className="quiz-title font-semibold text-gray-800 dark:text-gray-200 text-sm [&_p]:m-0"
-            dangerouslySetInnerHTML={{ __html: data.titleMdHtml }}
+              dangerouslySetInnerHTML={{ __html: safeData.titleMdHtml }}
           />
         </div>
 

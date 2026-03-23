@@ -1454,10 +1454,17 @@ export default function CodeTest({ data }: { data: CodeTestData }) {
             <select
               value={selectedLanguage}
               onChange={(event) => setSelectedLanguage(event.target.value)}
-              className="text-sm font-medium bg-transparent border border-gray-300 dark:border-gray-700 rounded px-2 py-1 text-gray-700 dark:text-gray-200"
+              className="text-sm font-medium bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded px-2 py-1 text-gray-800 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+              style={{ colorScheme: "dark" }}
             >
               {availableLanguages.map((language) => (
-                <option key={language} value={language}>{language}</option>
+                <option
+                  key={language}
+                  value={language}
+                  className="bg-white text-gray-900 dark:bg-gray-900 dark:text-gray-100"
+                >
+                  {language}
+                </option>
               ))}
             </select>
           ) : (

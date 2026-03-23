@@ -25,6 +25,54 @@ export interface InstaCalcData {
   version: number;
 }
 
+function asRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" ? (value as Record<string, unknown>) : {};
+}
+
+function asString(value: unknown): string {
+  return typeof value === "string" ? value : "";
+}
+
+function asBool(value: unknown, fallback = false): boolean {
+  return typeof value === "boolean" ? value : fallback;
+}
+
+function asNumber(value: unknown, fallback = 0): number {
+  return typeof value === "number" && Number.isFinite(value) ? value : fallback;
+}
+
+function columnLabel(index: number): string {
+  return String.fromCharCode(65 + (index % 26));
+}
+
+function normalizeCell(raw: unknown, rowIndex: number, colIndex: number): InstaCalcCell {
+  const rec = asRecord(raw);
+  const key = asString(rec.key) || `${columnLabel(colIndex)}${rowIndex + 1}`;
+  const expr = asString(rec.expr);
+  const rawVal = rec.val;
+  const val = typeof rawVal === "string" || typeof rawVal === "number" ? rawVal : "";
+
+  return {
+    className: asString(rec.className) || undefined,
+    color: asString(rec.color) || undefined,
+    expr,
+    hidden: asBool(rec.hidden),
+    key,
+    readOnly: asBool(rec.readOnly),
+    textColor: asString(rec.textColor) || undefined,
+    val,
+  };
+}
+
+function normalizeGrid(value: unknown): InstaCalcCell[][] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .filter((row) => Array.isArray(row))
+    .map((row, rowIndex) =>
+      (row as unknown[]).map((cell, colIndex) => normalizeCell(cell, rowIndex, colIndex))
+    );
+}
+
 // ─── Formula Evaluator ───────────────────────────────────────────────────────
 
 function evaluateFormula(
@@ -89,9 +137,21 @@ function getCellClasses(color?: string): string {
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function InstaCalc({ data }: { data: InstaCalcData }) {
-  const [values, setValues] = useState<Record<string, string | number>>(() =>
-    initValues(data.data)
+  const grid = normalizeGrid((data as unknown as Record<string, unknown>)?.data);
+  const safeCols = Math.max(
+    1,
+    asNumber((data as unknown as Record<string, unknown>)?.cols, 0) ||
+      grid.reduce((max, row) => Math.max(max, row.length), 0)
   );
+  const safeTitle = asString((data as unknown as Record<string, unknown>)?.title);
+
+  const [values, setValues] = useState<Record<string, string | number>>(() =>
+    initValues(grid)
+  );
+
+  useEffect(() => {
+    setValues(initValues(grid));
+  }, [grid]);
 
   // Recompute all formula cells whenever values change
   const recompute = useCallback(
@@ -101,7 +161,7 @@ export default function InstaCalc({ data }: { data: InstaCalcData }) {
       // Iterate to resolve chained formulas
       while (changed) {
         changed = false;
-        data.data.flat().forEach((cell) => {
+        grid.flat().forEach((cell) => {
           if (isFormula(cell.expr)) {
             const result = evaluateFormula(cell.expr, next);
             if (next[cell.key] !== result) {
@@ -113,7 +173,7 @@ export default function InstaCalc({ data }: { data: InstaCalcData }) {
       }
       return next;
     },
-    [data.data]
+    [grid]
   );
 
   // Run once on mount to resolve initial formulas
@@ -131,18 +191,18 @@ export default function InstaCalc({ data }: { data: InstaCalcData }) {
   return (
     <div className="max-w-4xl mx-auto px-6 py-2">
       {/* Title */}
-      {data.title && (
+      {safeTitle && (
         <h3 className="text-center text-lg font-bold text-gray-900 dark:text-gray-100 mb-4">
-          {data.title}
+          {safeTitle}
         </h3>
       )}
 
       {/* Grid */}
       <div
         className="border border-gray-200 dark:border-gray-700 rounded overflow-hidden"
-        style={{ display: "grid", gridTemplateColumns: `repeat(${data.cols}, 1fr)` }}
+        style={{ display: "grid", gridTemplateColumns: `repeat(${safeCols}, 1fr)` }}
       >
-        {data.data.map((row) =>
+        {grid.map((row) =>
           row.map((cell) => {
             if (cell.hidden) return null;
 

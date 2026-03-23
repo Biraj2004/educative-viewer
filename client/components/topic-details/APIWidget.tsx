@@ -57,6 +57,89 @@ interface ApiResponse {
   size: number;
 }
 
+function asRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" ? (value as Record<string, unknown>) : {};
+}
+
+function asString(value: unknown): string {
+  return typeof value === "string" ? value : "";
+}
+
+function asNumber(value: unknown, fallback = 0): number {
+  return typeof value === "number" && Number.isFinite(value) ? value : fallback;
+}
+
+function asArray<T = unknown>(value: unknown): T[] {
+  return Array.isArray(value) ? (value as T[]) : [];
+}
+
+function normalizeParams(value: unknown): RequestParam[] {
+  return asArray(value).map((v) => {
+    const rec = asRecord(v);
+    return { key: asString(rec.key), value: asString(rec.value) };
+  });
+}
+
+function normalizeHeaders(value: unknown): RequestHeader[] {
+  return asArray(value).map((v) => {
+    const rec = asRecord(v);
+    return { key: asString(rec.key), value: asString(rec.value) };
+  });
+}
+
+function normalizeRequest(value: unknown): ApiRequest {
+  const rec = asRecord(value);
+  const bodyRec = asRecord(rec.body);
+  return {
+    body: {
+      content_type: asString(bodyRec.content_type) || asString(bodyRec.contentType) || "None",
+      value: asString(bodyRec.value),
+    },
+    headers: normalizeHeaders(rec.headers),
+    method: asString(rec.method) || "GET",
+    parameters: normalizeParams(rec.parameters ?? rec.params ?? rec.queryParams),
+    url: asString(rec.url),
+  };
+}
+
+function normalizeCollectionItem(value: unknown, index: number): CollectionItem {
+  const rec = asRecord(value);
+  return {
+    id: asString(rec.id) || `item-${index}`,
+    name: asString(rec.name) || `Request ${index + 1}`,
+    request: normalizeRequest(rec.request),
+    type: asString(rec.type),
+  };
+}
+
+function normalizeCollections(value: unknown): Collection[] {
+  return asArray(value).map((collection, cIndex) => {
+    const rec = asRecord(collection);
+    const items = asArray(rec.items).map((item, i) => normalizeCollectionItem(item, i));
+    return {
+      id: asString(rec.id) || `collection-${cIndex}`,
+      name: asString(rec.name) || `Collection ${cIndex + 1}`,
+      items,
+      type: asString(rec.type),
+    };
+  });
+}
+
+function normalizeApiWidgetData(input: unknown): ApiWidgetData {
+  const root = asRecord(input);
+  const content = asRecord(root.content);
+  const source = Array.isArray(content.collections) ? content : root;
+  const rec = asRecord(source);
+
+  return {
+    comp_id: asString(rec.comp_id),
+    caption: asString(rec.caption),
+    collections: normalizeCollections(rec.collections),
+    primaryRequestId: asString(rec.primaryRequestId),
+    version: asNumber(rec.version),
+  };
+}
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 const METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE"];
@@ -86,8 +169,9 @@ function formatSize(bytes: number) {
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function APIWidget({ data }: { data: ApiWidgetData }) {
-  const allItems = flattenItems(data.collections);
-  const primary = allItems.find((i) => i.id === data.primaryRequestId) ?? allItems[0];
+  const safeData = normalizeApiWidgetData(data);
+  const allItems = flattenItems(safeData.collections);
+  const primary = allItems.find((i) => i.id === safeData.primaryRequestId) ?? allItems[0];
 
   const [selectedId, setSelectedId] = useState(primary?.id ?? "");
   const [activeTab, setActiveTab] = useState<"Parameters" | "Headers" | "Body">("Parameters");
@@ -108,7 +192,7 @@ export default function APIWidget({ data }: { data: ApiWidgetData }) {
     setResponse(null);
     const start = Date.now();
     try {
-      const target = new URL(url);
+      const target = new URL(url, window.location.origin);
       req.parameters.forEach((p) => { if (p.key) target.searchParams.set(p.key, p.value); });
       const headers: Record<string, string> = {};
       req.headers.forEach((h) => { if (h.key) headers[h.key] = h.value; });
@@ -343,8 +427,8 @@ export default function APIWidget({ data }: { data: ApiWidgetData }) {
       </div>
 
       {/* Caption */}
-      {data.caption && (
-        <p className="text-center text-sm text-gray-500 mt-3">{data.caption}</p>
+      {safeData.caption && (
+        <p className="text-center text-sm text-gray-500 mt-3">{safeData.caption}</p>
       )}
     </div>
   );

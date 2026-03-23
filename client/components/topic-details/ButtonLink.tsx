@@ -12,13 +12,21 @@ export interface ButtonLinkData {
   loginRequired?: boolean;
 }
 
+function asString(value: unknown): string {
+  return typeof value === "string" ? value : "";
+}
+
 export default function ButtonLink({ data }: { data: ButtonLinkData }) {
-  const isPrimary = data.buttonType === "Primary";
+  const safeUrl = asString((data as unknown as Record<string, unknown>)?.url) || "#";
+  const safeButtonText = asString((data as unknown as Record<string, unknown>)?.buttonText) || "Open link";
+  const safeButtonType = asString((data as unknown as Record<string, unknown>)?.buttonType);
+  const isPrimary = safeButtonType === "Primary";
+  const safeLoginRequired = !!(data as unknown as Record<string, unknown>)?.loginRequired;
   const [loading, setLoading] = useState(false);
 
   const handleClick = async (e: React.MouseEvent<HTMLAnchorElement>) => {
     // If it's an API route for download, handle it via fetch to inject Auth Headers
-    if (data.url.startsWith("/api")) {
+    if (safeUrl.startsWith("/api")) {
       e.preventDefault();
       if (loading) return;
       setLoading(true);
@@ -30,7 +38,7 @@ export default function ButtonLink({ data }: { data: ButtonLinkData }) {
 
         // Fallback to absolute backend URL if needed, depending on mapping
         const backendBase = getBackendApiBase();
-        const targetUrl = data.url.startsWith("/") ? `${backendBase}${data.url}` : data.url;
+        const targetUrl = safeUrl.startsWith("/") ? `${backendBase}${safeUrl}` : safeUrl;
 
         const res = await fetch(targetUrl, { headers });
         if (!res.ok) throw new Error("API request failed");
@@ -45,7 +53,7 @@ export default function ButtonLink({ data }: { data: ButtonLinkData }) {
         if (disposition && disposition.includes("filename=")) {
           filename = disposition.split("filename=")[1].replace(/"/g, "");
         } else {
-          const parts = data.url.split("/");
+          const parts = safeUrl.split("/");
           const last = parts.pop();
           if (last && last !== "download") filename = last;
         }
@@ -58,7 +66,7 @@ export default function ButtonLink({ data }: { data: ButtonLinkData }) {
       } catch (err) {
         console.error("ButtonLink download error:", err);
         // Fallback if fetch fails (e.g. CORS issues, missing proxy)
-        window.open(data.url, "_blank");
+        window.open(safeUrl, "_blank");
       } finally {
         setLoading(false);
       }
@@ -68,7 +76,7 @@ export default function ButtonLink({ data }: { data: ButtonLinkData }) {
   return (
     <div className="w-full flex justify-center py-4">
       <a
-        href={data.url}
+        href={safeUrl}
         onClick={handleClick}
         target="_blank"
         rel="noopener noreferrer"
@@ -80,8 +88,8 @@ export default function ButtonLink({ data }: { data: ButtonLinkData }) {
             : "bg-white text-gray-700 hover:bg-gray-50 border-gray-300 dark:bg-gray-800 dark:text-gray-200 dark:border-gray-700 dark:hover:bg-gray-700"
         }`}
       >
-        {loading ? "Processing..." : data.buttonText}
-        {data.loginRequired && !loading && (
+        {loading ? "Processing..." : safeButtonText}
+        {safeLoginRequired && !loading && (
           <span className="inline-flex items-center opacity-75" title="Login Required">
             <LockIcon />
           </span>

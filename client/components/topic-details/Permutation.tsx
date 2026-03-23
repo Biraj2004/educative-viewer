@@ -32,6 +32,74 @@ export interface PermutationData {
   version: string;
 }
 
+function asRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" ? (value as Record<string, unknown>) : {};
+}
+
+function asString(value: unknown): string {
+  return typeof value === "string" ? value : "";
+}
+
+function asBool(value: unknown, fallback = false): boolean {
+  return typeof value === "boolean" ? value : fallback;
+}
+
+function asNumber(value: unknown, fallback = 0): number {
+  return typeof value === "number" && Number.isFinite(value) ? value : fallback;
+}
+
+function normalizeOption(raw: unknown, index: number): PermutationOption {
+  const rec = asRecord(raw);
+  const content = asRecord(rec.content);
+  const mdhtml =
+    asString(content.mdhtml) ||
+    asString(content.mdHtml) ||
+    asString(content.html) ||
+    asString(content.data) ||
+    asString(rec.text);
+
+  return {
+    blockType: asString(rec.blockType),
+    content: {
+      data: asString(content.data),
+      mdhtml,
+    },
+    duplicateBlockCount: asNumber(rec.duplicateBlockCount),
+    hashid: asString(rec.hashid) || `opt-${index}`,
+    linkedTo: asString(rec.linkedTo) || null,
+    locked: asBool(rec.locked),
+    maxRedemptionOfBlock: asNumber(rec.maxRedemptionOfBlock),
+    position: typeof rec.position === "number" ? rec.position : null,
+  };
+}
+
+function normalizePermutationData(input: unknown): PermutationData {
+  const root = asRecord(input);
+  const content = asRecord(root.content);
+  const source = Array.isArray(content.options) || Array.isArray(content.protected_content) ? content : root;
+  const rec = asRecord(source);
+
+  const options = (Array.isArray(rec.options) ? rec.options : []).map((opt, i) => normalizeOption(opt, i));
+  const protectedRaw =
+    (Array.isArray(rec.protected_content) ? rec.protected_content : null) ??
+    (Array.isArray(rec.protectedContent) ? rec.protectedContent : []);
+  const protectedContent = protectedRaw.map((v) => asString(v)).filter((v) => v.length > 0);
+
+  return {
+    alignment: asString(rec.alignment),
+    comp_id: asString(rec.comp_id),
+    disableReset: asBool(rec.disableReset),
+    disableSolution: asBool(rec.disableSolution),
+    disableSubmit: asBool(rec.disableSubmit),
+    numberOfQuestionBlock: Math.max(0, asNumber(rec.numberOfQuestionBlock, options.length)),
+    options,
+    protected_content: protectedContent,
+    question_statement: asString(rec.question_statement) || asString(rec.questionStatement) || "Arrange in order",
+    showOptions: "showOptions" in rec ? asBool(rec.showOptions, true) : true,
+    version: asString(rec.version),
+  };
+}
+
 // drag source: hashid being dragged + where it came from (null = pool, number = slot index)
 interface DragSource {
   hashid: string;
@@ -56,8 +124,13 @@ function inlineHtml(mdhtml: string): string {
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function Permutation({ data }: { data: PermutationData }) {
+  const safeData = useMemo(() => normalizePermutationData(data), [data]);
+  const optionsSignature = useMemo(
+    () => safeData.options.map((o) => `${o.hashid}:${o.content.mdhtml}`).join("|"),
+    [safeData.options]
+  );
   const [slots, setSlots] = useState<(string | null)[]>(
-    Array(data.numberOfQuestionBlock).fill(null)
+    Array(safeData.numberOfQuestionBlock).fill(null)
   );
   const [selectedHashid, setSelectedHashid] = useState<string | null>(null);
   const [submitted, setSubmitted] = useState(false);
@@ -66,19 +139,19 @@ export default function Permutation({ data }: { data: PermutationData }) {
 
   const dragSource = useRef<DragSource | null>(null);
 
-  const [shuffledOptions, setShuffledOptions] = useState<PermutationOption[]>(data.options);
+  const [shuffledOptions, setShuffledOptions] = useState<PermutationOption[]>(safeData.options);
   useEffect(() => {
-    setShuffledOptions(shuffle(data.options));
-  }, [data.options]);
+    setShuffledOptions(shuffle(safeData.options));
+  }, [optionsSignature]);
 
   const optionMap = useMemo(() => {
     const m: Record<string, PermutationOption> = {};
-    data.options.forEach((o) => { m[o.hashid] = o; });
+    safeData.options.forEach((o) => { m[o.hashid] = o; });
     return m;
-  }, [data.options]);
+  }, [safeData.options]);
 
   const activeSlots = showSolution
-    ? data.protected_content.slice(0, data.numberOfQuestionBlock)
+    ? safeData.protected_content.slice(0, safeData.numberOfQuestionBlock)
     : slots;
 
   const placedHashids = new Set(activeSlots.filter(Boolean) as string[]);
@@ -186,7 +259,7 @@ export default function Permutation({ data }: { data: PermutationData }) {
   // ── Controls ──────────────────────────────────────────────────────────────
 
   function handleReset() {
-    setSlots(Array(data.numberOfQuestionBlock).fill(null));
+    setSlots(Array(safeData.numberOfQuestionBlock).fill(null));
     setSelectedHashid(null);
     setSubmitted(false);
     setShowSolution(false);
@@ -206,7 +279,7 @@ export default function Permutation({ data }: { data: PermutationData }) {
   }
 
   const score = submitted
-    ? activeSlots.filter((h, i) => h === data.protected_content[i]).length
+    ? activeSlots.filter((h, i) => h === safeData.protected_content[i]).length
     : null;
 
   const allFilled = slots.every((s) => s !== null);
@@ -219,18 +292,18 @@ export default function Permutation({ data }: { data: PermutationData }) {
         {/* Header */}
         <div className="px-6 py-4 border-b border-gray-100 dark:border-gray-700">
           <p className="text-xs font-semibold text-indigo-500 uppercase tracking-wider mb-1">Arrange in order</p>
-          <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100">{data.question_statement}</h3>
+          <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100">{safeData.question_statement}</h3>
         </div>
 
         <div className="px-6 pt-4 pb-2 space-y-5">
 
           {/* Answer slots */}
           <div className="space-y-2">
-            {Array.from({ length: data.numberOfQuestionBlock }, (_, i) => {
+            {Array.from({ length: safeData.numberOfQuestionBlock }, (_, i) => {
               const hashid = activeSlots[i];
               const option = hashid ? optionMap[hashid] : null;
-              const isCorrect = submitted && hashid === data.protected_content[i];
-              const isWrong = submitted && !!hashid && hashid !== data.protected_content[i];
+              const isCorrect = submitted && hashid === safeData.protected_content[i];
+              const isWrong = submitted && !!hashid && hashid !== safeData.protected_content[i];
               const isDragOver = dragOverTarget === i;
 
               return (
@@ -298,7 +371,7 @@ export default function Permutation({ data }: { data: PermutationData }) {
           </div>
 
           {/* Options pool */}
-          {data.showOptions && !showSolution && (
+          {safeData.showOptions && !showSolution && (
             <div
               className="pt-1"
               onDragOver={interactive ? onDragOverPool : undefined}
@@ -346,13 +419,13 @@ export default function Permutation({ data }: { data: PermutationData }) {
           <div className="mx-6 mt-2 mb-1 rounded-lg py-2 text-sm text-center bg-gray-50 dark:bg-gray-800 border border-gray-100 dark:border-gray-700 text-gray-600 dark:text-gray-400">
             You got{" "}
             <span className="font-semibold text-indigo-600 dark:text-indigo-400">{score}</span>
-            {" "}/ {data.numberOfQuestionBlock} in the correct position.
+            {" "}/ {safeData.numberOfQuestionBlock} in the correct position.
           </div>
         )}
 
         {/* Footer */}
         <div className="px-6 py-4 border-t border-gray-100 dark:border-gray-700 flex items-center justify-between mt-2">
-          {!data.disableReset ? (
+          {!safeData.disableReset ? (
             <button
               onClick={handleReset}
               className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200 transition-colors cursor-pointer"
@@ -366,7 +439,7 @@ export default function Permutation({ data }: { data: PermutationData }) {
           ) : <div />}
 
           <div className="flex gap-2">
-            {!data.disableSolution && (
+            {!safeData.disableSolution && (
               <button
                 onClick={handleShowSolution}
                 className="px-4 py-2 rounded-lg border border-gray-200 dark:border-gray-600 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors cursor-pointer"
@@ -374,7 +447,7 @@ export default function Permutation({ data }: { data: PermutationData }) {
                 {showSolution ? "Hide Solution" : "Show Solution"}
               </button>
             )}
-            {!data.disableSubmit && (
+            {!safeData.disableSubmit && (
               <button
                 onClick={handleSubmit}
                 disabled={submitted || !allFilled}

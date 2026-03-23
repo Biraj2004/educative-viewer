@@ -21,6 +21,53 @@ export interface StructuredQuizData {
   version: string;
 }
 
+function asRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" ? (value as Record<string, unknown>) : {};
+}
+
+function asString(value: unknown): string {
+  return typeof value === "string" ? value : "";
+}
+
+function asArray<T = unknown>(value: unknown): T[] {
+  return Array.isArray(value) ? (value as T[]) : [];
+}
+
+function normalizeQuestion(raw: unknown): StructuredQuestion {
+  const rec = asRecord(raw);
+  const questionText = asString(rec.questionText) || asString(rec.text) || asString(rec.prompt);
+  const questionTextHtml = asString(rec.questionTextHtml) || asString(rec.questionMdHtml) || questionText;
+  const answerText = asString(rec.answerText) || asString(rec.answer) || asString(rec.explanation);
+  const answerTextHtml =
+    asString(rec.answerTextHtml) ||
+    asString(asRecord(rec.explanation).mdHtml) ||
+    asString(asRecord(rec.explanation).html) ||
+    answerText;
+
+  return {
+    answerText,
+    answerTextHtml,
+    questionText,
+    questionTextHtml,
+  };
+}
+
+function normalizeStructuredQuizData(input: unknown): StructuredQuizData {
+  const root = asRecord(input);
+  const content = asRecord(root.content);
+  const source = asArray(content.questions).length > 0 ? content : root;
+  const rec = asRecord(source);
+
+  return {
+    comp_id: asString(rec.comp_id),
+    questions: asArray(rec.questions).map((q) => normalizeQuestion(q)),
+    renderMode: asString(rec.renderMode),
+    title: asString(rec.title),
+    titleMdHtml: asString(rec.titleMdHtml) || asString(rec.title),
+    version: asString(rec.version),
+  };
+}
+
 // ─── Icons ────────────────────────────────────────────────────────────────────
 
 function ChevronUp() {
@@ -108,8 +155,19 @@ function QuestionRow({
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export default function StructuredQuiz({ data }: { data: StructuredQuizData }) {
+  const safeData = normalizeStructuredQuizData(data);
   const [currentIndex, setCurrentIndex] = useState(0);
-  const total = data.questions.length;
+  const total = safeData.questions.length;
+
+  if (total === 0) {
+    return (
+      <div className="max-w-4xl mx-auto px-4 py-4">
+        <div className="rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm bg-white dark:bg-gray-900 px-6 py-5 text-sm text-gray-600 dark:text-gray-300">
+          No structured quiz questions available.
+        </div>
+      </div>
+    );
+  }
 
   const canGoPrev = currentIndex > 0;
   const canGoNext = currentIndex < total - 1;
@@ -142,18 +200,18 @@ export default function StructuredQuiz({ data }: { data: StructuredQuizData }) {
     <div className="max-w-4xl mx-auto px-4 py-4">
       <div className="rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden bg-white dark:bg-gray-900">
         {/* Title (only if non-empty) */}
-        {data.titleMdHtml && (
+        {safeData.titleMdHtml && (
           <div className="bg-indigo-50 dark:bg-indigo-950/50 border-b border-gray-200 dark:border-gray-700 px-6 py-3">
             <div
               className="sq-title font-semibold text-gray-800 dark:text-gray-200 text-sm [&_p]:m-0"
-              dangerouslySetInnerHTML={{ __html: data.titleMdHtml }}
+              dangerouslySetInnerHTML={{ __html: safeData.titleMdHtml }}
             />
           </div>
         )}
 
         <QuestionRow
           key={currentIndex}
-          question={data.questions[currentIndex]}
+          question={safeData.questions[currentIndex]}
           index={currentIndex}
           showNumber={total > 1}
         />
