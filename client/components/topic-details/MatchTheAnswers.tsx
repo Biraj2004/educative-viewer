@@ -28,8 +28,8 @@ interface RawMatchSide {
 }
 
 interface RawMatchPair {
-  left: RawMatchSide;
-  right: RawMatchSide;
+  left?: RawMatchSide;
+  right?: RawMatchSide;
   explanation?: string;
 }
 
@@ -50,28 +50,35 @@ export interface MatchTheAnswersData {
 // ─── Normalizer ───────────────────────────────────────────────────────────────
 
 function normalizeMatchData(raw: MatchTheAnswersData): NormalizedMatchData {
-  const pairs = raw.content.statements[0] ?? [];
+  const pairs = raw.content?.statements?.[0] ?? [];
+
+  const getSideText = (side?: RawMatchSide | null): string => {
+    return typeof side?.text === "string" ? side.text : "";
+  };
 
   // Left items (statements)
   const statements: MatchItem[] = pairs.map((p, i) => ({
     id: `L${i}`,
-    text: p.left.text,
+    text: getSideText(p?.left),
   }));
 
-  // Right items (options) — same order as in the JSON; displayed as clickable targets.
-  // The solution tells us which right item each left item should match.
-  const options: MatchItem[] = pairs.map((p, i) => ({
-    id: `R${i}`,
-    text: p.right.text,
-  }));
+  // Right items can be fewer than left statements and reused by multiple statements.
+  const options: MatchItem[] = pairs
+    .map((p) => getSideText(p?.right))
+    .filter((text) => text.length > 0)
+    .map((text, i) => ({
+      id: `R${i}`,
+      text,
+    }));
 
   // Build solution map: statementId → optionId
   // answers[0][i] is the index of the correct right item for left[i]
-  const answerRow = (raw.actualAnswers?.answers ?? raw.protectedContent?.answers ?? [[]])[0];
+  const answerGroups = raw.actualAnswers?.answers ?? raw.protectedContent?.answers ?? [];
+  const answerRow = Array.isArray(answerGroups[0]) ? answerGroups[0] : [];
   const solution: Record<string, string> = {};
   statements.forEach((stmt, i) => {
     const correctRightIdx = answerRow[i];
-    if (correctRightIdx !== undefined) {
+    if (typeof correctRightIdx === "number" && correctRightIdx >= 0 && correctRightIdx < options.length) {
       solution[stmt.id] = `R${correctRightIdx}`;
     }
   });
@@ -158,9 +165,7 @@ export default function MatchTheAnswers({ data: rawData }: { data: MatchTheAnswe
     if (submitted || showSolution || !selectedLeft) return;
     setConnections((prev) => {
       const next = { ...prev };
-      // Remove any left item already connected to this right option
-      Object.keys(next).forEach((k) => { if (next[k] === optionId) delete next[k]; });
-      // Toggle: disconnect if already connected, else connect
+      // Toggle currently selected left connection.
       if (next[selectedLeft] === optionId) delete next[selectedLeft];
       else next[selectedLeft] = optionId;
       return next;
@@ -221,45 +226,53 @@ export default function MatchTheAnswers({ data: rawData }: { data: MatchTheAnswe
 
           {/* Items */}
           <div className="grid gap-3" style={{ gridTemplateColumns: "5fr 3fr 5fr" }}>
-            {data.statements.map((stmt, i) => {
+            {Array.from({ length: Math.max(data.statements.length, data.options.length) }).map((_, i) => {
+              const stmt = data.statements[i];
               const option = data.options[i];
-              const isSelectedLeft = selectedLeft === stmt.id;
-              const isConnected = !!activeConnections[stmt.id];
-              const isCorrect = submitted && data.solution[stmt.id] === connections[stmt.id];
-              const isWrong = submitted && !!connections[stmt.id] && !isCorrect;
+              if (!stmt && !option) return null;
+
+              const statementId = stmt?.id;
+              const isSelectedLeft = statementId ? selectedLeft === statementId : false;
+              const isConnected = statementId ? !!activeConnections[statementId] : false;
+              const isCorrect = statementId ? submitted && data.solution[statementId] === connections[statementId] : false;
+              const isWrong = statementId ? submitted && !!connections[statementId] && !isCorrect : false;
               const rightConnected = option
                 ? Object.values(activeConnections).includes(option.id)
                 : false;
 
               return (
-                <React.Fragment key={stmt.id}>
+                <React.Fragment key={stmt?.id ?? option?.id ?? i}>
                   {/* Left statement */}
-                  <div
-                    ref={(el) => { leftRefs.current[i] = el; }}
-                    onClick={() => handleLeftClick(stmt.id)}
-                    className={[
-                      "rounded-lg border-2 px-4 py-3 min-h-16 flex flex-col justify-center transition-all duration-150",
-                      !submitted && !showSolution ? "cursor-pointer" : "cursor-default",
-                      isSelectedLeft
-                        ? "border-indigo-400 bg-indigo-50 dark:bg-indigo-900/30 shadow-sm"
-                        : submitted
-                          ? isCorrect
-                            ? "border-emerald-300 dark:border-emerald-700 bg-emerald-50 dark:bg-emerald-900/30"
-                            : isWrong
-                              ? "border-red-300 dark:border-red-700 bg-red-50 dark:bg-red-900/30"
-                              : "border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800"
-                          : isConnected
-                            ? "border-indigo-200 dark:border-indigo-700 bg-indigo-50/40 dark:bg-indigo-900/20"
-                            : "border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 hover:border-indigo-200",
-                    ].join(" ")}
-                  >
-                    <span className="text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-1">
-                      {stmt.id}
-                    </span>
-                    <span className="text-sm font-mono text-rose-500 wrap-break-word leading-snug">
-                      {stmt.text}
-                    </span>
-                  </div>
+                  {stmt ? (
+                    <div
+                      ref={(el) => { leftRefs.current[i] = el; }}
+                      onClick={() => handleLeftClick(stmt.id)}
+                      className={[
+                        "rounded-lg border-2 px-4 py-3 min-h-16 flex flex-col justify-center transition-all duration-150",
+                        !submitted && !showSolution ? "cursor-pointer" : "cursor-default",
+                        isSelectedLeft
+                          ? "border-indigo-400 bg-indigo-50 dark:bg-indigo-900/30 shadow-sm"
+                          : submitted
+                            ? isCorrect
+                              ? "border-emerald-300 dark:border-emerald-700 bg-emerald-50 dark:bg-emerald-900/30"
+                              : isWrong
+                                ? "border-red-300 dark:border-red-700 bg-red-50 dark:bg-red-900/30"
+                                : "border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800"
+                            : isConnected
+                              ? "border-indigo-200 dark:border-indigo-700 bg-indigo-50/40 dark:bg-indigo-900/20"
+                              : "border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 hover:border-indigo-200",
+                      ].join(" ")}
+                    >
+                      <span className="text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-1">
+                        {stmt.id}
+                      </span>
+                      <span className="text-sm font-mono text-rose-500 wrap-break-word leading-snug">
+                        {stmt.text}
+                      </span>
+                    </div>
+                  ) : (
+                    <div className="min-h-16" />
+                  )}
 
                   {/* Middle spacer — SVG lines drawn here via absolute overlay */}
                   <div />
@@ -270,11 +283,13 @@ export default function MatchTheAnswers({ data: rawData }: { data: MatchTheAnswe
                       ref={(el) => { rightRefs.current[i] = el; }}
                       onClick={() => handleRightClick(option.id)}
                       className={[
-                        "rounded-lg border px-4 py-3 min-h-16 flex items-center transition-all duration-150",
+                        "rounded-lg border px-4 py-3 min-h-16 flex items-center transition-all duration-150 border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800",
                         !submitted && !showSolution && selectedLeft
-                          ? "cursor-pointer border-gray-200 dark:border-gray-600 hover:border-indigo-300 hover:bg-indigo-50/40 dark:hover:bg-indigo-900/20"
-                          : "cursor-default border-transparent",
-                        rightConnected && !submitted && !showSolution ? "bg-indigo-50/20 dark:bg-indigo-900/20" : "",
+                          ? "cursor-pointer hover:border-indigo-300 hover:bg-indigo-50/40 dark:hover:bg-indigo-900/20"
+                          : "cursor-default",
+                        rightConnected && !submitted && !showSolution
+                          ? "ring-1 ring-indigo-300/70 dark:ring-indigo-700/70 bg-indigo-50/30 dark:bg-indigo-900/20"
+                          : "",
                       ].join(" ")}
                     >
                       <span className="text-sm text-gray-700 dark:text-gray-300 leading-snug">{option.text}</span>
