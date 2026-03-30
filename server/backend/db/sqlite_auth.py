@@ -62,6 +62,7 @@ class SQLiteAuthDatabase:
                     avatar TEXT,
                     role_id INTEGER NOT NULL DEFAULT 1 REFERENCES roles(id),
                     is_active INTEGER NOT NULL DEFAULT 1,
+                    is_first_login INTEGER NOT NULL DEFAULT 0,
                     two_factor_enabled INTEGER NOT NULL DEFAULT 0,
                     login_ip_log TEXT,
                     theme TEXT NOT NULL DEFAULT 'light',
@@ -83,7 +84,11 @@ class SQLiteAuthDatabase:
                     session_id TEXT,
                     last_login_ip TEXT,
                     last_login_at TEXT,
-                    current_token TEXT
+                    current_token TEXT,
+                    failed_attempts INTEGER NOT NULL DEFAULT 0,
+                    locked_until TEXT,
+                    temp_password_expires_at TEXT,
+                    onboarding_temp_password_hash TEXT
                 )
                 """
             )
@@ -125,15 +130,40 @@ class SQLiteAuthDatabase:
         finally:
             conn.close()
 
+    def ensure_first_login_columns(self) -> None:
+        """Lazily add first-login security columns if they don't exist yet."""
+        conn = self.get_connection()
+        try:
+            for sql in [
+                "ALTER TABLE users ADD COLUMN is_first_login INTEGER NOT NULL DEFAULT 0",
+                "ALTER TABLE users_sensitive ADD COLUMN failed_attempts INTEGER NOT NULL DEFAULT 0",
+                "ALTER TABLE users_sensitive ADD COLUMN locked_until TEXT",
+                "ALTER TABLE users_sensitive ADD COLUMN temp_password_expires_at TEXT",
+                "ALTER TABLE users_sensitive ADD COLUMN onboarding_temp_password_hash TEXT",
+            ]:
+                try:
+                    conn.execute(sql)
+                    conn.commit()
+                except sqlite3.OperationalError:
+                    pass  # Column already exists
+        finally:
+            conn.close()
+
     def get_all_users(self) -> list[sqlite3.Row]:
         self.ensure_is_active_column()
+        self.ensure_first_login_columns()
         conn = self.get_connection()
         try:
             return conn.execute(
                 """
-                SELECT u.id, u.email, u.name, u.username, u.role_id, r.name as role_name, u.is_active, u.created_at
+                SELECT u.id, u.email, u.name, u.username, u.role_id, r.name as role_name,
+                       u.is_active, u.created_at, u.two_factor_enabled,
+                       COALESCE(u.is_first_login, 0) as is_first_login,
+                       COALESCE(s.failed_attempts, 0) as failed_attempts,
+                       s.locked_until
                 FROM users u
                 JOIN roles r ON u.role_id = r.id
+                LEFT JOIN users_sensitive s ON s.user_id = u.id
                 ORDER BY u.id
                 """
             ).fetchall()
@@ -155,3 +185,85 @@ class SQLiteAuthDatabase:
 
     def is_integrity_error(self, exc: Exception) -> bool:
         return isinstance(exc, sqlite3.IntegrityError)
+
+    def create_user(
+        self,
+        email: str,
+        name: str | None,
+        role_id: int,
+        password_hash: str,
+        temp_password_expires_at: str,
+    ) -> int:
+        """Create an admin-provisioned user with a temporary password. Returns the new user id."""
+        self.ensure_first_login_columns()
+        conn = self.get_connection()
+        try:
+            cur = conn.execute(
+                "INSERT INTO users (email, name, role_id, is_first_login, two_factor_enabled) VALUES (?, ?, ?, 1, 1)",
+                (email, name, role_id),
+            )
+            user_id = cur.lastrowid
+            conn.execute(
+                "INSERT INTO users_sensitive (user_id, password_hash, temp_password_expires_at, onboarding_temp_password_hash) "
+                "VALUES (?, ?, ?, ?)",
+                (user_id, password_hash, temp_password_expires_at, password_hash),
+            )
+            conn.commit()
+            return user_id
+        finally:
+            conn.close()
+
+    def update_user_profile(self, user_id: int, name: str | None, email: str) -> bool:
+        """Update a user's display name and email."""
+        conn = self.get_connection()
+        try:
+            cur = conn.execute(
+                "UPDATE users SET name = ?, email = ? WHERE id = ?",
+                (name, email, user_id),
+            )
+            conn.commit()
+            return cur.rowcount > 0
+        finally:
+            conn.close()
+
+    def delete_user(self, user_id: int) -> bool:
+        """Delete a user and all cascaded rows (sensitive data, progress)."""
+        conn = self.get_connection()
+        try:
+            cur = conn.execute("DELETE FROM users WHERE id = ?", (user_id,))
+            conn.commit()
+            return cur.rowcount > 0
+        finally:
+            conn.close()
+
+    def reset_user_password(
+        self,
+        user_id: int,
+        password_hash: str,
+        temp_password_expires_at: str,
+    ) -> bool:
+        """Overwrite the password, re-arm the first-login flag, and reset 2FA & lockout."""
+        self.ensure_first_login_columns()
+        conn = self.get_connection()
+        try:
+            conn.execute(
+                "UPDATE users SET is_first_login = 1, two_factor_enabled = 1 WHERE id = ?",
+                (user_id,),
+            )
+            conn.execute(
+                "UPDATE users_sensitive "
+                "SET password_hash = :pw_hash, temp_password_expires_at = :exp, "
+                "onboarding_temp_password_hash = :pw_hash, "
+                "two_factor_confirmed = 0, two_factor_secret = NULL, "
+                "failed_attempts = 0, locked_until = NULL "
+                "WHERE user_id = :user_id",
+                {
+                    "pw_hash": password_hash,
+                    "exp": temp_password_expires_at,
+                    "user_id": user_id,
+                },
+            )
+            conn.commit()
+            return True
+        finally:
+            conn.close()

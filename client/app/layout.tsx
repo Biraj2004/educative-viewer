@@ -4,7 +4,7 @@ import "./globals.css";
 import { getTheme } from "@/utils/theme";
 import NavigationEvents from "@/components/edu-viewer/NavigationEvents";
 import NavProgressBar from "@/components/edu-viewer/NavProgressBar";
-// import AuthFlowGuard from "@/components/edu-viewer/AuthFlowGuard";
+import AuthFlowGuard from "@/utils/AuthFlowGuard";
 import { BRAND_ICON_URL } from "@/utils/branding";
 import {
   RUNTIME_PUBLIC_ENV_KEYS,
@@ -55,7 +55,7 @@ export default async function RootLayout({
     >
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
         <script id="ev-runtime-config" dangerouslySetInnerHTML={{ __html: runtimeConfigScript }} />
-        {/* <AuthFlowGuard /> */}
+        <AuthFlowGuard />
         <NavigationEvents />
         <NavProgressBar />
         {children}

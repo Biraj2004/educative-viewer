@@ -10,9 +10,10 @@
  *   backend on the very next API call → the global 401 handler fires → sign-in page.
  */
 
-import { getBackendApiBase, getRsaPublicKey } from "@/utils/runtime-config";
-
-const BACKEND = getBackendApiBase();
+const BACKEND = (process.env.NEXT_PUBLIC_BACKEND_API_BASE ?? "").replace(
+  /\/$/,
+  "",
+);
 const API = `${BACKEND}/api/auth`;
 const LS_KEY = "ev_token";
 const IS_BROWSER = typeof window !== "undefined";
@@ -55,7 +56,7 @@ async function _importPem(pem: string): Promise<CryptoKey> {
 async function _getPublicKey(): Promise<CryptoKey> {
   if (_cachedPublicKey) return _cachedPublicKey;
 
-  const baked = getRsaPublicKey();
+  const baked = process.env.NEXT_PUBLIC_RSA_PUBLIC_KEY;
   if (baked) {
     _cachedPublicKey = await _importPem(baked);
     return _cachedPublicKey;
@@ -133,6 +134,48 @@ export function clearAuthToken(): void {
   localStorage.removeItem(LS_KEY);
 }
 
+export interface JwtPayload {
+  exp?: number;
+  restricted?: boolean;
+  scope?: string;
+  two_factor_pending?: boolean;
+  status?: string;
+  role?: string;
+  [key: string]: unknown;
+}
+
+export function parseAuthTokenPayload(token: string): JwtPayload | null {
+  try {
+    const base64Url = token.split(".")[1];
+    const base64 = base64Url.replace(/-/g, "+").replace(/_/g, "/");
+    return JSON.parse(window.atob(base64)) as JwtPayload;
+  } catch {
+    return null;
+  }
+}
+
+export function isRestrictedAuthFlow(payload: JwtPayload): boolean {
+  if (!payload) return false;
+  // If the JWT was issued specifically for a restricted flow (like 2FA waiting, pw reset)
+  // or lacks full access scopes.
+  return (
+    payload.restricted === true ||
+    payload.scope === "partial" ||
+    payload.partial === true ||
+    payload.two_factor_pending === true
+  );
+}
+
+export function canAccessDeactivatedPage(): boolean {
+  // Determine if the current user session is allowed to sit on the /deactivated page.
+  // We'll decode the current token and see if the token or local state marks them as deactivated.
+  const token = getAuthToken();
+  if (!token) return false;
+  const payload = parseAuthTokenPayload(token);
+  return payload?.status === "deactivated" || payload?.role === "deactivated";
+}
+
+
 // ─── Errors ──────────────────────────────────────────────────────────────────
 
 /** Carries the HTTP status so callers can react to specific status codes. */
@@ -164,6 +207,7 @@ export interface AuthUser {
   role: string;
   theme: "light" | "dark";
   twoFactorEnabled: boolean;
+  isFirstLogin?: boolean;
   createdAt: string;
   progress?: ProgressData;
 }
@@ -173,6 +217,7 @@ export interface AuthResponse {
   user?: AuthUser;
   requiresTwoFactor?: boolean;
   requiresTwoFactorSetup?: boolean;
+  requiresFirstLogin?: boolean;
   message?: string;
   error?: string;
 }
@@ -438,4 +483,96 @@ async function apiFetch(path: string, init: RequestInit): Promise<void> {
       res.status,
     );
   }
+}
+
+// ─── Admin CRUD helpers ───────────────────────────────────────────────────────
+
+const ADMIN_API = `${BACKEND}/api/admin`;
+
+export interface AdminUser {
+  id: number;
+  email: string;
+  name: string | null;
+  username: string | null;
+  role_id: number;
+  role_name: string;
+  is_active: boolean;
+  two_factor_enabled: boolean;
+  is_first_login: boolean;
+  failed_attempts: number;
+  locked_until: string | null;
+  created_at: string;
+}
+
+export interface AdminCreateResult {
+  success: boolean;
+  user_id: number;
+  email: string;
+  name: string | null;
+  role_id: number;
+  temp_password: string;
+  temp_password_expires_at: string;
+}
+
+export interface AdminResetResult {
+  success: boolean;
+  user_id: number;
+  temp_password: string;
+  temp_password_expires_at: string;
+}
+
+async function adminApiCall<T>(
+  path: string,
+  method: string,
+  body?: Record<string, unknown>,
+): Promise<T> {
+  const token = getAuthToken();
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  if (token) headers["Authorization"] = `Bearer ${token}`;
+  const res = await fetch(path, {
+    method,
+    headers,
+    body: body !== undefined ? JSON.stringify(body) : undefined,
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new ApiError(data?.error ?? data?.message ?? `Request failed (${res.status})`, res.status);
+  }
+  return data as T;
+}
+
+export async function adminGetUsers(): Promise<AdminUser[]> {
+  return adminApiCall<AdminUser[]>(`${ADMIN_API}/users`, "GET");
+}
+
+export async function adminCreateUser(
+  email: string,
+  name: string | null,
+  role_id: number,
+): Promise<AdminCreateResult> {
+  return adminApiCall<AdminCreateResult>(`${ADMIN_API}/users/create`, "POST", {
+    email,
+    name,
+    role_id,
+  });
+}
+
+export async function adminEditUser(
+  userId: number,
+  email: string,
+  name: string | null,
+): Promise<{ success: boolean }> {
+  return adminApiCall<{ success: boolean }>(
+    `${ADMIN_API}/users/${userId}/edit`,
+    "PATCH",
+    { email, name },
+  );
+}
+
+export async function adminDeleteUser(userId: number): Promise<{ success: boolean }> {
+  return adminApiCall<{ success: boolean }>(`${ADMIN_API}/users/${userId}`, "DELETE");
+}
+
+export async function adminResetUserPassword(userId: number): Promise<AdminResetResult> {
+  return adminApiCall<AdminResetResult>(`${ADMIN_API}/users/${userId}/reset-password`, "POST");
 }

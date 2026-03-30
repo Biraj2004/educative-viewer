@@ -49,6 +49,7 @@ def create_app(
     @app.errorhandler(403)
     @app.errorhandler(404)
     @app.errorhandler(409)
+    @app.errorhandler(429)
     @app.errorhandler(500)
     def json_error(error):
         return jsonify({"error": getattr(error, "description", str(error))}), error.code

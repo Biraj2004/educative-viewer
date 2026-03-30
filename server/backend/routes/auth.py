@@ -104,10 +104,109 @@ def create_auth_blueprint(auth_service: AuthService, db_manager: DBManager) -> B
         stored_hash = user["password_hash"].encode() if (user and user.get("password_hash")) else dummy_hash
         password_ok = bcrypt.checkpw(password.encode(), stored_hash)
 
-        if not user or not password_ok:
+        if not user:
             abort(401, description="Invalid email or password")
 
-        if user.get("two_factor_secret") and not user.get("two_factor_confirmed"):
+        # ── Brute-force lockout check ──────────────────────────────────────────
+        now_ts = time.time()
+        locked_until_str = user.get("locked_until")
+        if locked_until_str:
+            try:
+                locked_until_ts = time.mktime(time.strptime(locked_until_str, "%Y-%m-%dT%H:%M:%SZ"))
+                # Convert from local to UTC offset
+                locked_until_ts -= time.timezone
+                remaining = int(locked_until_ts - now_ts)
+                if remaining > 0:
+                    mins = max(1, (remaining + 59) // 60)
+                    abort(429, description=f"Account temporarily locked. Try again in {mins} minute(s).")
+            except (ValueError, OverflowError):
+                pass
+
+        if not password_ok:
+            # Increment failed attempts and potentially lock
+            conn3 = db_manager.get_auth_connection()
+            try:
+                new_attempts = int(user.get("failed_attempts") or 0) + 1
+                locked_until_val = None
+                if new_attempts >= 5:
+                    locked_until_val = time.strftime(
+                        "%Y-%m-%dT%H:%M:%SZ",
+                        time.gmtime(now_ts + 15 * 60),
+                    )
+                execute(
+                    conn3,
+                    "UPDATE users_sensitive SET failed_attempts = :attempts, locked_until = :locked "
+                    "WHERE user_id = :user_id",
+                    {"attempts": new_attempts, "locked": locked_until_val, "user_id": user["id"]},
+                )
+                conn3.commit()
+
+                # ── Check for stale temp password usage ───────────────────────
+                # If they used the OLD temp password after changing it, we can detect it here.
+                # This only applies if they are in the transitional phase (already changed pw but not finished 2FA).
+                stale_hash = user.get("onboarding_temp_password_hash")
+                if stale_hash and not user.get("is_first_login"):
+                    if bcrypt.checkpw(password_raw.encode(), stale_hash.encode()):
+                        abort(
+                            401,
+                            description=(
+                                "You already changed your password. "
+                                "Please use your new password."
+                            ),
+                        )
+            finally:
+                conn3.close()
+            abort(401, description="Invalid email or password")
+
+        # ── Reset lockout on successful credential check ───────────────────────
+        conn_reset = db_manager.get_auth_connection()
+        try:
+            execute(
+                conn_reset,
+                "UPDATE users_sensitive SET failed_attempts = 0, locked_until = NULL WHERE user_id = :user_id",
+                {"user_id": user["id"]},
+            )
+            conn_reset.commit()
+        finally:
+            conn_reset.close()
+
+        # ── Temp password expiry check ─────────────────────────────────────────
+        temp_exp_str = user.get("temp_password_expires_at")
+        if temp_exp_str and user.get("is_first_login"):
+            try:
+                # Parse UTC string correctly using calendar.timegm
+                import calendar
+                st = time.strptime(temp_exp_str, "%Y-%m-%dT%H:%M:%SZ")
+                temp_exp_ts = calendar.timegm(st)
+                
+                if now_ts > temp_exp_ts:
+                    abort(
+                        401,
+                        description=(
+                            "Your temporary password has expired. "
+                            "Please contact an administrator to reset your account."
+                        ),
+                    )
+            except (ValueError, OverflowError):
+                pass
+
+        if not user.get("is_active", True) and user.get("role") != "admin":
+            abort(403, description="Account is deactivated. Please contact an administrator.")
+
+        # ── First-login: force password change ────────────────────────────────
+        if user.get("is_first_login"):
+            return (
+                jsonify(
+                    {
+                        "token": auth_service.make_partial_token(int(user["id"])),
+                        "requiresFirstLogin": True,
+                        "message": "You must change your password before continuing.",
+                    }
+                ),
+                200,
+            )
+
+        if (user.get("two_factor_enabled") or user.get("two_factor_secret")) and not user.get("two_factor_confirmed"):
             return (
                 jsonify(
                     {
@@ -161,7 +260,7 @@ def create_auth_blueprint(auth_service: AuthService, db_manager: DBManager) -> B
 
     @bp.route("/me", methods=["GET"])
     def auth_me():
-        user, _ = auth_service.resolve_user(require_full=True)
+        user, _ = auth_service.resolve_user(require_full=False)
         if not user:
             abort(401, description="Not authenticated")
 
@@ -193,7 +292,8 @@ def create_auth_blueprint(auth_service: AuthService, db_manager: DBManager) -> B
 
     @bp.route("/change-password", methods=["POST"])
     def auth_change_password():
-        user, _ = auth_service.resolve_user(require_full=True)
+        # Accept partial tokens so first-login users can change their temp password
+        user, _ = auth_service.resolve_user(require_full=False)
         if not user:
             abort(401, description="Not authenticated")
 
@@ -231,8 +331,16 @@ def create_auth_blueprint(auth_service: AuthService, db_manager: DBManager) -> B
         try:
             execute(
                 conn,
-                "UPDATE users_sensitive SET password_hash = :pw_hash WHERE user_id = :user_id",
+                "UPDATE users_sensitive "
+                "SET password_hash = :pw_hash, temp_password_expires_at = NULL "
+                "WHERE user_id = :user_id",
                 {"pw_hash": pw_hash, "user_id": user["id"]},
+            )
+            # Clear is_first_login if this was the mandatory first-login flow
+            execute(
+                conn,
+                "UPDATE users SET is_first_login = 0 WHERE id = :user_id",
+                {"user_id": user["id"]},
             )
             conn.commit()
         finally:
@@ -272,7 +380,7 @@ def create_auth_blueprint(auth_service: AuthService, db_manager: DBManager) -> B
 
     @bp.route("/theme", methods=["PUT"])
     def auth_set_theme():
-        user, _ = auth_service.resolve_user(require_full=True)
+        user, _ = auth_service.resolve_user(require_full=False)
         if not user:
             abort(401, description="Not authenticated")
 
@@ -420,6 +528,7 @@ def create_auth_blueprint(auth_service: AuthService, db_manager: DBManager) -> B
             execute(
                 conn,
                 "UPDATE users_sensitive SET two_factor_confirmed = 1, "
+                "onboarding_temp_password_hash = NULL, "
                 "session_id = :session_id, last_login_ip = :ip, "
                 "last_login_at = :login_at, current_token = :token "
                 "WHERE user_id = :user_id",

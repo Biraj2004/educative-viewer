@@ -22,8 +22,11 @@ _USER_JOIN = """
     SELECT u.id, u.email, u.name, u.username, u.avatar,
            r.name AS role, u.is_active,
            u.role_id, u.two_factor_enabled, u.login_ip_log, u.theme, u.created_at,
+           COALESCE(u.is_first_login, 0) AS is_first_login,
            s.password_hash, s.two_factor_secret, s.two_factor_confirmed,
-           s.session_id, s.last_login_ip, s.last_login_at, s.current_token
+           s.session_id, s.last_login_ip, s.last_login_at, s.current_token,
+           COALESCE(s.failed_attempts, 0) AS failed_attempts, s.locked_until,
+           s.temp_password_expires_at
     FROM users u
     LEFT JOIN roles r ON r.id = u.role_id
     LEFT JOIN users_sensitive s ON s.user_id = u.id
@@ -119,6 +122,7 @@ class AuthService:
             "role": user.get("role", "user"),
             "theme": user.get("theme", "light"),
             "twoFactorEnabled": bool(user.get("two_factor_enabled")),
+            "isFirstLogin": bool(user.get("is_first_login")),
             "createdAt": user.get("created_at"),
             "sessionId": user.get("session_id"),
             "iat": now,
@@ -266,6 +270,7 @@ class AuthService:
             "role": user.get("role", "user"),
             "theme": user.get("theme", "light"),
             "twoFactorEnabled": bool(user.get("two_factor_enabled")),
+            "isFirstLogin": bool(user.get("is_first_login")),
             "createdAt": user.get("created_at"),
         }
         if conn is not None:
