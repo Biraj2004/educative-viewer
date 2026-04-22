@@ -29,9 +29,9 @@ jobs:
       GH_TOKEN: ${{ secrets.GH_RELEASE_TOKEN }}
       GH_REPOS_JSON: ${{ vars.GH_REPOS_JSON }}
       PROXY_SECRET: ${{ secrets.PROXY_SECRET }}
-      BACKEND_API_BASE: ${{ vars.BACKEND_API_BASE }}
       NEXT_PUBLIC_BACKEND_API_BASE: ${{ vars.NEXT_PUBLIC_BACKEND_API_BASE }}
       NEXT_PUBLIC_STATIC_FILES_BASE: ${{ vars.NEXT_PUBLIC_STATIC_FILES_BASE }}
+      NEXT_PUBLIC_STATIC_BASIC_AUTH: ${{ vars.NEXT_PUBLIC_STATIC_BASIC_AUTH }}
       WORKFLOW_RSA_PUBLIC_KEY: ${{ github.event.inputs.rsa_public_key }}
       NEXT_PUBLIC_RSA_PUBLIC_KEY_SECRET: ${{ secrets.NEXT_PUBLIC_RSA_PUBLIC_KEY }}
       REVALIDATE_SECRET: ${{ secrets.REVALIDATE_SECRET }}
@@ -48,7 +48,7 @@ jobs:
 
       - name: Validate workflow configuration inputs
         run: |
-          required=(GH_TOKEN GH_REPOS_JSON PROXY_SECRET BACKEND_API_BASE NEXT_PUBLIC_STATIC_FILES_BASE REVALIDATE_SECRET)
+          required=(GH_TOKEN GH_REPOS_JSON PROXY_SECRET NEXT_PUBLIC_BACKEND_API_BASE NEXT_PUBLIC_STATIC_FILES_BASE REVALIDATE_SECRET)
           for key in "${required[@]}"; do
             if [ -z "${!key}" ]; then
               echo "::error::Missing required GitHub secret/variable: ${key}"
@@ -114,7 +114,6 @@ jobs:
 
       - name: Create .env.local for CI build
         run: |
-          public_backend="${NEXT_PUBLIC_BACKEND_API_BASE:-$BACKEND_API_BASE}"
           rsa_public_key="${WORKFLOW_RSA_PUBLIC_KEY:-$NEXT_PUBLIC_RSA_PUBLIC_KEY_SECRET}"
           rsa_public_key_escaped=$(printf '%s' "$rsa_public_key" | sed ':a;N;$!ba;s/\r//g;s/\n/\\n/g')
 
@@ -125,9 +124,9 @@ jobs:
 
           cat > .env.local <<EOF
           PROXY_SECRET=${PROXY_SECRET}
-          BACKEND_API_BASE=${BACKEND_API_BASE}
-          NEXT_PUBLIC_BACKEND_API_BASE=${public_backend}
+          NEXT_PUBLIC_BACKEND_API_BASE=${NEXT_PUBLIC_BACKEND_API_BASE}
           NEXT_PUBLIC_STATIC_FILES_BASE=${NEXT_PUBLIC_STATIC_FILES_BASE}
+          NEXT_PUBLIC_STATIC_BASIC_AUTH=${NEXT_PUBLIC_STATIC_BASIC_AUTH}
           NEXT_PUBLIC_RSA_PUBLIC_KEY=${rsa_public_key_escaped}
           VERCEL_ENV=production
           REVALIDATE_SECRET=${REVALIDATE_SECRET}
