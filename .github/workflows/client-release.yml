@@ -34,7 +34,6 @@ jobs:
       NEXT_PUBLIC_STATIC_BASIC_AUTH: ${{ vars.NEXT_PUBLIC_STATIC_BASIC_AUTH }}
       WORKFLOW_RSA_PUBLIC_KEY: ${{ github.event.inputs.rsa_public_key }}
       NEXT_PUBLIC_RSA_PUBLIC_KEY_SECRET: ${{ secrets.NEXT_PUBLIC_RSA_PUBLIC_KEY }}
-      REVALIDATE_SECRET: ${{ secrets.REVALIDATE_SECRET }}
       PRESERVE_NEXT_CACHE: "1"
 
     steps:
