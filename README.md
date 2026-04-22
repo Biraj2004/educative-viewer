@@ -1,105 +1,255 @@
-# ⚙️ JavaScript Obfuscation for Next.js
+# EducativeViewer Local Setup Guide
 
-This project demonstrates how to build a **Next.js application** and obfuscate its generated JavaScript chunks using **javascript-obfuscator**.
+This guide shows how to run the app on your computer (Windows).
 
----
+It covers:
+- Backend (Flask)
+- Frontend (Next.js via `build-and-run.js`)
+- Local reverse proxy (Nginx or Apache)
+- Serving images through the local proxy
 
-## 📦 Prerequisites
+## 1. Prerequisites
 
-Install the obfuscator globally:
+Install these first:
+- Node.js 18+
+- Python 3.10+
+- Nginx or Apache (only if you want local proxy routing)
 
-```bash
-npm install -g javascript-obfuscator
-```
+## 2. Folder Overview
 
----
+- `client/`: Next.js frontend
+- `server/`: Flask backend
+- `proxy/`: Ready-to-use Nginx/Apache config files
 
-## 🏗 Build the Project
+## 3. Backend Setup (Flask)
 
-Run the Next.js production build:
-
-```bash
-npx next build
-```
-
-After the build completes, obfuscate the generated JavaScript chunks:
-
-```bash
-javascript-obfuscator .next/static/chunks --output .next/static/chunks --compact true --identifier-names-generator hexadecimal --string-array true --string-array-encoding base64
-```
-
----
-
-## ⚙️ Environment Configuration
-
-Modify the `.env` file according to your project configuration before running the application.
-
-### Runtime env for shared `.next.zip`
-
-`NEXT_PUBLIC_*` values are now injected at runtime from server env, not baked into static chunks.
-This means you can share the built zip and let other users provide their own values before starting the app.
-
-Required runtime keys:
-
-- `NEXT_PUBLIC_BACKEND_API_BASE`
-- `NEXT_PUBLIC_RSA_PUBLIC_KEY`
-- `NEXT_PUBLIC_STATIC_FILES_BASE`
-- `NEXT_PUBLIC_STATIC_BASIC_AUTH`
-
-Examples:
+Open PowerShell in the `server/` folder:
 
 ```powershell
-$env:NEXT_PUBLIC_BACKEND_API_BASE="https://api.example.com"
-$env:NEXT_PUBLIC_RSA_PUBLIC_KEY="-----BEGIN PUBLIC KEY-----..."
-$env:NEXT_PUBLIC_STATIC_FILES_BASE="https://static.example.com"
-$env:NEXT_PUBLIC_STATIC_BASIC_AUTH="Basic xxxxx"
-npx next start
+cd server
+
+# If you do not have a virtual environment yet:
+python -m venv env
+
+# Activate virtual environment:
+.\env\Scripts\Activate.ps1
+
+# Install backend dependencies:
+pip install -r requirements.txt
 ```
 
-Or place the same keys in `.env.local` in the extracted project, then run `npx next start`.
+Then run the one-time setup script:
 
----
+```powershell
+python setup.py
+```
 
-## ▶️ Run the Project
+`setup.py` will:
+1. **Generate an RSA-2048 key pair** and write `RSA_PRIVATE_KEY` directly into `server/.env`
+2. **Print the RSA public key** — copy it, you will paste it when `build-and-run.js` prompts you for `NEXT_PUBLIC_RSA_PUBLIC_KEY` during the client build
+3. **Prompt for required `.env` values** (DB paths, JWT secret, invite codes)
+4. **Ask whether to start the server now**
 
-Install dependencies:
+> On subsequent runs `setup.py` skips key generation if `RSA_PRIVATE_KEY` is already set, and just reviews env values + starts the server. You can also start the server directly with `python app.py` once setup is done.
 
-```bash
+Keep this terminal running.
+
+
+## 4. Frontend Setup (Next.js)
+
+Open a second PowerShell terminal in the `client/` folder:
+
+```powershell
+cd client
 npm install
+node build-and-run.js
 ```
 
-Start the production server:
-
-```bash
-npx next start
-```
-
----
-
-## 📂 Workflow Summary
+The interactive menu appears:
 
 ```
-Install Obfuscator → Build Next.js App → Obfuscate JS Chunks → Configure .env → Start Server
+┌──────────────────────────────┐
+│   EducativeViewer Builder    │
+└──────────────────────────────┘
+
+  1) Full build + obfuscate + zip + create new release
+  2) Full build + obfuscate + zip + upload to existing release
+  3) Build + obfuscate + zip only (no upload)
+  4) Build + obfuscate + run local server
+  5) Build only (no obfuscation) + zip
+  6) Build and run local server
+  7) Upload existing .next.zip to existing release
+  8) Upload existing .next.zip as new release
+  9) Manage saved GitHub repos
+  0) Exit
 ```
 
----
+**To run locally, choose option `6`** — it will:
+1. Prompt you to review / enter environment variable values (saved to `client/.env.local`)
+2. Run a Next.js build (no obfuscation — use option `4` if you need obfuscation)
+3. Start the local server at `http://localhost:3000`
 
-## 🔒 Obfuscation Features Used
+> Every build option (`1`–`6`) prompts for environment variables before building, so you never need to edit `.env.local` by hand.
 
-- Compact code output  
-- Hexadecimal identifier names  
-- String array transformation  
-- Base64 string encoding  
+### Environment variables prompted during build
 
----
+Based on `client/.env.local.example`:
 
-## 👤 Author
+| Variable | Description |
+|---|---|
+| `PROXY_SECRET` | Secret shared with the Cloudflare Worker (`x-edu-proxy` header) |
+| `NEXT_PUBLIC_BACKEND_API_BASE` | URL of the Flask backend (e.g. `http://localhost:5000/`) |
+| `NEXT_PUBLIC_STATIC_FILES_BASE` | Base URL for static/image assets |
+| `NEXT_PUBLIC_STATIC_BASIC_AUTH` | Optional Basic auth header for protected static worker |
+| `VERCEL_ENV` | Set to `development` for local runs |
+| `NEXT_PUBLIC_RSA_PUBLIC_KEY` | **Required.** RSA public key generated by the Flask server (see RSA Key Setup) |
 
-- **Biraj** - [Biraj2004](https://github.com/Biraj2004)
-- **Anilabha** - [anilabhadatta](https://github.com/anilabhadatta)
+For a purely local setup use:
 
----
+```
+NEXT_PUBLIC_BACKEND_API_BASE=http://localhost/
+NEXT_PUBLIC_STATIC_FILES_BASE=http://localhost/
+VERCEL_ENV=development
+NEXT_PUBLIC_RSA_PUBLIC_KEY=<paste-public-key-from-server-log>
+```
 
-## 📜 License
+### CLI commands (non-interactive)
 
-This project is for educational and development purposes.
+You can also pass a command directly:
+
+```powershell
+node build-and-run.js local      # prompt env + build + obfuscate + start server
+node build-and-run.js serve      # prompt env + start server (uses existing .next)
+node build-and-run.js build      # prompt env + build + obfuscate + zip
+node build-and-run.js build:only # prompt env + build (no obfuscation) + zip
+node build-and-run.js upload     # zip + upload to existing GitHub release
+node build-and-run.js release    # zip + create new GitHub release
+node build-and-run.js download   # download .next.zip from a GitHub release
+```
+
+Frontend runs on: `http://localhost:3000`
+
+## 5. Local Proxy Setup (API Split + Local Images)
+
+Use this when you want one local URL that:
+- Sends real backend API routes to Flask
+- Serves image/static files from local disk under `/api`
+- Sends everything else to Next.js
+
+### Option A: Nginx (Windows)
+
+1. Use config: [proxy/nginx-windows.conf](proxy/nginx-windows.conf)
+2. If your main `nginx.conf` already has a default `server { ... }` block on port 80, comment/remove it before using this project server block.
+3. Keep only one active `localhost:80` server block for this app, otherwise Nginx may serve the wrong site.
+4. In the file, confirm these values:
+
+```nginx
+server_name localhost;
+root C:/inetpub/wwwroot/educativeviewer;
+# Flask upstream: 127.0.0.1:5000
+# Next upstream: 127.0.0.1:3000
+```
+
+5. Create local static folder:
+
+```text
+C:/inetpub/wwwroot/educativeviewer/api/images
+```
+
+6. Put image files there, for example:
+
+```text
+C:/inetpub/wwwroot/educativeviewer/api/images/logo.png
+```
+
+7. Test and reload Nginx:
+
+```powershell
+nginx -t
+nginx -s reload
+```
+
+### Option B: Apache (Windows)
+
+1. Use config: [proxy/apache-windows.conf](proxy/apache-windows.conf)
+2. If your main Apache config already has a default `<VirtualHost *:80>` for localhost, disable/comment it when enabling this project vhost.
+3. Keep only one active `localhost:80` vhost for this app, otherwise requests may go to the wrong virtual host.
+4. Confirm `Alias` path points to:
+
+```text
+C:/inetpub/wwwroot/educativeviewer/api/
+```
+
+5. Put images in:
+
+```text
+C:/inetpub/wwwroot/educativeviewer/api/images
+```
+
+6. Test and restart Apache:
+
+```powershell
+httpd -t
+httpd -k restart
+```
+
+## 6. Start Order (Quick)
+
+1. Start backend in `server/` (first time):
+
+```powershell
+python setup.py
+```
+
+Or on subsequent runs (keys + env already configured):
+
+```powershell
+python app.py
+```
+
+2. Start frontend in `client/`:
+
+```powershell
+node build-and-run.js
+```
+
+Choose option `6` (Build and run local server).
+
+3. Start or reload Nginx/Apache with the proxy config.
+4. Open: `http://localhost`
+
+Use `http://localhost` (proxy) instead of `http://localhost:3000` when testing full local routing.
+
+## 7. Verify Image Proxy
+
+After adding `logo.png` to:
+
+```text
+C:/inetpub/wwwroot/educativeviewer/api/images/logo.png
+```
+
+Open this URL in your browser:
+
+`http://localhost/api/images/logo.png`
+
+If the image opens, local proxy image serving is working.
+
+## 8. Troubleshooting
+
+### Frontend starts but API fails
+- Confirm backend is running on port `5000`.
+- Confirm `NEXT_PUBLIC_BACKEND_API_BASE=http://localhost/` in `client/.env.local`.
+
+### Frontend does not start
+- Use `node build-and-run.js` instead of `npm run dev`.
+- In the menu, choose option `6` to build and run locally.
+- If skipping a build, use `node build-and-run.js serve` (requires an existing `.next` folder).
+
+### Images return 404 through proxy
+- Confirm file exists under `C:/inetpub/wwwroot/educativeviewer/api/...`.
+- Confirm proxy root/alias paths match your real folder.
+
+### Port already in use
+- Change the port in config and matching env values.
+
+Once all three services are running, use `http://localhost` as your main local app URL.

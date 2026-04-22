@@ -8,8 +8,8 @@
  *   node build.js            — full interactive menu
  *   node build.js build:only  — clean + build only (no obfuscation, no zip)
  *   node build.js build      — build + obfuscate + zip only (no upload)
- *   node build.js local      — build + obfuscate + start local server
- *   node build.js serve      — start local server using existing .next folder
+ *   node build.js local      — prompt env + build + obfuscate + start local server
+ *   node build.js serve      — prompt env + start local server (existing .next folder)
  *   node build.js upload     — zip + upload to existing GitHub release
  *   node build.js release    — zip + create new GitHub release
  *   node build.js download   — download .next.zip from an existing release
@@ -295,11 +295,12 @@ async function promptEnvVars(rl) {
   }
 }
 
-async function stepStartLocal(rl) {
+/** Prompt env vars then start local server. Requires .next to already exist. */
+async function stepServeOnly(rl) {
   header('Start Local Server');
 
   if (!fs.existsSync(NEXT_DIR)) {
-    console.error('[ERROR] .next folder not found. Run a build first (option 4 or node build.js local).');
+    console.error('[ERROR] .next folder not found. Run a build first (option 6 or node build.js local).');
     process.exit(1);
   }
 
@@ -561,7 +562,8 @@ async function stepCreateRelease(rl, tagArg) {
 
 // ─── Main flows ──────────────────────────────────────────────────────────────
 
-async function flowBuildOnly() {
+async function flowBuildOnly(rl) {
+  await promptEnvVars(rl);
   stepInstallObfuscator();
   stepClean();
   stepBuild();
@@ -569,23 +571,37 @@ async function flowBuildOnly() {
   stepZip();
   console.log('\n[✓] Build complete. .next.zip is ready to upload.');
 }
-async function flowBuildNoObfuscate() {
+async function flowBuildNoObfuscate(rl) {
+  await promptEnvVars(rl);
   stepClean();
   stepBuild();
   stepZip();
-  console.log('\n[\u2713] Build complete (no obfuscation). .next.zip is ready to upload.');
+  console.log('\n[✓] Build complete (no obfuscation). .next.zip is ready to upload.');
 }
 
+/** Build (no obfuscation) + prompt env + start local server (menu option 6). */
+async function flowBuildAndRun(rl) {
+  await promptEnvVars(rl);
+  stepClean();
+  stepBuild();
+  console.log('[*] Starting Next.js server on http://localhost:3000 ...');
+  runServer();
+}
+
+/** Legacy: build + obfuscate + start local server (CLI `local` command). */
 async function flowLocal(rl) {
+  await promptEnvVars(rl);
   stepInstallObfuscator();
   stepClean();
   stepBuild();
   stepObfuscate();
-  await stepStartLocal(rl);
+  console.log('[*] Starting Next.js server on http://localhost:3000 ...');
+  runServer();
 }
 async function flowUpload(rl, tagArg) {
   if (!fs.existsSync(ZIP_PATH)) {
     console.log('[!] No .next.zip found — running full build first...');
+    await promptEnvVars(rl);
     stepInstallObfuscator();
     stepClean();
     stepBuild();
@@ -598,6 +614,7 @@ async function flowUpload(rl, tagArg) {
 async function flowRelease(rl, tagArg) {
   if (!fs.existsSync(ZIP_PATH)) {
     console.log('[!] No .next.zip found — running full build first...');
+    await promptEnvVars(rl);
     stepInstallObfuscator();
     stepClean();
     stepBuild();
@@ -617,7 +634,7 @@ async function interactiveMenu(rl) {
   console.log('  3) Build + obfuscate + zip only (no upload)');
   console.log('  4) Build + obfuscate + run local server');
   console.log('  5) Build only (no obfuscation) + zip');
-  console.log('  6) Run local server (use existing .next folder)');
+  console.log('  6) Build and run local server');
   console.log('  7) Upload existing .next.zip to existing release');
   console.log('  8) Upload existing .next.zip as new release');
   console.log('  9) Manage saved GitHub repos');
@@ -628,6 +645,7 @@ async function interactiveMenu(rl) {
 
   switch (choice) {
     case '1':
+      await promptEnvVars(rl);
       stepInstallObfuscator();
       stepClean();
       stepBuild();
@@ -636,6 +654,7 @@ async function interactiveMenu(rl) {
       await stepCreateRelease(rl);
       break;
     case '2':
+      await promptEnvVars(rl);
       stepInstallObfuscator();
       stepClean();
       stepBuild();
@@ -644,16 +663,16 @@ async function interactiveMenu(rl) {
       await stepUploadToRelease(rl);
       break;
     case '3':
-      await flowBuildOnly();
+      await flowBuildOnly(rl);
       break;
     case '4':
       await flowLocal(rl);
       break;
     case '5':
-      await flowBuildNoObfuscate();
+      await flowBuildNoObfuscate(rl);
       break;
     case '6':
-      await stepStartLocal(rl);
+      await flowBuildAndRun(rl);
       break;
     case '7':
       await stepUploadToRelease(rl);
@@ -681,17 +700,17 @@ async function main() {
 
   try {
     if (!cmd)              await interactiveMenu(rl);
-    else if (cmd === 'build')      await flowBuildOnly();
-    else if (cmd === 'build:only') await flowBuildNoObfuscate();
+    else if (cmd === 'build')      await flowBuildOnly(rl);
+    else if (cmd === 'build:only') await flowBuildNoObfuscate(rl);
     else if (cmd === 'local')      await flowLocal(rl);
     else if (cmd === 'download')   await downloadZip(rl);
     else if (cmd === 'public:sync' || cmd === 'public') await stepSyncPublicJson();
-    else if (cmd === 'serve')      await stepStartLocal(rl);
+    else if (cmd === 'serve')      await stepServeOnly(rl);
     else if (cmd === 'upload')     await flowUpload(rl, arg);
     else if (cmd === 'release')    await flowRelease(rl, arg);
     else {
       console.error(`Unknown command: ${cmd}`);
-      console.error('Usage: node build.js [build|build:only|local|serve|download|public:sync|upload [tag]|release [tag]]');
+      console.error('Usage: node build-and-run.js [build|build:only|local|serve|download|public:sync|upload [tag]|release [tag]]');
       process.exit(1);
     }
   } finally {
