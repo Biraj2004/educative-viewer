@@ -255,7 +255,50 @@ function saveEnvFilePreservingTemplate(vars, examplePath) {
   fs.writeFileSync(ENV_PATH, out, 'utf8');
 }
 
+/**
+ * In CI (GITHUB_ACTIONS / CI env var set), write .env.local from process.env
+ * using the keys declared in .env.local.example — no interactive prompts.
+ */
+function writeEnvFromProcessEnv() {
+  const examplePath = path.join(ROOT, '.env.local.example');
+  const exampleVars = fs.existsSync(examplePath) ? parseEnvFile(examplePath) : {};
+  const allKeys = Object.keys(exampleVars);
+
+  if (allKeys.length === 0) {
+    console.log('[!] No .env.local.example found — skipping CI env write.');
+    return;
+  }
+
+  header('Environment Variables (CI mode — reading from process.env)');
+  const vars = fs.existsSync(ENV_PATH) ? parseEnvFile(ENV_PATH) : {};
+  let written = 0;
+
+  for (const key of allKeys) {
+    if (process.env[key] !== undefined) {
+      vars[key] = process.env[key];
+      const isSensitive = /secret|key|password|token|proxy/i.test(key);
+      const display = isSensitive && process.env[key].length > 4
+        ? process.env[key].slice(0, 4) + '***'
+        : process.env[key];
+      console.log(`  [+] ${key.padEnd(36)} = ${display}`);
+      written++;
+    } else {
+      console.log(`  [!] ${key.padEnd(36)} not set in environment`);
+    }
+  }
+
+  saveEnvFilePreservingTemplate(vars, examplePath);
+  console.log(`\n[+] .env.local written from process.env (${written}/${allKeys.length} keys).`);
+}
+
 async function promptEnvVars(rl) {
+  const isCI = !!process.env.CI || !!process.env.GITHUB_ACTIONS;
+
+  if (isCI) {
+    writeEnvFromProcessEnv();
+    return;
+  }
+
   const examplePath = ensureEnvLocalFile();
   if (!examplePath) return;
 
