@@ -177,41 +177,11 @@ function stepZip() {
   // Remove old zip if present
   if (fs.existsSync(ZIP_PATH)) fs.unlinkSync(ZIP_PATH);
 
-  const includeCacheInZip = process.env.INCLUDE_NEXT_CACHE_IN_ZIP === '1';
-  const zipTempCachePath = path.join(ROOT, '.next-cache-zip-tmp');
-  let cacheMovedForZip = false;
-
-  if (!includeCacheInZip && fs.existsSync(NEXT_CACHE)) {
-    if (fs.existsSync(zipTempCachePath)) {
-      fs.rmSync(zipTempCachePath, { recursive: true, force: true });
-    }
-    fs.renameSync(NEXT_CACHE, zipTempCachePath);
-    cacheMovedForZip = true;
-    console.log('[+] Excluding .next/cache from .next.zip');
+  if (process.platform === 'win32') {
+    run(`powershell -Command "Compress-Archive -Path '.next' -DestinationPath '.next.zip'"`);
+  } else {
+    run(`zip -r .next.zip .next`);
   }
-
-  const zipCmd = process.platform === 'win32'
-    ? `powershell -Command "Compress-Archive -Path '.next' -DestinationPath '.next.zip'"`
-    : `zip -r .next.zip .next`;
-
-  let zipStatus = 0;
-  try {
-    console.log(`\n> ${zipCmd}`);
-    const result = spawnSync(zipCmd, { shell: true, stdio: 'inherit', cwd: ROOT });
-    zipStatus = result.status ?? 1;
-  } finally {
-    if (cacheMovedForZip && fs.existsSync(zipTempCachePath)) {
-      fs.mkdirSync(NEXT_DIR, { recursive: true });
-      fs.renameSync(zipTempCachePath, NEXT_CACHE);
-      console.log('[+] Restored .next/cache after packaging');
-    }
-  }
-
-  if (zipStatus !== 0) {
-    console.error(`\n[ERROR] Command failed: ${zipCmd}`);
-    process.exit(zipStatus);
-  }
-
   const sizeMB = (fs.statSync(ZIP_PATH).size / 1024 / 1024).toFixed(2);
   console.log(`[+] Created .next.zip (${sizeMB} MB)`);
 }

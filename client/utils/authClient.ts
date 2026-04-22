@@ -10,16 +10,11 @@
  *   backend on the very next API call → the global 401 handler fires → sign-in page.
  */
 
-import { getBackendApiBase, getRsaPublicKey } from "@/utils/runtime-config";
-
-function getAuthApiBase(): string {
-  return `${getBackendApiBase()}/api/auth`;
-}
-
-function getAdminApiBase(): string {
-  return `${getBackendApiBase()}/api/admin`;
-}
-
+const BACKEND = (process.env.NEXT_PUBLIC_BACKEND_API_BASE ?? "").replace(
+  /\/$/,
+  "",
+);
+const API = `${BACKEND}/api/auth`;
 const LS_KEY = "ev_token";
 const IS_BROWSER = typeof window !== "undefined";
 
@@ -61,14 +56,14 @@ async function _importPem(pem: string): Promise<CryptoKey> {
 async function _getPublicKey(): Promise<CryptoKey> {
   if (_cachedPublicKey) return _cachedPublicKey;
 
-  const baked = getRsaPublicKey();
+  const baked = process.env.NEXT_PUBLIC_RSA_PUBLIC_KEY;
   if (baked) {
     _cachedPublicKey = await _importPem(baked);
     return _cachedPublicKey;
   }
 
   throw new Error(
-    "RSA Public Key missing. Please set NEXT_PUBLIC_RSA_PUBLIC_KEY in runtime environment."
+    "RSA Public Key missing. Please set NEXT_PUBLIC_RSA_PUBLIC_KEY in .env.local"
   );
 }
 
@@ -314,7 +309,7 @@ export async function login(
   password: string,
 ): Promise<AuthResponse> {
   const encryptedPassword = await _encryptPassword(password);
-  const result = await apiPost<AuthResponse>(`${getAuthApiBase()}/login`, {
+  const result = await apiPost<AuthResponse>(`${API}/login`, {
     email,
     password: encryptedPassword,
   });
@@ -329,7 +324,7 @@ export async function signup(
   name?: string,
 ): Promise<AuthResponse> {
   const encryptedPassword = await _encryptPassword(password);
-  const result = await apiPost<AuthResponse>(`${getAuthApiBase()}/signup`, {
+  const result = await apiPost<AuthResponse>(`${API}/signup`, {
     email,
     password: encryptedPassword,
     inviteCode,
@@ -341,7 +336,7 @@ export async function signup(
 
 export async function logout(): Promise<void> {
   try {
-    await apiPost<unknown>(`${getAuthApiBase()}/logout`, {});
+    await apiPost<unknown>(`${API}/logout`, {});
   } catch {
     /* best-effort */
   }
@@ -349,27 +344,27 @@ export async function logout(): Promise<void> {
 }
 
 export async function getUser(): Promise<AuthUser> {
-  return apiGet<AuthUser>(`${getAuthApiBase()}/me`);
+  return apiGet<AuthUser>(`${API}/me`);
 }
 
 export async function verify2FA(code: string): Promise<AuthResponse> {
-  const result = await apiPost<AuthResponse>(`${getAuthApiBase()}/2fa/verify`, { code });
+  const result = await apiPost<AuthResponse>(`${API}/2fa/verify`, { code });
   if (result.token && !result.requiresTwoFactor) storeAuthToken(result.token);
   return result;
 }
 
 export async function get2FASetup(): Promise<TwoFASetup> {
-  return apiGet<TwoFASetup>(`${getAuthApiBase()}/2fa/setup`);
+  return apiGet<TwoFASetup>(`${API}/2fa/setup`);
 }
 
 export async function enable2FA(code: string): Promise<AuthResponse> {
-  const result = await apiPost<AuthResponse>(`${getAuthApiBase()}/2fa/enable`, { code });
+  const result = await apiPost<AuthResponse>(`${API}/2fa/enable`, { code });
   if (result.token) storeAuthToken(result.token);
   return result;
 }
 
 export async function rollbackSignup(): Promise<void> {
-  await apiPost<unknown>(`${getAuthApiBase()}/signup/rollback`, {});
+  await apiPost<unknown>(`${API}/signup/rollback`, {});
   clearAuthToken();
 }
 
@@ -379,7 +374,7 @@ export async function rollbackSignup(): Promise<void> {
 export async function forgotPasswordRequest(
   email: string,
 ): Promise<AuthResponse> {
-  const result = await apiPost<AuthResponse>(`${getAuthApiBase()}/forgot-password/request`, {
+  const result = await apiPost<AuthResponse>(`${API}/forgot-password/request`, {
     email,
   });
   if (result.token) storeAuthToken(result.token);
@@ -390,7 +385,7 @@ export async function forgotPasswordRequest(
 export async function forgotPasswordVerify(
   code: string,
 ): Promise<AuthResponse> {
-  const result = await apiPost<AuthResponse>(`${getAuthApiBase()}/forgot-password/verify`, {
+  const result = await apiPost<AuthResponse>(`${API}/forgot-password/verify`, {
     code,
   });
   if (result.token) storeAuthToken(result.token);
@@ -402,7 +397,7 @@ export async function forgotPasswordReset(
   password: string,
 ): Promise<{ message: string }> {
   const encryptedPassword = await _encryptPassword(password);
-  return apiPost<{ message: string }>(`${getAuthApiBase()}/forgot-password/reset`, {
+  return apiPost<{ message: string }>(`${API}/forgot-password/reset`, {
     password: encryptedPassword,
   });
 }
@@ -416,7 +411,7 @@ export async function changePassword(
     _encryptPassword(currentPassword),
     _encryptPassword(newPassword),
   ]);
-  return apiPost<{ message: string }>(`${getAuthApiBase()}/change-password`, {
+  return apiPost<{ message: string }>(`${API}/change-password`, {
     current_password: encryptedCurrent,
     new_password: encryptedNew,
   });
@@ -425,7 +420,7 @@ export async function changePassword(
 export async function setTheme(theme: "light" | "dark"): Promise<void> {
   // Public pages also use the theme toggle; only persist to DB when authenticated.
   if (!getAuthToken()) return;
-  await apiFetch(`${getAuthApiBase()}/theme`, {
+  await apiFetch(`${API}/theme`, {
     method: "PUT",
     body: JSON.stringify({ theme }),
   });
@@ -446,7 +441,7 @@ export async function recordTopicVisit(
   topicIndex: number,
   completed = false,
 ): Promise<void> {
-  await apiPost<unknown>(`${getAuthApiBase()}/progress/topic`, {
+  await apiPost<unknown>(`${API}/progress/topic`, {
     course_id: courseId,
     topic_index: topicIndex,
     completed,
@@ -454,7 +449,7 @@ export async function recordTopicVisit(
 }
 
 export async function resetCourseProgress(courseId: number): Promise<void> {
-  await apiFetch(`${getAuthApiBase()}/progress/course`, {
+  await apiFetch(`${API}/progress/course`, {
     method: "DELETE",
     body: JSON.stringify({ course_id: courseId }),
   });
@@ -491,6 +486,8 @@ async function apiFetch(path: string, init: RequestInit): Promise<void> {
 }
 
 // ─── Admin CRUD helpers ───────────────────────────────────────────────────────
+
+const ADMIN_API = `${BACKEND}/api/admin`;
 
 export interface AdminUser {
   id: number;
@@ -545,7 +542,7 @@ async function adminApiCall<T>(
 }
 
 export async function adminGetUsers(): Promise<AdminUser[]> {
-  return adminApiCall<AdminUser[]>(`${getAdminApiBase()}/users`, "GET");
+  return adminApiCall<AdminUser[]>(`${ADMIN_API}/users`, "GET");
 }
 
 export async function adminCreateUser(
@@ -553,7 +550,7 @@ export async function adminCreateUser(
   name: string | null,
   role_id: number,
 ): Promise<AdminCreateResult> {
-  return adminApiCall<AdminCreateResult>(`${getAdminApiBase()}/users/create`, "POST", {
+  return adminApiCall<AdminCreateResult>(`${ADMIN_API}/users/create`, "POST", {
     email,
     name,
     role_id,
@@ -566,16 +563,16 @@ export async function adminEditUser(
   name: string | null,
 ): Promise<{ success: boolean }> {
   return adminApiCall<{ success: boolean }>(
-    `${getAdminApiBase()}/users/${userId}/edit`,
+    `${ADMIN_API}/users/${userId}/edit`,
     "PATCH",
     { email, name },
   );
 }
 
 export async function adminDeleteUser(userId: number): Promise<{ success: boolean }> {
-  return adminApiCall<{ success: boolean }>(`${getAdminApiBase()}/users/${userId}`, "DELETE");
+  return adminApiCall<{ success: boolean }>(`${ADMIN_API}/users/${userId}`, "DELETE");
 }
 
 export async function adminResetUserPassword(userId: number): Promise<AdminResetResult> {
-  return adminApiCall<AdminResetResult>(`${getAdminApiBase()}/users/${userId}/reset-password`, "POST");
+  return adminApiCall<AdminResetResult>(`${ADMIN_API}/users/${userId}/reset-password`, "POST");
 }
