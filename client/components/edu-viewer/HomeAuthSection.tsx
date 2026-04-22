@@ -18,6 +18,8 @@ import { createContext, useContext, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { getUser, clearAuthToken } from "@/utils/authClient";
+import { motion } from "framer-motion";
+import { ArrowRight, LogIn, Rocket } from "lucide-react";
 
 // ─── Auth context shared across all auth-sensitive spots on the page ──────────
 
@@ -34,17 +36,15 @@ const HomeAuthCtx = createContext<HomeAuthCtxValue>({
 export function HomeAuthProvider({
   children,
 }: {
-  initialIsAuthed?: boolean; // kept for API compat, ignored — token is in localStorage
+  initialIsAuthed?: boolean; 
   children: React.ReactNode;
 }) {
-  // Start as null (loading) so we never flash "Sign In" for an authenticated user.
   const [isAuthed, setIsAuthed] = useState<boolean | null>(null);
 
   useEffect(() => {
     getUser()
       .then(() => setIsAuthed(true))
       .catch((err) => {
-        // If the token was revoked (session superseded), clear stale token.
         if (err?.status === 401) clearAuthToken();
         setIsAuthed(false);
       });
@@ -57,40 +57,24 @@ export function HomeAuthProvider({
   );
 }
 
-// ─── Icons ────────────────────────────────────────────────────────────────────
-
-function IconArrow() {
-  return (
-    <svg
-      className="w-4 h-4"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={2.5}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <path d="M5 12h14M12 5l7 7-7 7" />
-    </svg>
-  );
-}
-
 // ─── Nav sign-in button ───────────────────────────────────────────────────────
-// Shown in the navbar only when the user is NOT authenticated.
+
+const MotionLink = motion.create(Link);
 
 export function HomeNavSignIn() {
   const { isAuthed } = useContext(HomeAuthCtx);
-  // While loading keep whatever was SSR'd (null treated as true so we don't
-  // flash an extra button while the fetch is in flight).
   if (isAuthed !== false) return null;
+  
   return (
-    <Link
+    <MotionLink
       href="/auth?next=/dashboard"
-      className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-md bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium transition-colors"
+      whileHover={{ scale: 1.05 }}
+      whileTap={{ scale: 0.95 }}
+      className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-white/5 dark:bg-gray-800/50 backdrop-blur-md border border-gray-200 dark:border-gray-700 hover:bg-white/20 dark:hover:bg-gray-800 hover:border-indigo-400 dark:hover:border-indigo-500 text-gray-800 dark:text-gray-200 text-sm font-medium transition-colors"
     >
+      <LogIn className="w-4 h-4" />
       Sign In
-      <IconArrow />
-    </Link>
+    </MotionLink>
   );
 }
 
@@ -113,34 +97,46 @@ export function HomeHeroCTA() {
       if (status === 401) {
         clearAuthToken();
         setIsAuthed(false);
-        window.dispatchEvent(new Event("navprogress:done")); // not navigating — cancel bar
+        window.dispatchEvent(new Event("navprogress:done")); 
       } else {
-        // Non-401 (network glitch etc.) — navigate anyway
         router.push(appHref);
       }
     }
   };
 
+  const buttonClasses = "relative group inline-flex items-stretch overflow-hidden rounded-full p-[1px]";
+  const innerClasses = "inline-flex items-center gap-2 px-6 py-3 rounded-full bg-indigo-600 group-hover:bg-indigo-700 text-white text-base font-semibold transition-colors shadow-[0_0_20px_rgba(99,102,241,0.4)] backdrop-blur-xl relative z-10";
+
   if (isAuthed) {
     return (
-      <button
-        onClick={handleLaunch}
-        className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold shadow-md shadow-indigo-500/20 hover:shadow-lg hover:shadow-indigo-500/30 hover:-translate-y-px transition-all cursor-pointer"
+      <motion.button 
+        onClick={handleLaunch} 
+        className={buttonClasses}
+        whileHover={{ scale: 1.05 }}
+        whileTap={{ scale: 0.95 }}
       >
-        Launch App
-        <IconArrow />
-      </button>
+        <div className="absolute inset-0 bg-linear-to-r from-indigo-400 via-fuchsia-400 to-indigo-400 opacity-70 group-hover:opacity-100 animate-[marquee_3s_linear_infinite]" style={{ backgroundSize: '200% auto' }} />
+        <span className={innerClasses}>
+          Launch App
+          <Rocket className="w-5 h-5" />
+        </span>
+      </motion.button>
     );
   }
 
   return (
-    <Link
-      href={signInHref}
-      className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold shadow-md shadow-indigo-500/20 hover:shadow-lg hover:shadow-indigo-500/30 hover:-translate-y-px transition-all"
+    <MotionLink 
+      href={signInHref} 
+      className={buttonClasses}
+      whileHover={{ scale: 1.05 }}
+      whileTap={{ scale: 0.95 }}
     >
-      Sign In
-      <IconArrow />
-    </Link>
+      <div className="absolute inset-0 bg-linear-to-r from-indigo-400 via-violet-500 to-fuchsia-400 opacity-70 group-hover:opacity-100 animate-[marquee_3s_linear_infinite]" style={{ backgroundSize: '200% auto' }} />
+      <span className={innerClasses}>
+        Sign In to Platform
+        <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+      </span>
+    </MotionLink>
   );
 }
 
@@ -163,40 +159,53 @@ export function HomeBottomCTA() {
       if (status === 401) {
         clearAuthToken();
         setIsAuthed(false);
-        window.dispatchEvent(new Event("navprogress:done")); // not navigating — cancel bar
+        window.dispatchEvent(new Event("navprogress:done")); 
       } else {
         router.push(appHref);
       }
     }
   };
 
+  const ctaButtonClasses = "inline-flex items-center gap-2 px-6 py-3 rounded-full bg-gray-900 border border-transparent dark:bg-white dark:text-gray-900 text-white hover:bg-gray-800 dark:hover:bg-gray-100 text-base font-semibold shadow-xl hover:shadow-2xl transition-all relative z-10";
+
   return (
-    <div className="max-w-sm mx-auto">
-      <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-3">
-        Ready to explore?
+    <motion.div 
+      className="max-w-xl mx-auto rounded-4xl p-10 bg-white/5 dark:bg-gray-900/40 backdrop-blur-2xl border border-gray-200/50 dark:border-gray-800/50 relative overflow-hidden"
+      initial={{ opacity: 0, y: 40 }}
+      whileInView={{ opacity: 1, y: 0 }}
+      viewport={{ once: true }}
+      transition={{ duration: 0.6, ease: "easeOut" }}
+    >
+      <div className="absolute inset-0 bg-linear-to-b from-indigo-500/10 to-transparent pointer-events-none" />
+      <h2 className="text-3xl font-extrabold text-gray-900 dark:text-white mb-4 relative z-10">
+        Ready to build the future?
       </h2>
-      <p className="text-sm text-gray-600 dark:text-gray-400 mb-8">
+      <p className="text-base text-gray-600 dark:text-gray-400 mb-8 relative z-10">
         {isAuthed
-          ? "Welcome back. Jump straight into your courses."
-          : "Sign in to access your courses and start learning."}
+          ? "Welcome back. Jump straight into your workspace."
+          : "Join today and experience the most advanced learning viewer."}
       </p>
       {isAuthed ? (
-        <button
+        <motion.button
           onClick={handleLaunch}
-          className="inline-flex items-center gap-2 px-6 py-3 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold shadow-md shadow-indigo-500/20 hover:shadow-lg hover:shadow-indigo-500/30 hover:-translate-y-px transition-all cursor-pointer"
+          className={ctaButtonClasses}
+          whileHover={{ scale: 1.05 }}
+          whileTap={{ scale: 0.95 }}
         >
           Launch Edu-Viewer PRO
-          <IconArrow />
-        </button>
+          <Rocket className="w-4 h-4" />
+        </motion.button>
       ) : (
-        <Link
+        <MotionLink
           href={signInHref}
-          className="inline-flex items-center gap-2 px-6 py-3 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold shadow-md shadow-indigo-500/20 hover:shadow-lg hover:shadow-indigo-500/30 hover:-translate-y-px transition-all"
+          className={ctaButtonClasses}
+          whileHover={{ scale: 1.05 }}
+          whileTap={{ scale: 0.95 }}
         >
-          Sign In to Get Started
-          <IconArrow />
-        </Link>
+          Get Started Now
+          <ArrowRight className="w-5 h-5 ml-1" />
+        </MotionLink>
       )}
-    </div>
+    </motion.div>
   );
 }

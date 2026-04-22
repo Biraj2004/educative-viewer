@@ -1,9 +1,9 @@
-import Link from "next/link";
 import DarkModeToggle from "./DarkModeToggle";
 import BackButton from "@/components/edu-viewer/BackButton";
 import { BRAND_ICON_URL } from "@/utils/branding";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
+
 
 interface Crumb {
   label: string;
@@ -54,8 +54,10 @@ export default function AppNavbar({
   mobileMenuTrigger,
 }: AppNavbarProps) {
   return (
-    <div className="sticky top-0 z-50 bg-white/95 dark:bg-gray-900/95 backdrop-blur-sm border-b border-gray-200 dark:border-gray-800 shadow-sm">
-      <div className="w-full px-8 h-14 flex items-center justify-between gap-5">
+    <div className="sticky top-0 z-50 bg-white/60 dark:bg-[#030712]/60 backdrop-blur-2xl border-b border-gray-200/50 dark:border-white/5 dark:supports-backdrop-filter:bg-[#030712]/40 shadow-sm dark:shadow-[0_4px_24px_-8px_rgba(0,0,0,0.5)] transition-all duration-500">
+      <div className="w-full px-8 h-14 flex items-center justify-between gap-5 relative">
+        {/* Premium subtle glass edge reflection instead of "gamer" neon */}
+        <div className="absolute bottom-0 left-0 w-full h-px bg-linear-to-r from-transparent via-gray-300 dark:via-white/12 to-transparent" />
 
         {/* ── Left: hamburger (mobile/tablet) + logo + breadcrumbs ──────── */}
         <div className="flex items-center min-w-0 overflow-hidden gap-2">
@@ -64,7 +66,8 @@ export default function AppNavbar({
             <span className="lg:hidden shrink-0">{mobileMenuTrigger}</span>
           )}
           {/* Logo */}
-          <Link href="/" className="flex items-center gap-2 group shrink-0">
+          {/* eslint-disable-next-line @next/next/no-html-link-for-pages */}
+          <a href="/" className="flex items-center gap-2 group shrink-0">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={BRAND_ICON_URL}
@@ -80,19 +83,19 @@ export default function AppNavbar({
               Edu-Viewer{" "}
               <span className="text-indigo-600 dark:text-indigo-400 font-bold">PRO</span>
             </span>
-          </Link>
+          </a>
 
           {/* Breadcrumbs */}
           {crumbs?.map((crumb, i) => (
             <span key={i} className="flex items-center min-w-0">
               <span className="mx-2.5 text-gray-300 dark:text-gray-700 select-none text-sm shrink-0">/</span>
               {crumb.href ? (
-                <Link
+                <a
                   href={crumb.href}
                   className="text-sm font-medium text-gray-500 dark:text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors truncate max-w-45"
                 >
                   {crumb.label}
-                </Link>
+                </a>
               ) : (
                 <span className="text-sm font-semibold text-gray-900 dark:text-gray-100 truncate max-w-45">
                   {crumb.label}

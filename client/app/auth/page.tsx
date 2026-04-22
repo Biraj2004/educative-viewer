@@ -3,17 +3,24 @@
 import { useState, useEffect, useRef, useCallback, Suspense } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { clearAuthToken, getAuthToken, getUser, login, signup, verify2FA, get2FASetup, enable2FA, rollbackSignup, forgotPasswordRequest, forgotPasswordVerify, forgotPasswordReset } from "@/utils/authClient";
+import { AnimatePresence, motion } from "framer-motion";
+import { clearAuthToken, getAuthToken, parseAuthTokenPayload, isRestrictedAuthFlow, getUser, login, signup, verify2FA, get2FASetup, enable2FA, rollbackSignup, forgotPasswordRequest, forgotPasswordVerify, forgotPasswordReset } from "@/utils/authClient";
 
 const AUTH_SUCCESS_REDIRECT = "/dashboard";
 
 // ─── Shared input style ───────────────────────────────────────────────────────
 
 const inputCls =
-  "w-full px-3.5 py-2.5 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-sm text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all";
+  "w-full rounded-xl border border-slate-300/70 dark:border-slate-700 bg-white/85 dark:bg-slate-950/65 px-3.5 py-2.5 text-sm text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 shadow-[inset_0_1px_0_rgba(255,255,255,0.45)] dark:shadow-none focus:outline-none focus:ring-2 focus:ring-cyan-400/70 dark:focus:ring-cyan-500/60 focus:border-cyan-400/70 dark:focus:border-cyan-600 transition-all";
 
 const btnPrimary =
-  "w-full py-2.5 px-4 rounded-lg bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 dark:focus:ring-offset-gray-950 text-white text-sm font-semibold transition-colors cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed";
+  "w-full rounded-xl bg-gradient-to-r from-cyan-500 via-blue-500 to-indigo-500 px-4 py-2.5 text-sm font-semibold text-white shadow-[0_12px_30px_-16px_rgba(37,99,235,0.9)] transition-all cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed";
+
+const stepMotion = {
+  initial: { opacity: 0, y: 10, scale: 0.985 },
+  animate: { opacity: 1, y: 0, scale: 1 },
+  exit: { opacity: 0, y: -8, scale: 0.985 },
+};
 
 // ─── Eye icon for password toggle ────────────────────────────────────────────
 
@@ -152,7 +159,7 @@ function TwoFAStep({
       <button
         type="button"
         onClick={onBack}
-        className="inline-flex items-center justify-center gap-1.5 w-full py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 hover:border-indigo-300 dark:hover:border-indigo-700 hover:text-indigo-700 dark:hover:text-indigo-400 text-xs font-medium transition-all cursor-pointer"
+        className="inline-flex w-full items-center justify-center gap-1.5 rounded-xl border border-slate-300/80 bg-white/70 py-2 text-xs font-medium text-slate-600 transition-colors hover:border-cyan-400/40 hover:text-cyan-700 dark:border-slate-700 dark:bg-slate-900/65 dark:text-slate-300 dark:hover:border-cyan-700 dark:hover:text-cyan-300"
       >
         <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">
           <path d="m15 18-6-6 6-6" />
@@ -214,7 +221,7 @@ function ForgotEmailForm({ onSuccess, onBack }: { onSuccess: () => void; onBack:
       <button
         type="button"
         onClick={onBack}
-        className="inline-flex items-center justify-center gap-1.5 w-full py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 hover:border-indigo-300 dark:hover:border-indigo-700 hover:text-indigo-700 dark:hover:text-indigo-400 text-xs font-medium transition-all cursor-pointer"
+        className="inline-flex w-full items-center justify-center gap-1.5 rounded-xl border border-slate-300/80 bg-white/70 py-2 text-xs font-medium text-slate-600 transition-colors hover:border-cyan-400/40 hover:text-cyan-700 dark:border-slate-700 dark:bg-slate-900/65 dark:text-slate-300 dark:hover:border-cyan-700 dark:hover:text-cyan-300"
       >
         <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">
           <path d="m15 18-6-6 6-6" />
@@ -282,7 +289,7 @@ function ForgotTOTPStep({ onSuccess, onBack }: { onSuccess: () => void; onBack: 
       <button
         type="button"
         onClick={onBack}
-        className="inline-flex items-center justify-center gap-1.5 w-full py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 hover:border-indigo-300 dark:hover:border-indigo-700 hover:text-indigo-700 dark:hover:text-indigo-400 text-xs font-medium transition-all cursor-pointer"
+        className="inline-flex w-full items-center justify-center gap-1.5 rounded-xl border border-slate-300/80 bg-white/70 py-2 text-xs font-medium text-slate-600 transition-colors hover:border-cyan-400/40 hover:text-cyan-700 dark:border-slate-700 dark:bg-slate-900/65 dark:text-slate-300 dark:hover:border-cyan-700 dark:hover:text-cyan-300"
       >
         <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">
           <path d="m15 18-6-6 6-6" />
@@ -383,7 +390,7 @@ function ForgotResetForm({ onSuccess, onBack }: { onSuccess: () => void; onBack:
       <button
         type="button"
         onClick={onBack}
-        className="inline-flex items-center justify-center gap-1.5 w-full py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 hover:border-indigo-300 dark:hover:border-indigo-700 hover:text-indigo-700 dark:hover:text-indigo-400 text-xs font-medium transition-all cursor-pointer"
+        className="inline-flex w-full items-center justify-center gap-1.5 rounded-xl border border-slate-300/80 bg-white/70 py-2 text-xs font-medium text-slate-600 transition-colors hover:border-cyan-400/40 hover:text-cyan-700 dark:border-slate-700 dark:bg-slate-900/65 dark:text-slate-300 dark:hover:border-cyan-700 dark:hover:text-cyan-300"
       >
         <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">
           <path d="m15 18-6-6 6-6" />
@@ -417,6 +424,10 @@ function LoginForm({
     setLoading(true);
     try {
       const data = await login(email, password);
+      if (data.requiresFirstLogin) {
+        window.location.href = "/auth/first-login";
+        return;
+      }
       if (data.requiresTwoFactorSetup) {
         const setup = await get2FASetup();
         onSuccess2FASetup(setup.qrCodeUrl);
@@ -675,6 +686,12 @@ function AuthPageInner() {
     getUser()
       .then(() => {
         if (!cancelled) {
+          const token = getAuthToken();
+          const payload = parseAuthTokenPayload(token || "");
+          if (payload && isRestrictedAuthFlow(payload)) {
+            setCheckingSession(false);
+            return;
+          }
           window.location.replace(AUTH_SUCCESS_REDIRECT);
         }
       })
@@ -692,7 +709,7 @@ function AuthPageInner() {
   if (checkingSession) {
     return (
       <div className="flex-1 flex items-center justify-center px-4 py-12">
-        <div className="w-8 h-8 rounded-full border-2 border-indigo-600 border-t-transparent animate-spin" />
+        <div className="w-8 h-8 rounded-full border-2 border-cyan-500 border-t-transparent animate-spin" />
       </div>
     );
   }
@@ -763,14 +780,28 @@ function AuthPageInner() {
   const showForgot  = step === "forgot-email" || step === "forgot-2fa" || step === "forgot-reset";
 
   return (
-    <div className="flex-1 flex flex-col items-center justify-center px-4 py-12">
-      {/* Card */}
-      <div className="w-full max-w-md">
+    <div className="relative flex-1 overflow-hidden px-4 py-12">
+      <div className="pointer-events-none absolute inset-0">
+        <motion.div
+          initial={{ opacity: 0.35 }}
+          animate={{ opacity: [0.32, 0.48, 0.32], x: [0, 12, 0], y: [0, -8, 0] }}
+          transition={{ duration: 11, repeat: Infinity, ease: "easeInOut" }}
+          className="absolute -top-20 left-1/2 h-72 w-72 -translate-x-[135%] rounded-full bg-cyan-400/20 blur-3xl dark:bg-cyan-500/20"
+        />
+        <motion.div
+          initial={{ opacity: 0.28 }}
+          animate={{ opacity: [0.25, 0.38, 0.25], x: [0, -12, 0], y: [0, 10, 0] }}
+          transition={{ duration: 13, repeat: Infinity, ease: "easeInOut" }}
+          className="absolute -bottom-16 right-1/2 h-72 w-72 translate-x-[155%] rounded-full bg-indigo-400/20 blur-3xl dark:bg-indigo-500/20"
+        />
+      </div>
+      <div className="relative z-10 flex h-full flex-col items-center justify-center">
+        <div className="w-full max-w-xl">
 
-        <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 shadow-lg shadow-gray-100/50 dark:shadow-black/30 overflow-hidden">
+        <div className="overflow-hidden rounded-3xl border border-slate-200/70 bg-white/80 shadow-[0_36px_90px_-45px_rgba(15,23,42,0.45)] backdrop-blur-xl dark:border-slate-800/80 dark:bg-slate-950/70">
         {/* Session expired notice */}
-          {sessionExpired && !showForgot && (
-            <div className="mx-8 mt-5 mb-0 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 px-3 py-2.5 text-xs text-amber-700 dark:text-amber-400 flex items-center gap-2">
+          {sessionExpired && !showForgot && !showTwoFA && (
+            <div className="mx-6 mt-6 mb-0 flex items-center gap-2 rounded-xl border border-amber-300/70 bg-amber-50/90 px-3 py-2.5 text-xs text-amber-800 dark:border-amber-800 dark:bg-amber-950/35 dark:text-amber-300">
               <svg className="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
                 <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
               </svg>
@@ -780,38 +811,48 @@ function AuthPageInner() {
 
           {/* Tab bar (hidden during 2FA / forgot-password) */}
           {!showTwoFA && !showForgot && (
-            <div className="flex border-b border-gray-100 dark:border-gray-800">
-              {(["login", "signup"] as const).map((t) => (
-                <button
-                  key={t}
-                  onClick={() => { setTab(t); setStep(t); }}
-                  className={`flex-1 py-3.5 text-sm font-semibold transition-colors cursor-pointer ${
-                    tab === t
-                      ? "text-indigo-600 dark:text-indigo-400 border-b-2 border-indigo-600 dark:border-indigo-400 -mb-px"
-                      : "text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"
-                  }`}
-                >
-                  {t === "login" ? "Sign In" : "Create Account"}
-                </button>
-              ))}
+            <div className="p-2">
+              <div className="relative grid grid-cols-2 rounded-2xl border border-slate-200/90 bg-slate-100/80 p-1 dark:border-slate-800 dark:bg-slate-900/70">
+                {(["login", "signup"] as const).map((t) => (
+                  <button
+                    key={t}
+                    type="button"
+                    onClick={() => { setTab(t); setStep(t); }}
+                    className={`relative z-10 rounded-xl px-3 py-2.5 text-sm font-semibold transition-colors ${
+                      tab === t
+                        ? "text-slate-900 dark:text-slate-100"
+                        : "text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"
+                    }`}
+                  >
+                    {tab === t && (
+                      <motion.span
+                        layoutId="auth-tab-indicator"
+                        transition={{ type: "spring", stiffness: 280, damping: 28 }}
+                        className="absolute inset-0 -z-10 rounded-xl bg-white shadow-sm dark:bg-slate-800"
+                      />
+                    )}
+                    {t === "login" ? "Sign In" : "Create Account"}
+                  </button>
+                ))}
+              </div>
             </div>
           )}
 
           {/* 2FA heading */}
           {showTwoFA && (
-            <div className="px-8 pt-7 pb-1">
+            <div className="border-b border-slate-200/90 px-8 pb-4 pt-7 dark:border-slate-800/90">
               <div className="flex items-center gap-3 mb-1">
-                <div className="w-8 h-8 rounded-lg bg-indigo-50 dark:bg-indigo-950/60 flex items-center justify-center">
-                  <svg className="w-4 h-4 text-indigo-600 dark:text-indigo-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-cyan-50 dark:bg-cyan-950/60">
+                  <svg className="h-4 w-4 text-cyan-600 dark:text-cyan-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
                     <rect x="5" y="11" width="14" height="10" rx="2" />
                     <path d="M8 11V7a4 4 0 0 1 8 0v4" />
                   </svg>
                 </div>
                 <div>
-                  <h2 className="text-base font-bold text-gray-900 dark:text-gray-100">
+                  <h2 className="text-base font-bold text-slate-900 dark:text-slate-100">
                     {step === "2fa-setup" ? "Set Up Two-Factor Auth" : "Two-Factor Verification"}
                   </h2>
-                  <p className="text-xs text-gray-400 dark:text-gray-600">Extra layer of security</p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">Extra layer of account protection</p>
                 </div>
               </div>
             </div>
@@ -819,22 +860,22 @@ function AuthPageInner() {
 
           {/* Forgot-password heading */}
           {showForgot && (
-            <div className="px-8 pt-7 pb-1">
+            <div className="border-b border-slate-200/90 px-8 pb-4 pt-7 dark:border-slate-800/90">
               <div className="flex items-center gap-3 mb-1">
-                <div className="w-8 h-8 rounded-lg bg-amber-50 dark:bg-amber-950/60 flex items-center justify-center">
-                  <svg className="w-4 h-4 text-amber-600 dark:text-amber-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-amber-50 dark:bg-amber-950/60">
+                  <svg className="h-4 w-4 text-amber-600 dark:text-amber-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
                     <circle cx="12" cy="12" r="10" />
                     <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
                     <line x1="12" y1="17" x2="12.01" y2="17" />
                   </svg>
                 </div>
                 <div>
-                  <h2 className="text-base font-bold text-gray-900 dark:text-gray-100">
+                  <h2 className="text-base font-bold text-slate-900 dark:text-slate-100">
                     {step === "forgot-email" && "Reset Password"}
                     {step === "forgot-2fa"   && "Verify Identity"}
                     {step === "forgot-reset" && "Set New Password"}
                   </h2>
-                  <p className="text-xs text-gray-400 dark:text-gray-600">
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
                     {step === "forgot-email" && "Step 1 of 3 — enter your email"}
                     {step === "forgot-2fa"   && "Step 2 of 3 — authenticator code"}
                     {step === "forgot-reset" && "Step 3 of 3 — choose a new password"}
@@ -845,51 +886,55 @@ function AuthPageInner() {
           )}
 
           {/* Body */}
-          <div className="px-8 py-7">
-            {step === "login" && (
-              <LoginForm
-                onSuccess2FA={handleLoginSuccess2FA}
-                onSuccess2FASetup={handleLoginSetup2FA}
-                onForgotPassword={handleForgotStart}
-              />
-            )}
-            {step === "signup" && <SignupForm onShow2FASetup={handleSignupSuccess2FA} />}
-            {(step === "2fa-verify" || step === "2fa-setup") && (
-              <TwoFAStep
-                mode={step === "2fa-setup" ? "setup" : "verify"}
-                qrUrl={setupQrUrl}
-                notice={step === "2fa-setup" && twoFASetupSource === "login"
-                  ? "Your account exists, but two-factor authentication setup was never completed. Scan the QR code below to finish setup before signing in."
-                  : undefined}
-                onSuccess={handleTwoFASuccess}
-                onBack={handleBack}
-              />
-            )}
-            {step === "forgot-email" && <ForgotEmailForm onSuccess={handleForgotEmail} onBack={handleForgotBack} />}
-            {step === "forgot-2fa"   && <ForgotTOTPStep  onSuccess={handleForgotTOTP}  onBack={handleForgotBack} />}
-            {step === "forgot-reset" && <ForgotResetForm onSuccess={handleForgotReset} onBack={handleForgotBack} />}
+          <div className="px-6 pb-6 pt-5 md:px-8 md:pb-8 md:pt-6">
+            <AnimatePresence mode="wait" initial={false}>
+              <motion.div key={step} {...stepMotion} transition={{ duration: 0.24, ease: "easeOut" }}>
+                {step === "login" && (
+                  <LoginForm
+                    onSuccess2FA={handleLoginSuccess2FA}
+                    onSuccess2FASetup={handleLoginSetup2FA}
+                    onForgotPassword={handleForgotStart}
+                  />
+                )}
+                {step === "signup" && <SignupForm onShow2FASetup={handleSignupSuccess2FA} />}
+                {(step === "2fa-verify" || step === "2fa-setup") && (
+                  <TwoFAStep
+                    mode={step === "2fa-setup" ? "setup" : "verify"}
+                    qrUrl={setupQrUrl}
+                    notice={step === "2fa-setup" && twoFASetupSource === "login"
+                      ? "Your account exists, but two-factor authentication setup was never completed. Scan the QR code below to finish setup before signing in."
+                      : undefined}
+                    onSuccess={handleTwoFASuccess}
+                    onBack={handleBack}
+                  />
+                )}
+                {step === "forgot-email" && <ForgotEmailForm onSuccess={handleForgotEmail} onBack={handleForgotBack} />}
+                {step === "forgot-2fa"   && <ForgotTOTPStep  onSuccess={handleForgotTOTP}  onBack={handleForgotBack} />}
+                {step === "forgot-reset" && <ForgotResetForm onSuccess={handleForgotReset} onBack={handleForgotBack} />}
+              </motion.div>
+            </AnimatePresence>
           </div>
 
           {/* Footer link */}
           {!showTwoFA && !showForgot && (
-            <div className="px-8 pb-6 text-center">
-              <p className="text-xs text-gray-400 dark:text-gray-600">
+            <div className="border-t border-slate-200/80 px-8 pb-8 pt-4 text-center dark:border-slate-800/90">
+              <p className="text-xs text-slate-500 dark:text-slate-400">
                 {tab === "login" ? (
-                  <>Don&apos;t have an account?{" "}
+                  <>No account yet?{" "}
                     <button
                       type="button"
                       onClick={() => { setTab("signup"); setStep("signup"); }}
-                      className="text-indigo-600 dark:text-indigo-400 hover:underline font-medium cursor-pointer"
+                      className="font-semibold text-cyan-700 hover:underline dark:text-cyan-300"
                     >
-                      Sign up
+                      Create one
                     </button>
                   </>
                 ) : (
-                  <>Already have an account?{" "}
+                  <>Already a member?{" "}
                     <button
                       type="button"
                       onClick={() => { setTab("login"); setStep("login"); }}
-                      className="text-indigo-600 dark:text-indigo-400 hover:underline font-medium cursor-pointer"
+                      className="font-semibold text-cyan-700 hover:underline dark:text-cyan-300"
                     >
                       Sign in
                     </button>
@@ -901,31 +946,32 @@ function AuthPageInner() {
         </div>
 
         {/* Back to home — hidden during 2FA / forgot-password (go-back inside card replaces it) */}
-        <div className="mt-8 flex flex-col items-center gap-4">
-          <div className="flex items-center gap-4">
+        <div className="mt-6 flex flex-col items-center gap-4">
+          <div className="flex flex-wrap items-center justify-center gap-3">
             <Link
               href="/"
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 hover:border-indigo-300 dark:hover:border-indigo-700 hover:text-indigo-700 dark:hover:text-indigo-400 text-xs font-medium transition-all"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300/80 bg-white/70 px-3 py-1.5 text-xs font-medium text-slate-600 transition-colors hover:border-cyan-400/40 hover:text-cyan-700 dark:border-slate-700 dark:bg-slate-900/60 dark:text-slate-300 dark:hover:border-cyan-700 dark:hover:text-cyan-300"
             >
-              <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">
+              <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">
                 <path d="m15 18-6-6 6-6" />
               </svg>
               Back to home
             </Link>
             <Link
               href="/contact"
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 hover:border-indigo-300 dark:hover:border-indigo-700 hover:text-indigo-700 dark:hover:text-indigo-400 text-xs font-medium transition-all"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300/80 bg-white/70 px-3 py-1.5 text-xs font-medium text-slate-600 transition-colors hover:border-cyan-400/40 hover:text-cyan-700 dark:border-slate-700 dark:bg-slate-900/60 dark:text-slate-300 dark:hover:border-cyan-700 dark:hover:text-cyan-300"
             >
-              <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">
+              <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">
                 <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
               </svg>
               Contact Support
             </Link>
           </div>
           
-          <p className="text-[11px] text-gray-400 dark:text-gray-600">
-            Powered by <span className="font-bold text-gray-500">Edu-Viewer PRO</span>
+          <p className="text-[11px] text-slate-500 dark:text-slate-400">
+            Powered by <span className="font-semibold text-slate-700 dark:text-slate-200">Edu-Viewer PRO</span>
           </p>
+        </div>
         </div>
       </div>
     </div>
@@ -936,7 +982,7 @@ export default function AuthPage() {
   return (
     <Suspense fallback={
       <div className="flex-1 flex items-center justify-center">
-        <div className="w-8 h-8 rounded-full border-2 border-indigo-600 border-t-transparent animate-spin" />
+        <div className="w-8 h-8 rounded-full border-2 border-cyan-500 border-t-transparent animate-spin" />
       </div>
     }>
       <AuthPageInner />

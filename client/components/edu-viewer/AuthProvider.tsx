@@ -65,8 +65,16 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
     let cancelled = false;
     setAuthToken(getAuthToken());
     getUser()
-      .then((u) => { if (!cancelled) setUser(u); })
-      .catch(() => { 
+      .then((u) => {
+        if (!cancelled) {
+          setUser(u);
+          // Guard: first-login users must set their password before using the dashboard
+          if (u.isFirstLogin && pathname !== "/auth/first-login") {
+            window.location.replace("/auth/first-login");
+          }
+        }
+      })
+      .catch(() => {
         if (!cancelled) {
           setUser(null);
         }

@@ -116,6 +116,8 @@ class DBManager:
 
     def init_auth_db(self) -> None:
         self.auth_backend.init_schema()
+        self.auth_backend.ensure_is_active_column()
+        self.auth_backend.ensure_first_login_columns()
 
     def keep_auth_db_alive(self) -> None:
         self.auth_backend.keep_alive()
