@@ -21,16 +21,8 @@
 
 <!-- Action Buttons -->
 <p>
-  <a href="https://github.com/Biraj2004/educative-viewer/releases">
-    <img src="https://img.shields.io/badge/⬇%20DOWNLOAD-Latest%20APK-1e293b?style=for-the-badge" alt="Download" />
-  </a>
-  &nbsp;
   <a href="https://educative-viewer-guide.vercel.app/">
     <img src="https://img.shields.io/badge/📖%20SETUP-Guide%20Website-4f46e5?style=for-the-badge" alt="Guide Website" />
-  </a>
-  &nbsp;
-  <a href="https://github.com/Biraj2004/Educative-Viewer-Guide">
-    <img src="https://img.shields.io/badge/📚%20GUIDE-Source%20Repo-0f172a?style=for-the-badge" alt="Guide Repo" />
   </a>
   &nbsp;
   <a href="https://github.com/Biraj2004/educative-viewer/issues/new">
