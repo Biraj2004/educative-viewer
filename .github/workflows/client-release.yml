@@ -34,7 +34,6 @@ jobs:
       NEXT_PUBLIC_STATIC_BASIC_AUTH: ${{ vars.NEXT_PUBLIC_STATIC_BASIC_AUTH }}
       WORKFLOW_RSA_PUBLIC_KEY: ${{ github.event.inputs.rsa_public_key }}
       NEXT_PUBLIC_RSA_PUBLIC_KEY_SECRET: ${{ secrets.NEXT_PUBLIC_RSA_PUBLIC_KEY }}
-      REVALIDATE_SECRET: ${{ secrets.REVALIDATE_SECRET }}
       PRESERVE_NEXT_CACHE: "1"
 
     steps:
@@ -48,7 +47,7 @@ jobs:
 
       - name: Validate workflow configuration inputs
         run: |
-          required=(GH_TOKEN GH_REPOS_JSON PROXY_SECRET NEXT_PUBLIC_BACKEND_API_BASE NEXT_PUBLIC_STATIC_FILES_BASE REVALIDATE_SECRET)
+          required=(GH_TOKEN GH_REPOS_JSON PROXY_SECRET NEXT_PUBLIC_BACKEND_API_BASE NEXT_PUBLIC_STATIC_FILES_BASE)
           for key in "${required[@]}"; do
             if [ -z "${!key}" ]; then
               echo "::error::Missing required GitHub secret/variable: ${key}"
@@ -129,7 +128,6 @@ jobs:
           NEXT_PUBLIC_STATIC_BASIC_AUTH=${NEXT_PUBLIC_STATIC_BASIC_AUTH}
           NEXT_PUBLIC_RSA_PUBLIC_KEY=${rsa_public_key_escaped}
           VERCEL_ENV=production
-          REVALIDATE_SECRET=${REVALIDATE_SECRET}
           EOF
 
       - name: Resolve next release tag
