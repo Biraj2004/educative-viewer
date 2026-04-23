@@ -13,3 +13,5 @@ __pycache__
 auth.sqlite3
 .env
 temp.json
+agent-context.md
+README_OLD.md
