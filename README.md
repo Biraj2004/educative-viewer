@@ -44,10 +44,7 @@ Edu-Viewer PRO is a clean, performance-focused full-stack web application for vi
 
 ## 📖 Full Setup Guide
 
-> For a detailed visual walkthrough with screenshots and step-by-step instructions, visit the official guide:
->
-> 🌐 **[educative-viewer-guide.vercel.app](https://educative-viewer-guide.vercel.app/)**
-> &nbsp;&nbsp;&nbsp;📦 **[Guide Source Repository](https://github.com/Biraj2004/Educative-Viewer-Guide)**
+> For a detailed visual walkthrough with screenshots and step-by-step instructions, visit the official guide: **[educative-viewer-guide.vercel.app](https://educative-viewer-guide.vercel.app/)**
 
 ---
 
