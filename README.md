@@ -18,6 +18,7 @@ What the launcher does:
 - Creates `server/env` if missing and installs backend dependencies.
 - Generates RSA keys and updates `server/.env` with local defaults.
 - Writes local runtime values into `client/.env.local`.
+- Prompts once for the course DB path `path/to/educative_scraper.db`.
 - Prompts once for the static API root (defaults to the parent folder of the course DB) and creates `<staticRoot>/api/images`.
 - Builds the Next.js production bundle only when `.next` is missing (use `--force-build` when you want a rebuild).
 - Starts Flask, Next.js, and an embedded proxy on port 80.
