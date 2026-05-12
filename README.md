@@ -39,11 +39,15 @@ node local-start.js --proxy-port 3000 --client-port 3001
 
 # Point static assets to another folder
 node local-start.js --static-root D:\path\to\static
+
+# Edit local server env values (invite codes, JWT secret, DB paths)
+node local-start.js --edit-env
 ```
 
 Notes:
 - On Windows, port 80 requires an elevated shell. If it fails, re-run as Administrator or use `--proxy-port`.
 - Static images must live under `<staticRoot>/api/images` and will be served at `/api/images/...`.
+- Default invite code for local is `local`.
 
 ## Manual setup
 

@@ -29,6 +29,7 @@ const backendPort = parsePort(args['backend-port'] || process.env.EV_BACKEND_POR
 const clientPort = parsePort(args['client-port'] || process.env.EV_CLIENT_PORT, 3000, 'client-port');
 const skipBuild = !!args['skip-build'] || process.env.EV_SKIP_BUILD === '1';
 const forceBuild = !!args['force-build'] || process.env.EV_FORCE_BUILD === '1';
+const editEnv = !!args['edit-env'] || process.env.EV_EDIT_ENV === '1';
 
 const children = [];
 let proxyServer = null;
@@ -42,8 +43,14 @@ async function main() {
   const python = resolvePythonCommand();
   ensurePythonVersion(python.versionText);
 
-  const serverEnv = ensureServerEnv({
+  const venvPython = ensureVenv(python);
+  installPythonDeps(venvPython);
+
+  const serverEnv = await ensureServerEnv({
     backendPort,
+    pythonExec: venvPython,
+    rl,
+    editEnv,
   });
   const publicKeyOneline = serverEnv.publicKeyOneline;
   const defaultStaticRoot = serverEnv.courseDbPath
@@ -70,8 +77,15 @@ async function main() {
 
   ensureStaticRoot(staticRoot);
 
-  const venvPython = ensureVenv(python);
-  installPythonDeps(venvPython);
+  printEnvSummary({
+    proxyPort,
+    backendPort,
+    clientPort,
+    authDbPath: serverEnv.authDbPath,
+    courseDbPath: serverEnv.courseDbPath,
+    inviteCodes: serverEnv.inviteCodes,
+    staticRoot,
+  });
 
   const backendProcess = startBackend(venvPython);
   const clientProcess = await startClient({ skipBuild, forceBuild, clientPort });
@@ -106,6 +120,7 @@ function printUsage() {
   console.log('  --static-root <path>   Static API root (default: parent of course DB)');
   console.log('  --skip-build           Skip Next.js build (requires existing .next)');
   console.log('  --force-build          Rebuild Next.js even if .next exists');
+  console.log('  --edit-env             Prompt to edit server env values');
 }
 
 function parseArgs(argv) {
@@ -276,7 +291,7 @@ function isPlaceholder(value) {
   return false;
 }
 
-function ensureServerEnv({ backendPort }) {
+async function ensureServerEnv({ backendPort, pythonExec, rl, editEnv }) {
   ensureEnvFile(SERVER_ENV_PATH, SERVER_ENV_EXAMPLE_PATH);
 
   const current = parseEnvFile(SERVER_ENV_PATH);
@@ -284,6 +299,7 @@ function ensureServerEnv({ backendPort }) {
 
   const defaultAuthDbPath = path.join(SERVER_DIR, 'auth.sqlite3');
   const defaultCourseDbPath = path.join(SERVER_DIR, 'course.sqlite3');
+  const currentCourseDbPath = current.COURSE_SQLITE_DB_PATH || current.DB_PATH || '';
 
   if (isPlaceholder(current.FLASK_PORT)) updates.FLASK_PORT = String(backendPort);
   if (isPlaceholder(current.FLASK_DEBUG)) updates.FLASK_DEBUG = '0';
@@ -310,6 +326,36 @@ function ensureServerEnv({ backendPort }) {
     updates.DB_PATH = defaultCourseDbPath;
   }
 
+  if (rl) {
+    const courseDefault = !isPlaceholder(currentCourseDbPath)
+      ? currentCourseDbPath
+      : defaultCourseDbPath;
+    const shouldPromptCourse = editEnv || isPlaceholder(currentCourseDbPath);
+    if (shouldPromptCourse) {
+      const chosen = await promptValue(rl, 'Course DB path', courseDefault);
+      updates.COURSE_SQLITE_DB_PATH = chosen;
+      updates.DB_PATH = chosen;
+    }
+  }
+
+  if (rl && editEnv) {
+    const currentInvite = current.INVITE_CODES || updates.INVITE_CODES || 'local';
+    const inviteCodes = await promptValue(rl, 'Invite codes (CSV)', currentInvite, { allowEmpty: false });
+    updates.INVITE_CODES = inviteCodes;
+
+    const currentJwt = current.JWT_SECRET || updates.JWT_SECRET || '';
+    const jwtSecret = await promptValue(rl, 'JWT secret', currentJwt || crypto.randomBytes(32).toString('hex'), {
+      sensitive: true,
+    });
+    updates.JWT_SECRET = jwtSecret;
+
+    if (useSqlite) {
+      const currentAuthPath = current.AUTH_SQLITE_DB_PATH || updates.AUTH_SQLITE_DB_PATH || defaultAuthDbPath;
+      const authPath = await promptValue(rl, 'Auth DB path (SQLite)', currentAuthPath);
+      updates.AUTH_SQLITE_DB_PATH = authPath;
+    }
+  }
+
   if (isPlaceholder(current.JWT_SECRET)) {
     updates.JWT_SECRET = crypto.randomBytes(32).toString('hex');
   }
@@ -318,11 +364,11 @@ function ensureServerEnv({ backendPort }) {
 
   let publicKeyOneline = '';
   if (isPlaceholder(current.RSA_PRIVATE_KEY)) {
-    const keys = generateRsaKeys();
+    const keys = generateRsaKeysWithPython(pythonExec);
     updates.RSA_PRIVATE_KEY = keys.privateKeyOneline;
     publicKeyOneline = keys.publicKeyOneline;
   } else {
-    publicKeyOneline = derivePublicKey(current.RSA_PRIVATE_KEY);
+    publicKeyOneline = derivePublicKeyWithPython(pythonExec, current.RSA_PRIVATE_KEY);
   }
 
   const finalVars = { ...current, ...updates };
@@ -330,40 +376,98 @@ function ensureServerEnv({ backendPort }) {
 
   const courseDbPathRaw = finalVars.COURSE_SQLITE_DB_PATH || finalVars.DB_PATH || defaultCourseDbPath;
   const courseDbPath = resolvePathFrom(SERVER_DIR, courseDbPathRaw);
+  const authDbPathRaw = finalVars.AUTH_SQLITE_DB_PATH || defaultAuthDbPath;
+  const authDbPath = resolvePathFrom(SERVER_DIR, authDbPathRaw);
   const staticRootFromEnv = finalVars.EV_STATIC_API_ROOT || '';
+  const inviteCodes = finalVars.INVITE_CODES || '';
 
   return {
     publicKeyOneline,
+    authDbPath,
     courseDbPath,
     staticRootFromEnv,
+    inviteCodes,
   };
 }
 
-function generateRsaKeys() {
-  const { publicKey, privateKey } = crypto.generateKeyPairSync('rsa', {
-    modulusLength: 2048,
-    publicKeyEncoding: { type: 'spki', format: 'pem' },
-    privateKeyEncoding: { type: 'pkcs1', format: 'pem' },
-  });
+function generateRsaKeysWithPython(pythonExec) {
+  const code = [
+    'from cryptography.hazmat.primitives.asymmetric import rsa',
+    'from cryptography.hazmat.primitives import serialization',
+    'priv = rsa.generate_private_key(public_exponent=65537, key_size=2048)',
+    'priv_pem = priv.private_bytes(',
+    '    encoding=serialization.Encoding.PEM,',
+    '    format=serialization.PrivateFormat.TraditionalOpenSSL,',
+    '    encryption_algorithm=serialization.NoEncryption(),',
+    ').decode().strip().replace("\\n", "\\\\n")',
+    'pub_pem = priv.public_key().public_bytes(',
+    '    encoding=serialization.Encoding.PEM,',
+    '    format=serialization.PublicFormat.SubjectPublicKeyInfo,',
+    ').decode().strip().replace("\\n", "\\\\n")',
+    'print(priv_pem)',
+    'print(pub_pem)',
+  ].join('\n');
+
+  const output = runPythonSnippet(pythonExec, code, {});
+  const lines = output.split(/\r?\n/).filter((line) => line.trim());
+  if (lines.length < 2) {
+    console.error('[error] Failed to generate RSA keys using Python.');
+    process.exit(1);
+  }
 
   return {
-    privateKeyOneline: privateKey.trim().replace(/\n/g, '\\n'),
-    publicKeyOneline: publicKey.trim().replace(/\n/g, '\\n'),
+    privateKeyOneline: lines[0],
+    publicKeyOneline: lines[1],
   };
 }
 
-function derivePublicKey(privateKeyOneline) {
-  try {
-    const privatePem = privateKeyOneline.replace(/\\n/g, '\n');
-    const privateKey = crypto.createPrivateKey(privatePem);
-    const publicKey = crypto.createPublicKey(privateKey);
-    const publicPem = publicKey.export({ type: 'spki', format: 'pem' }).toString();
-    return publicPem.trim().replace(/\n/g, '\\n');
-  } catch (err) {
+function derivePublicKeyWithPython(pythonExec, privateKeyOneline) {
+  const code = [
+    'import os',
+    'from cryptography.hazmat.primitives import serialization',
+    'from cryptography.hazmat.primitives.serialization import load_pem_private_key',
+    'raw = os.environ.get("EV_RSA_PRIVATE_KEY", "")',
+    'pem = raw.replace("\\\\n", "\\n").encode()',
+    'key = load_pem_private_key(pem, password=None)',
+    'pub = key.public_key().public_bytes(',
+    '    encoding=serialization.Encoding.PEM,',
+    '    format=serialization.PublicFormat.SubjectPublicKeyInfo,',
+    ').decode().strip().replace("\\n", "\\\\n")',
+    'print(pub)',
+  ].join('\n');
+
+  const output = runPythonSnippet(pythonExec, code, {
+    EV_RSA_PRIVATE_KEY: privateKeyOneline,
+  });
+
+  const line = output.split(/\r?\n/).find((value) => value.trim());
+  if (!line) {
     console.error('[error] Failed to derive RSA public key from RSA_PRIVATE_KEY.');
     console.error('        Re-run after clearing RSA_PRIVATE_KEY in server/.env.');
     process.exit(1);
   }
+
+  return line.trim();
+}
+
+function runPythonSnippet(pythonExec, code, extraEnv) {
+  const result = spawnSync(pythonExec, ['-c', code], {
+    cwd: SERVER_DIR,
+    env: { ...process.env, ...extraEnv },
+    stdio: ['ignore', 'pipe', 'pipe'],
+    encoding: 'utf8',
+  });
+
+  if (result.status !== 0) {
+    const stderr = (result.stderr || '').trim();
+    const stdout = (result.stdout || '').trim();
+    if (stderr) console.error(stderr);
+    if (stdout) console.error(stdout);
+    console.error('[error] Python RSA helper failed.');
+    process.exit(result.status ?? 1);
+  }
+
+  return (result.stdout || '').toString().trim();
 }
 
 function ensureClientEnv({ proxyPort, publicKeyOneline }) {
@@ -657,6 +761,39 @@ async function promptStaticRoot(rl, defaultRoot) {
 
 function ask(rl, question) {
   return new Promise((resolve) => rl.question(question, resolve));
+}
+
+function printEnvSummary({
+  proxyPort,
+  backendPort,
+  clientPort,
+  authDbPath,
+  courseDbPath,
+  inviteCodes,
+  staticRoot,
+}) {
+  console.log('');
+  console.log('[env] Local environment summary');
+  console.log(`  Proxy port:        ${proxyPort}`);
+  console.log(`  Backend port:      ${backendPort}`);
+  console.log(`  Client port:       ${clientPort}`);
+  console.log(`  Auth DB path:      ${authDbPath}`);
+  console.log(`  Course DB path:    ${courseDbPath}`);
+  console.log(`  Invite codes:      ${inviteCodes || 'local'}`);
+  console.log(`  Static root:       ${staticRoot}`);
+}
+
+async function promptValue(rl, label, currentValue, options = {}) {
+  const allowEmpty = options.allowEmpty !== false;
+  const display = options.sensitive && currentValue
+    ? `${String(currentValue).slice(0, 4)}***`
+    : currentValue;
+  const prompt = `${label} [${display || ''}]: `;
+  const answer = (await ask(rl, prompt)).trim();
+  if (!answer && !allowEmpty && !currentValue) {
+    return promptValue(rl, label, currentValue, options);
+  }
+  return answer || currentValue;
 }
 
 function attachShutdownHandlers() {
