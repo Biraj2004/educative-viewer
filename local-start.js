@@ -56,13 +56,10 @@ async function main() {
   const defaultStaticRoot = serverEnv.courseDbPath
     ? path.dirname(serverEnv.courseDbPath)
     : SERVER_DIR;
-  let staticRootValue =
-    args['static-root'] || process.env.EV_STATIC_API_ROOT || serverEnv.staticRootFromEnv;
+  let staticRootValue = serverEnv.staticRootFromEnv;
 
   if (!staticRootValue || isPlaceholder(staticRootValue)) {
     staticRootValue = await promptStaticRoot(rl, defaultStaticRoot);
-    updateServerEnv({ EV_STATIC_API_ROOT: staticRootValue });
-  } else if (args['static-root']) {
     updateServerEnv({ EV_STATIC_API_ROOT: staticRootValue });
   }
 
@@ -117,10 +114,9 @@ function printUsage() {
   console.log('  --proxy-port <port>    Proxy port (default: 80)');
   console.log('  --backend-port <port>  Flask port (default: 5000)');
   console.log('  --client-port <port>   Next.js port (default: 3000)');
-  console.log('  --static-root <path>   Static API root (default: parent of course DB)');
   console.log('  --skip-build           Skip Next.js build (requires existing .next)');
   console.log('  --force-build          Rebuild Next.js even if .next exists');
-  console.log('  --edit-env             Prompt to edit server env values');
+  console.log('  --edit-env             Prompt to edit server env values (invite codes, JWT secret, DB paths, static root)');
 }
 
 function parseArgs(argv) {
@@ -354,6 +350,16 @@ async function ensureServerEnv({ backendPort, pythonExec, rl, editEnv }) {
       const authPath = await promptValue(rl, 'Auth DB path (SQLite)', currentAuthPath);
       updates.AUTH_SQLITE_DB_PATH = authPath;
     }
+
+    const defaultStaticRootForPrompt = !isPlaceholder(currentCourseDbPath)
+      ? path.dirname(resolvePathFrom(SERVER_DIR, currentCourseDbPath))
+      : SERVER_DIR;
+    const currentStaticRoot = current.EV_STATIC_API_ROOT || updates.EV_STATIC_API_ROOT || '';
+    const staticRootPromptDefault = !isPlaceholder(currentStaticRoot)
+      ? currentStaticRoot
+      : defaultStaticRootForPrompt;
+    const staticRootAnswer = await promptValue(rl, 'Static API root (contains /api/images)', staticRootPromptDefault);
+    updates.EV_STATIC_API_ROOT = staticRootAnswer;
   }
 
   if (isPlaceholder(current.JWT_SECRET)) {

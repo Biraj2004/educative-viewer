@@ -38,10 +38,7 @@ node local-start.js --skip-build
 # Use alternate ports if 80 is unavailable
 node local-start.js --proxy-port 3000 --client-port 3001
 
-# Point static assets to another folder
-node local-start.js --static-root D:\path\to\static
-
-# Edit local server env values (invite codes, JWT secret, DB paths)
+# Edit local server env values (invite codes, JWT secret, DB paths, static root)
 node local-start.js --edit-env
 ```
 
