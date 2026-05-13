@@ -79,9 +79,16 @@ export default function AppNavbar({
               loading="eager"
               decoding="async"
             />
-            <span className="hidden sm:block font-semibold text-sm text-gray-800 dark:text-gray-200 group-hover:text-indigo-700 dark:group-hover:text-indigo-400 transition-colors whitespace-nowrap">
-              Edu-Viewer{" "}
-              <span className="text-indigo-600 dark:text-indigo-400 font-bold">PRO</span>
+            <span className="hidden sm:flex flex-col font-semibold text-sm text-gray-800 dark:text-gray-200 group-hover:text-indigo-700 dark:group-hover:text-indigo-400 transition-colors whitespace-nowrap leading-tight">
+              <span>
+                Edu-Viewer{" "}
+                <span className="text-indigo-600 dark:text-indigo-400 font-bold">PRO</span>
+              </span>
+              {process.env.NEXT_PUBLIC_VERSION && (
+                <span className="text-[10px] font-normal text-gray-400 dark:text-gray-500 leading-none tracking-wide">
+                  v{process.env.NEXT_PUBLIC_VERSION}
+                </span>
+              )}
             </span>
           </a>
 
