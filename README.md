@@ -1,12 +1,15 @@
 # Edu-Viewer PRO
 
-Local-first full-stack viewer for structured educational content (courses, topics, quizzes, code, and media), with a single-script local launcher.
+A local viewer for structured educational content. One script starts everything.
 
-## Local setup (one script)
+## Requirements
 
-Prereqs:
-- Node.js 18+
-- Python 3.10+
+Install these before running:
+
+- **[Node.js 18+](https://nodejs.org/)** — download and install the LTS version
+- **[Python 3.10+](https://www.python.org/downloads/)** — make sure it's on your PATH (`python --version` should work)
+
+## Start locally
 
 From the repo root:
 
@@ -14,39 +17,50 @@ From the repo root:
 node local-start.js
 ```
 
-What the launcher does:
-- Creates `server/env` if missing and installs backend dependencies.
-- Generates RSA keys and updates `server/.env` with local defaults.
-- Writes local runtime values into `client/.env.local`.
-- Prompts once for the course DB path `path/to/educative_scraper.db`.
-- Prompts once for the static API root (defaults to the parent folder of the course DB) and creates `<staticRoot>/api/images`.
-- Builds the Next.js production bundle only when `.next` is missing (use `--force-build` when you want a rebuild).
-- Starts Flask, Next.js, and an embedded proxy on port 80.
+> **Windows:** Port 80 requires an elevated shell — run PowerShell as **Administrator**, or use `--proxy-port 8080`.
 
-Open the app:
-- http://localhost/
+### What happens on first run
 
-Useful options:
+The script is fully automated. It will:
+
+1. **Create a Python venv** at `server/env/` and install backend dependencies.
+2. **Generate RSA keys** and write them into `server/.env`.
+3. **Ask for your course DB path** — paste the full path to your `educative_scraper.db` file:
+   ```
+   Course DB path: C:\Users\you\Downloads\educative_scraper.db
+   ```
+4. **Ask for the static API root** — the folder that holds course images. Just press **Enter** to accept the default (parent folder of the DB).
+5. **Build the Next.js bundle** — takes ~1–2 min the first time.
+6. Start Flask, Next.js, and the embedded proxy.
+
+Once done, open **http://localhost** and log in with invite code **`local`**.
+
+On **subsequent runs** all prompts are skipped — it starts straight away.
+
+## Useful flags
 
 ```powershell
-# Force a production rebuild
-node local-start.js --force-build
-
-# Skip build (requires existing client/.next)
-node local-start.js --skip-build
-
-# Use alternate ports if 80 is unavailable
-node local-start.js --proxy-port 3000 --client-port 3001
-
-# Edit local server env values (invite codes, JWT secret, DB paths, static root)
-node local-start.js --edit-env
+node local-start.js --force-build      # force a full rebuild
+node local-start.js --skip-build       # skip build, serve existing .next
+node local-start.js --proxy-port 8080  # use a non-privileged port
+node local-start.js --edit-env         # change saved settings (DB path, ports, etc.)
 ```
 
-Notes:
-- On Windows, port 80 requires an elevated shell. If it fails, re-run as Administrator or use `--proxy-port`.
-- Static images must live under `<staticRoot>/api/images` and will be served at `/api/images/...`.
-- Default invite code for local is `local`.
+## Versioning
 
-## Manual setup
+The version shown in the navbar (`v1.x.x`) is stored in `client/.env.local.example`:
 
-For the full manual setup guide, see [README_DETAILED.md](README_DETAILED.md).
+```
+NEXT_PUBLIC_VERSION=1.0.63
+```
+
+CI auto-increments the patch on every push to `main`. To bump major or minor, edit this line and commit.
+
+## More docs
+
+| | |
+|---|---|
+| [README_DETAILED.md](README_DETAILED.md) | Full detailed README |
+| [Cloudflare_Vercel.md](Cloudflare_Vercel.md) | Production deployment (Cloudflare + Vercel) |
+| [proxy/README.md](proxy/README.md) | Nginx / Apache proxy configs |
+| [CONTRIBUTING.md](CONTRIBUTING.md) | How to contribute |
