@@ -711,14 +711,64 @@ function serveStatic(req, res, staticRoot, pathname) {
       return;
     }
 
-    res.setHeader('Content-Type', getMimeType(filePath));
-    const stream = fs.createReadStream(filePath);
-    stream.on('error', () => {
+    const mimeFromExt = getMimeType(filePath);
+
+    // Detect SVG by content sniffing — files may be stored without a .svg
+    // extension or with a generic application/octet-stream MIME type.
+    if (mimeFromExt === 'application/octet-stream') {
+      sniffAndServe(filePath, res);
+    } else {
+      res.setHeader('Content-Type', mimeFromExt);
+      pipeFile(filePath, res);
+    }
+  });
+}
+
+/**
+ * Reads the first 512 bytes of a file to detect SVG/XML content.
+ * If the file starts with `<svg` or `<?xml`, it is served as image/svg+xml.
+ * Otherwise the generic application/octet-stream type is used.
+ */
+function sniffAndServe(filePath, res) {
+  const SNIFF_BYTES = 512;
+  const fd = fs.open(filePath, 'r', (openErr, fdNum) => {
+    if (openErr) {
       res.statusCode = 500;
       res.end('Server Error');
+      return;
+    }
+
+    const buf = Buffer.alloc(SNIFF_BYTES);
+    fs.read(fdNum, buf, 0, SNIFF_BYTES, 0, (readErr, bytesRead) => {
+      fs.close(fdNum, () => {});
+
+      if (readErr) {
+        res.statusCode = 500;
+        res.end('Server Error');
+        return;
+      }
+
+      const textStart = buf.slice(0, bytesRead).toString('utf8');
+      const trimmed = textStart.trimStart();
+      const contentType =
+        trimmed.startsWith('<svg') || trimmed.startsWith('<?xml')
+          ? 'image/svg+xml'
+          : 'application/octet-stream';
+
+      res.setHeader('Content-Type', contentType);
+      pipeFile(filePath, res);
     });
-    stream.pipe(res);
   });
+  void fd; // suppress unused-variable warning — fd is passed via callback
+}
+
+function pipeFile(filePath, res) {
+  const stream = fs.createReadStream(filePath);
+  stream.on('error', () => {
+    res.statusCode = 500;
+    res.end('Server Error');
+  });
+  stream.pipe(res);
 }
 
 function getMimeType(filePath) {
