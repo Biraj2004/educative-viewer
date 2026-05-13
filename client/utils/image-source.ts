@@ -241,19 +241,30 @@ export async function prepareImageSource(url: string): Promise<PreparedImageSour
     if (!resp.ok) return { src: requestUrl, shouldRevoke: false };
 
     const contentType = normalizeContentType(resp.headers.get("Content-Type"));
-    if (!needsAuthenticatedBlob && contentType.startsWith("image/")) {
+
+    // Fast-path: skip blob creation only for formats that cannot carry transparency
+    // (JPEG, GIF) when no auth header is required. SVG, PNG, and WebP must always
+    // go through the blob path so that:
+    //   1. Transparency is detected and `#transparent-bg` is appended when needed.
+    //   2. The browser receives a proper MIME type even if the server returned
+    //      application/octet-stream (content-sniffed on the client side).
+    const isOpaqueFormat =
+      contentType === "image/jpeg" || contentType === "image/gif";
+    if (!needsAuthenticatedBlob && isOpaqueFormat) {
       return { src: requestUrl, shouldRevoke: false };
     }
 
     const bytes = new Uint8Array(await resp.arrayBuffer());
     const sniffedType = detectImageMime(bytes);
     const finalType = sniffedType || contentType || "application/octet-stream";
-    const hasTransparency = detectImageHasTransparency(bytes, finalType);
 
+    // If we cannot identify the image type and no auth is needed, return the
+    // raw URL rather than serving a blob with an unknown MIME type.
     if (!sniffedType && !needsAuthenticatedBlob) {
       return { src: requestUrl, shouldRevoke: false };
     }
 
+    const hasTransparency = detectImageHasTransparency(bytes, finalType);
     const blob = new Blob([bytes], { type: finalType });
     const blobUrl = URL.createObjectURL(blob);
     return {
