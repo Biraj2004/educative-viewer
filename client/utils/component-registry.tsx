@@ -41,6 +41,7 @@ import Adaptive from "@/components/topic-details/Adaptive";
 import HashTable from "@/components/topic-details/HashTable";
 import Mermaid from "@/components/topic-details/Mermaid";
 import MarkMap from "@/components/topic-details/MarkMap";
+import D2Diagram from "@/components/topic-details/D2Diagram";
 import SequenceDiagrams from "@/components/topic-details/SequenceDiagrams";
 import "katex/dist/katex.min.css";
 
@@ -118,6 +119,7 @@ export const COMPONENT_REGISTRY: Record<string, RendererFn> = {
   HashTable:             (c) => <div data-component-type="HashTable">            <HashTable              data={c as any} /></div>,
   Mermaid:               (c) => <div data-component-type="Mermaid">              <Mermaid                data={c as any} /></div>,
   MarkMap:               (c) => <div data-component-type="MarkMap">              <MarkMap                data={c as any} /></div>,
+  D2Diagram:             (c) => <div data-component-type="D2Diagram">            <D2Diagram              data={c as any} /></div>,
 };
 
 // ─── Lookup Helper ───────────────────────────────────────────────────────────

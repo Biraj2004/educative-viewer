@@ -18,5 +18,10 @@ export function resolveEduUrl(path: string): string {
       return `${EDU_BASE}${path}`;
     }
   }
+  // For local /api/... paths: EDU_BASE ends with "/" and path starts with "/"
+  // which would produce a double slash. Strip the trailing slash from the base.
+  if (path.startsWith("/")) {
+    return `${EDU_BASE.replace(/\/$/, "")}${path}`;
+  }
   return `${EDU_BASE}${path}`;
 }
