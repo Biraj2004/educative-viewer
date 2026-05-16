@@ -370,8 +370,8 @@ export default function Permutation({ data }: { data: PermutationData }) {
             })}
           </div>
 
-          {/* Options pool */}
-          {safeData.showOptions && !showSolution && (
+          {/* Options pool – always shown (showOptions flag is unreliable in some payloads) */}
+          {!showSolution && (
             <div
               className="pt-1"
               onDragOver={interactive ? onDragOverPool : undefined}
