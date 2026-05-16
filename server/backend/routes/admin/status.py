@@ -67,13 +67,18 @@ def register_status_routes(
 
         table, pk = _ENTITY_TABLE[entity]
 
-        conn = db_manager.get_course_connection()
+        try:
+            shard, local_id = db_manager.resolve_course_db_id(entity_id)
+        except ValueError:
+            abort(404, description=f"{entity.capitalize()} id={entity_id} not found")
+
+        conn = db_manager.open_course_connection(shard)
         try:
             _ensure_is_active_column(conn, table)
 
             result = conn.execute(
                 f"UPDATE {table} SET is_active = ? WHERE {pk} = ?",
-                (int(is_active), entity_id),
+                (int(is_active), local_id),
             )
             conn.commit()
 

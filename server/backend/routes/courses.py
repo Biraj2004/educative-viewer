@@ -190,11 +190,36 @@ def create_courses_blueprint(auth_service: AuthService, db_manager: DBManager) -
             try:
                 has_projects_active = _has_is_active(db_manager, conn, shard, "projects")
                 has_courses_active = _has_is_active(db_manager, conn, shard, "courses")
+                has_project_course_id = db_manager.course_db_has_column(
+                    conn,
+                    shard,
+                    "projects",
+                    "course_id",
+                )
+                has_course_project_id = db_manager.course_db_has_column(
+                    conn,
+                    shard,
+                    "courses",
+                    "project_id",
+                )
+
+                if has_project_course_id:
+                    join_clause = "LEFT JOIN courses c ON c.id = p.course_id"
+                    course_id_select = "COALESCE(c.id, p.course_id) AS course_id"
+                    allow_course_active = has_courses_active
+                elif has_course_project_id:
+                    join_clause = "LEFT JOIN courses c ON c.project_id = p.id"
+                    course_id_select = "c.id AS course_id"
+                    allow_course_active = has_courses_active
+                else:
+                    join_clause = "LEFT JOIN courses c ON 1=0"
+                    course_id_select = "NULL AS course_id"
+                    allow_course_active = False
 
                 active_filters: list[str] = []
                 if not admin and has_projects_active:
                     active_filters.append("p.is_active = 1")
-                if not admin and has_courses_active:
+                if not admin and allow_course_active:
                     active_filters.append("c.is_active = 1")
                 active_filter = f"AND {' AND '.join(active_filters)}" if active_filters else ""
 
@@ -203,7 +228,7 @@ def create_courses_blueprint(auth_service: AuthService, db_manager: DBManager) -
                     f"""
                     SELECT
                         p.id,
-                        c.id AS course_id,
+                        {course_id_select},
                         p.project_author_id,
                         p.project_collection_id,
                         p.project_work_id,
@@ -215,7 +240,7 @@ def create_courses_blueprint(auth_service: AuthService, db_manager: DBManager) -
                         c.title AS course_title,
                         c.type AS course_type
                     FROM projects p
-                    LEFT JOIN courses c ON c.project_id = p.id
+                    {join_clause}
                     WHERE 1=1 {active_filter}
                     ORDER BY p.id
                     """
@@ -244,11 +269,32 @@ def create_courses_blueprint(auth_service: AuthService, db_manager: DBManager) -
         try:
             has_projects_active = _has_is_active(db_manager, conn, shard, "projects")
             has_courses_active = _has_is_active(db_manager, conn, shard, "courses")
+            has_project_course_id = db_manager.course_db_has_column(
+                conn,
+                shard,
+                "projects",
+                "course_id",
+            )
+            has_course_project_id = db_manager.course_db_has_column(
+                conn,
+                shard,
+                "courses",
+                "project_id",
+            )
+
+            if has_project_course_id:
+                join_clause = "JOIN courses c ON c.id = p.course_id"
+                allow_course_active = has_courses_active
+            elif has_course_project_id:
+                join_clause = "JOIN courses c ON c.project_id = p.id"
+                allow_course_active = has_courses_active
+            else:
+                abort(404, description=f"Project id={project_id} not found or inactive")
 
             active_filters: list[str] = []
             if not admin and has_projects_active:
                 active_filters.append("p.is_active = 1")
-            if not admin and has_courses_active:
+            if not admin and allow_course_active:
                 active_filters.append("c.is_active = 1")
             active_filter = f"AND {' AND '.join(active_filters)}" if active_filters else ""
 
@@ -267,7 +313,7 @@ def create_courses_blueprint(auth_service: AuthService, db_manager: DBManager) -
                     c.title AS course_title,
                     c.type AS course_type
                 FROM projects p
-                JOIN courses c ON c.project_id = p.id
+                {join_clause}
                 WHERE p.id = ? {active_filter}
                 """,
                 (local_project_id,),
