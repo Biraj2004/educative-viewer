@@ -89,7 +89,7 @@ def resolve_topic_url(db_manager: DBManager, component: dict) -> str | None:
     Returns None silently if the lookup fails (non-fatal).
     """
     try:
-        conn = db_manager.get_course_connection(int(component["course_id"]))
+        conn = db_manager.get_course_connection()
         try:
             row = conn.execute(
                 "SELECT topic_url FROM topics WHERE course_id = ? AND topic_index = ?",

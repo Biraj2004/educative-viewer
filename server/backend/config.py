@@ -27,13 +27,6 @@ class OracleAuthConfig:
 
 
 @dataclass(frozen=True)
-class SqliteCourseShard:
-    start_id: int
-    end_id: int
-    db_path: str
-
-
-@dataclass(frozen=True)
 class AppConfig:
     flask_port: int
     flask_debug: bool
@@ -45,8 +38,7 @@ class AppConfig:
     oracle_auth: OracleAuthConfig
 
     course_db_engine: str
-    course_sqlite_default_db_path: str
-    course_sqlite_shards: tuple[SqliteCourseShard, ...]
+    course_sqlite_db_paths: tuple[str, ...]
 
     jwt_secret: str
     jwt_expires_days: int
@@ -90,13 +82,13 @@ def _parse_csv_codes(raw_codes: str) -> set[str]:
     return {code.strip() for code in raw_codes.split(",") if code.strip()}
 
 
-def _parse_sqlite_shards(raw: str) -> tuple[SqliteCourseShard, ...]:
-    """Parse shard configuration from COURSE_SQLITE_SHARDS_JSON.
+def _parse_sqlite_db_paths(raw: str) -> tuple[str, ...]:
+    """Parse multi-DB configuration from COURSE_SQLITE_SHARDS_JSON.
 
     Expected JSON format:
     [
-      {"start_id": 1, "end_id": 999, "db_path": "/path/to/shard_a.db"},
-      {"start_id": 1000, "end_id": 1999, "db_path": "/path/to/shard_b.db"}
+      "/path/to/course_db_a.db",
+      "/path/to/course_db_b.db"
     ]
     """
     raw = (raw or "").strip()
@@ -111,31 +103,22 @@ def _parse_sqlite_shards(raw: str) -> tuple[SqliteCourseShard, ...]:
     if not isinstance(parsed, list):
         raise ValueError("COURSE_SQLITE_SHARDS_JSON must be a JSON array")
 
-    shards: list[SqliteCourseShard] = []
+    paths: list[str] = []
     for item in parsed:
-        if not isinstance(item, dict):
-            raise ValueError("Each shard entry must be a JSON object")
+        if isinstance(item, str):
+            db_path = item.strip()
+        elif isinstance(item, dict):
+            db_path = str(item.get("db_path", "")).strip()
+        else:
+            raise ValueError("Each shard entry must be a path string or object with db_path")
 
-        start_id = int(item.get("start_id"))
-        end_id = int(item.get("end_id"))
-        db_path = str(item.get("db_path", "")).strip()
-
-        if start_id > end_id:
-            raise ValueError(f"Invalid shard range: {start_id}>{end_id}")
         if not db_path:
             raise ValueError("Each shard entry must include a non-empty db_path")
 
-        shards.append(SqliteCourseShard(start_id=start_id, end_id=end_id, db_path=db_path))
+        if db_path not in paths:
+            paths.append(db_path)
 
-    shards.sort(key=lambda shard: shard.start_id)
-    for prev, curr in zip(shards, shards[1:]):
-        if curr.start_id <= prev.end_id:
-            raise ValueError(
-                "Overlapping shard ranges found in COURSE_SQLITE_SHARDS_JSON: "
-                f"[{prev.start_id}, {prev.end_id}] overlaps [{curr.start_id}, {curr.end_id}]"
-            )
-
-    return tuple(shards)
+    return tuple(paths)
 
 
 def load_config() -> AppConfig:
@@ -144,12 +127,17 @@ def load_config() -> AppConfig:
     legacy_db_path = os.environ.get("DB_PATH", r"/path/to/educative_scraper.db")
     raw_shards = os.environ.get("COURSE_SQLITE_SHARDS_JSON", "")
 
-    shards: tuple[SqliteCourseShard, ...]
     try:
-        shards = _parse_sqlite_shards(raw_shards)
+        shard_paths = _parse_sqlite_db_paths(raw_shards)
     except ValueError as exc:
-        log.warning("Invalid shard config ignored: %s", exc)
-        shards = ()
+        log.warning("Invalid course DB list ignored: %s", exc)
+        shard_paths = ()
+
+    default_course_db_path = os.environ.get(
+        "COURSE_SQLITE_DB_PATH",
+        os.environ.get("COURSE_DB_PATH", legacy_db_path),
+    )
+    course_db_paths = shard_paths or (default_course_db_path,)
 
     oracle_auth = OracleAuthConfig(
         user=os.environ.get("ORACLE_USER", ""),
@@ -174,8 +162,7 @@ def load_config() -> AppConfig:
         oracle_auth=oracle_auth,
 
         course_db_engine=os.environ.get("COURSE_DB_ENGINE", "sqlite").strip().lower(),
-        course_sqlite_default_db_path=os.environ.get("COURSE_SQLITE_DB_PATH", os.environ.get("COURSE_DB_PATH", legacy_db_path)),
-        course_sqlite_shards=shards,
+        course_sqlite_db_paths=course_db_paths,
 
         jwt_secret=os.environ.get("JWT_SECRET", "changeme-dev-secret"),
         jwt_expires_days=int(os.environ.get("JWT_EXPIRES_DAYS", "7")),

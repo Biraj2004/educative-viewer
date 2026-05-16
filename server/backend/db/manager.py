@@ -9,7 +9,7 @@ from flask import Flask
 from backend.config import AppConfig
 from backend.db.oracle_auth import OracleAuthDatabase
 from backend.db.sqlite_auth import SQLiteAuthDatabase
-from backend.db.sqlite_courses import SQLiteCourseDatabase
+from backend.db.sqlite_courses import CourseDbShard, SQLiteCourseDatabase
 from backend.db.sql_helpers import execute, fetch_one_dict
 
 log = logging.getLogger(__name__)
@@ -41,17 +41,31 @@ class DBManager:
     def _build_course_backend(self):
         engine = self.config.course_db_engine
         if engine == "sqlite":
-            return SQLiteCourseDatabase(
-                default_db_path=self.config.course_sqlite_default_db_path,
-                shards=self.config.course_sqlite_shards,
-            )
+            return SQLiteCourseDatabase(self.config.course_sqlite_db_paths)
         raise ValueError(f"Unsupported COURSE_DB_ENGINE '{engine}'. Supported: sqlite")
 
     def get_auth_connection(self):
         return self.auth_backend.get_connection()
 
-    def get_course_connection(self, course_id: int | None = None):
-        return self.course_backend.get_connection(course_id)
+    def get_course_connection(self):
+        """Return a connection to the first configured course DB."""
+        shard = self.course_backend.iter_shards()[0]
+        return self.course_backend.get_connection(shard)
+
+    def iter_course_shards(self) -> tuple[CourseDbShard, ...]:
+        return self.course_backend.iter_shards()
+
+    def resolve_course_db_id(self, global_id: int) -> tuple[CourseDbShard, int]:
+        return self.course_backend.resolve_global_id(global_id)
+
+    def open_course_connection(self, shard: CourseDbShard):
+        return self.course_backend.get_connection(shard)
+
+    def course_global_id(self, shard: CourseDbShard, local_id: int) -> int:
+        return self.course_backend.to_global_id(shard, local_id)
+
+    def course_db_has_column(self, conn, shard: CourseDbShard, table: str, column: str) -> bool:
+        return self.course_backend.has_column(conn, shard, table, column)
 
     def insert_user(self, conn, *, email: str, name: str | None) -> int:
         """Insert a user using SQL compatible with both Oracle and SQLite."""
