@@ -32,11 +32,10 @@ export default function Adaptive({ data }: { data: AdaptiveData }) {
   // Determine which tabs to show. Educative's "children" maps parent tabs to sub-tabs.
   // Generally, "defaultTab" holds the root-level tabs to display.
   const rootTabsIds = data.children?.["defaultTab"] || [];
-  
-  // If there are no root tabs IDs specifeid, fallback to all non-defaultTab keys
-  const availableTabIds = rootTabsIds.length > 0 
-    ? rootTabsIds 
-    : Object.keys(data.tabs).filter(id => id !== "defaultTab");
+  const tabKeys = Object.keys(data.tabs || {});
+
+  // If there are no root tabs IDs specified, fall back to all available tabs.
+  const availableTabIds = rootTabsIds.length > 0 ? rootTabsIds : tabKeys;
 
   const [activeTabId, setActiveTabId] = useState<string>(availableTabIds[0] || "");
 

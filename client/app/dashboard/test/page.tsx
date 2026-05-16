@@ -45,6 +45,7 @@ import CodeTest, { CodeTestData } from '@/components/topic-details/CodeTest';
 import HashTable, { HashTableData } from '@/components/topic-details/HashTable';
 import Mermaid, { MermaidData } from '@/components/topic-details/Mermaid';
 import MarkMap, { MarkMapData } from '@/components/topic-details/MarkMap';
+import D2Diagram, { D2DiagramData } from '@/components/topic-details/D2Diagram';
 import SequenceDiagrams, { SequenceDiagramData } from "@/components/topic-details/SequenceDiagrams";
 import { getBackendApiBase } from "@/utils/runtime-config";
 
@@ -120,6 +121,7 @@ const componentMapping: { [key: string]: React.ComponentType<any> } = {
     "HashTable": (props: { data: HashTableData }) => <HashTable {...props} />,
     "Mermaid": (props: { data: MermaidData }) => <Mermaid {...props} />,
     "MarkMap": (props: { data: MarkMapData }) => <MarkMap {...props} />,
+    "D2Diagram": (props: { data: D2DiagramData }) => <D2Diagram {...props} />,
     "SequenceDiagrams": (props: { data: SequenceDiagramData }) => <SequenceDiagrams {...props} />,
 };
 
