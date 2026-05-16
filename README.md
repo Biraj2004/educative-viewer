@@ -25,9 +25,12 @@ The script is fully automated. It will:
 
 1. **Create a Python venv** at `server/env/` and install backend dependencies.
 2. **Generate RSA keys** and write them into `server/.env`.
-3. **Ask for your course DB path** — paste the full path to your `educative_scraper.db` file:
+3. **Ask for your course DB path(s)** — paste the full path to each DB file. After each entry you can add another with **Y/N**:
    ```
-   Course DB path: C:\Users\you\Downloads\educative_scraper.db
+   Course DB path 1: C:\Users\you\Downloads\educative_scraper.db
+   Add another course DB? [y/N]: y
+   Course DB path 2: D:\Courses\extra.db
+   Add another course DB? [y/N]: n
    ```
 4. **Ask for the static API root** — the folder that holds course images. Just press **Enter** to accept the default (parent folder of the DB).
 5. **Build the Next.js bundle** — takes ~1–2 min the first time.

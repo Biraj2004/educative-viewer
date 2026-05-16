@@ -83,7 +83,7 @@ def _parse_csv_codes(raw_codes: str) -> set[str]:
 
 
 def _parse_sqlite_db_paths(raw: str) -> tuple[str, ...]:
-    """Parse multi-DB configuration from COURSE_SQLITE_SHARDS_JSON.
+    """Parse multi-DB configuration from COURSE_SQLITE_DB_PATHS_JSON.
 
     Expected JSON format:
     [
@@ -98,10 +98,10 @@ def _parse_sqlite_db_paths(raw: str) -> tuple[str, ...]:
     try:
         parsed = json.loads(raw)
     except json.JSONDecodeError as exc:
-        raise ValueError("COURSE_SQLITE_SHARDS_JSON must be valid JSON") from exc
+        raise ValueError("COURSE_SQLITE_DB_PATHS_JSON must be valid JSON") from exc
 
     if not isinstance(parsed, list):
-        raise ValueError("COURSE_SQLITE_SHARDS_JSON must be a JSON array")
+        raise ValueError("COURSE_SQLITE_DB_PATHS_JSON must be a JSON array")
 
     paths: list[str] = []
     for item in parsed:
@@ -110,10 +110,10 @@ def _parse_sqlite_db_paths(raw: str) -> tuple[str, ...]:
         elif isinstance(item, dict):
             db_path = str(item.get("db_path", "")).strip()
         else:
-            raise ValueError("Each shard entry must be a path string or object with db_path")
+            raise ValueError("Each entry must be a path string or object with db_path")
 
         if not db_path:
-            raise ValueError("Each shard entry must include a non-empty db_path")
+            raise ValueError("Each entry must include a non-empty db_path")
 
         if db_path not in paths:
             paths.append(db_path)
@@ -124,20 +124,13 @@ def _parse_sqlite_db_paths(raw: str) -> tuple[str, ...]:
 def load_config() -> AppConfig:
     load_env_file()
 
-    legacy_db_path = os.environ.get("DB_PATH", r"/path/to/educative_scraper.db")
-    raw_shards = os.environ.get("COURSE_SQLITE_SHARDS_JSON", "")
+    raw_paths = os.environ.get("COURSE_SQLITE_DB_PATHS_JSON", "")
 
     try:
-        shard_paths = _parse_sqlite_db_paths(raw_shards)
+        course_db_paths = _parse_sqlite_db_paths(raw_paths)
     except ValueError as exc:
-        log.warning("Invalid course DB list ignored: %s", exc)
-        shard_paths = ()
-
-    default_course_db_path = os.environ.get(
-        "COURSE_SQLITE_DB_PATH",
-        os.environ.get("COURSE_DB_PATH", legacy_db_path),
-    )
-    course_db_paths = shard_paths or (default_course_db_path,)
+        log.warning("Invalid course DB paths ignored: %s", exc)
+        course_db_paths = ()
 
     oracle_auth = OracleAuthConfig(
         user=os.environ.get("ORACLE_USER", ""),

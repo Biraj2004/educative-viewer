@@ -95,7 +95,7 @@ Browser → Nginx / Apache  (:80)
 | Frontend | Next.js App Router (React 19, TypeScript, Tailwind v4) | `3000` |
 | Backend | Flask (Python 3.10+) | `5000` |
 | Auth DB | Oracle or SQLite — configured via env | — |
-| Course DB | SQLite — with optional shard mapping | — |
+| Course DB | SQLite — DB path list (JSON array) | — |
 | Reverse Proxy | Nginx or Apache | `80` |
 
 ---

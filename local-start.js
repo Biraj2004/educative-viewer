@@ -79,7 +79,7 @@ async function main() {
     backendPort,
     clientPort,
     authDbPath: serverEnv.authDbPath,
-    courseDbPath: serverEnv.courseDbPath,
+    courseDbPaths: serverEnv.courseDbPaths,
     inviteCodes: serverEnv.inviteCodes,
     staticRoot,
   });
@@ -287,6 +287,54 @@ function isPlaceholder(value) {
   return false;
 }
 
+function parseCourseDbPaths(raw) {
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    const paths = [];
+    for (const item of parsed) {
+      if (typeof item === 'string') {
+        const trimmed = item.trim();
+        if (trimmed) paths.push(trimmed);
+        continue;
+      }
+      if (item && typeof item === 'object' && typeof item.db_path === 'string') {
+        const trimmed = item.db_path.trim();
+        if (trimmed) paths.push(trimmed);
+      }
+    }
+    return Array.from(new Set(paths));
+  } catch {
+    return [];
+  }
+}
+
+async function promptCourseDbPaths(rl, existingPaths, defaultPath) {
+  const paths = [];
+  let index = 1;
+  while (true) {
+    const currentValue = existingPaths[index - 1] || (index === 1 ? defaultPath : '');
+    const value = await promptValue(rl, `Course DB path ${index}`, currentValue, {
+      allowEmpty: index > 1,
+    });
+    const trimmed = (value || '').trim();
+    if (!trimmed) {
+      if (index === 1) continue;
+      break;
+    }
+    paths.push(trimmed);
+
+    const addMore = (await ask(rl, '  Add another course DB? [y/N]: ')).trim().toLowerCase();
+    if (addMore !== 'y' && addMore !== 'yes') {
+      break;
+    }
+    index += 1;
+  }
+
+  return paths;
+}
+
 async function ensureServerEnv({ backendPort, pythonExec, rl, editEnv }) {
   ensureEnvFile(SERVER_ENV_PATH, SERVER_ENV_EXAMPLE_PATH);
 
@@ -295,7 +343,9 @@ async function ensureServerEnv({ backendPort, pythonExec, rl, editEnv }) {
 
   const defaultAuthDbPath = path.join(SERVER_DIR, 'auth.sqlite3');
   const defaultCourseDbPath = path.join(SERVER_DIR, 'course.sqlite3');
-  const currentCourseDbPath = current.COURSE_SQLITE_DB_PATH || current.DB_PATH || '';
+  const currentCourseDbPathsRaw = current.COURSE_SQLITE_DB_PATHS_JSON || '';
+  const currentCourseDbPaths = parseCourseDbPaths(currentCourseDbPathsRaw);
+  const primaryCourseDbPath = currentCourseDbPaths[0] || defaultCourseDbPath;
 
   if (isPlaceholder(current.FLASK_PORT)) updates.FLASK_PORT = String(backendPort);
   if (isPlaceholder(current.FLASK_DEBUG)) updates.FLASK_DEBUG = '0';
@@ -317,20 +367,14 @@ async function ensureServerEnv({ backendPort, pythonExec, rl, editEnv }) {
   }
 
   if (isPlaceholder(current.COURSE_DB_ENGINE)) updates.COURSE_DB_ENGINE = 'sqlite';
-  if (isPlaceholder(current.COURSE_SQLITE_DB_PATH) && isPlaceholder(current.DB_PATH)) {
-    updates.COURSE_SQLITE_DB_PATH = defaultCourseDbPath;
-    updates.DB_PATH = defaultCourseDbPath;
-  }
-
   if (rl) {
-    const courseDefault = !isPlaceholder(currentCourseDbPath)
-      ? currentCourseDbPath
-      : defaultCourseDbPath;
-    const shouldPromptCourse = editEnv || isPlaceholder(currentCourseDbPath);
+    const shouldPromptCourse =
+      editEnv ||
+      currentCourseDbPaths.length === 0 ||
+      isPlaceholder(currentCourseDbPathsRaw);
     if (shouldPromptCourse) {
-      const chosen = await promptValue(rl, 'Course DB path', courseDefault);
-      updates.COURSE_SQLITE_DB_PATH = chosen;
-      updates.DB_PATH = chosen;
+      const chosenPaths = await promptCourseDbPaths(rl, currentCourseDbPaths, defaultCourseDbPath);
+      updates.COURSE_SQLITE_DB_PATHS_JSON = JSON.stringify(chosenPaths);
     }
   }
 
@@ -351,8 +395,8 @@ async function ensureServerEnv({ backendPort, pythonExec, rl, editEnv }) {
       updates.AUTH_SQLITE_DB_PATH = authPath;
     }
 
-    const defaultStaticRootForPrompt = !isPlaceholder(currentCourseDbPath)
-      ? path.dirname(resolvePathFrom(SERVER_DIR, currentCourseDbPath))
+    const defaultStaticRootForPrompt = !isPlaceholder(primaryCourseDbPath)
+      ? path.dirname(resolvePathFrom(SERVER_DIR, primaryCourseDbPath))
       : SERVER_DIR;
     const currentStaticRoot = current.EV_STATIC_API_ROOT || updates.EV_STATIC_API_ROOT || '';
     const staticRootPromptDefault = !isPlaceholder(currentStaticRoot)
@@ -377,11 +421,14 @@ async function ensureServerEnv({ backendPort, pythonExec, rl, editEnv }) {
     publicKeyOneline = derivePublicKeyWithPython(pythonExec, current.RSA_PRIVATE_KEY);
   }
 
-  const finalVars = { ...current, ...updates };
+  const sanitizedCurrent = { ...current };
+  delete sanitizedCurrent.COURSE_SQLITE_DB_PATH;
+  delete sanitizedCurrent.DB_PATH;
+  const finalVars = { ...sanitizedCurrent, ...updates };
   saveEnvFilePreservingTemplate(SERVER_ENV_PATH, SERVER_ENV_EXAMPLE_PATH, finalVars);
 
-  const courseDbPathRaw = finalVars.COURSE_SQLITE_DB_PATH || finalVars.DB_PATH || defaultCourseDbPath;
-  const courseDbPath = resolvePathFrom(SERVER_DIR, courseDbPathRaw);
+  const courseDbPaths = parseCourseDbPaths(finalVars.COURSE_SQLITE_DB_PATHS_JSON || '');
+  const courseDbPath = courseDbPaths[0] ? resolvePathFrom(SERVER_DIR, courseDbPaths[0]) : '';
   const authDbPathRaw = finalVars.AUTH_SQLITE_DB_PATH || defaultAuthDbPath;
   const authDbPath = resolvePathFrom(SERVER_DIR, authDbPathRaw);
   const staticRootFromEnv = finalVars.EV_STATIC_API_ROOT || '';
@@ -391,6 +438,7 @@ async function ensureServerEnv({ backendPort, pythonExec, rl, editEnv }) {
     publicKeyOneline,
     authDbPath,
     courseDbPath,
+    courseDbPaths,
     staticRootFromEnv,
     inviteCodes,
   };
@@ -824,7 +872,7 @@ function printEnvSummary({
   backendPort,
   clientPort,
   authDbPath,
-  courseDbPath,
+  courseDbPaths,
   inviteCodes,
   staticRoot,
 }) {
@@ -834,7 +882,10 @@ function printEnvSummary({
   console.log(`  Backend port:      ${backendPort}`);
   console.log(`  Client port:       ${clientPort}`);
   console.log(`  Auth DB path:      ${authDbPath}`);
-  console.log(`  Course DB path:    ${courseDbPath}`);
+  const courseList = Array.isArray(courseDbPaths) && courseDbPaths.length > 0
+    ? courseDbPaths.join(', ')
+    : 'not configured';
+  console.log(`  Course DB paths:   ${courseList}`);
   console.log(`  Invite codes:      ${inviteCodes || 'local'}`);
   console.log(`  Static root:       ${staticRoot}`);
 }

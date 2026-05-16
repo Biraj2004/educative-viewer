@@ -12,6 +12,7 @@ Run once before the first server start:
 """
 from __future__ import annotations
 
+import json
 import re
 import subprocess
 import sys
@@ -233,6 +234,49 @@ def _prompt_oracle_auth(env_vars: dict[str, str], updates: dict[str, str]) -> No
         )
 
 
+def _parse_course_db_paths(raw: str) -> list[str]:
+    if not raw:
+        return []
+    try:
+        parsed = json.loads(raw)
+    except json.JSONDecodeError:
+        return []
+    if not isinstance(parsed, list):
+        return []
+    paths: list[str] = []
+    for item in parsed:
+        if isinstance(item, str):
+            trimmed = item.strip()
+            if trimmed:
+                paths.append(trimmed)
+    return paths
+
+
+def _prompt_course_db_paths(env_vars: dict[str, str], updates: dict[str, str]) -> None:
+    _header("Course Database (SQLite)")
+    updates["COURSE_DB_ENGINE"] = "sqlite"
+
+    current_paths = _parse_course_db_paths(env_vars.get("COURSE_SQLITE_DB_PATHS_JSON", ""))
+    paths: list[str] = []
+    index = 1
+    while True:
+        current_value = current_paths[index - 1] if index - 1 < len(current_paths) else ""
+        value = _prompt(f"Course DB path {index}", current_value, required=(index == 1))
+        value = value.strip()
+        if not value:
+            if index == 1:
+                continue
+            break
+
+        paths.append(value)
+        add_more = input("  Add another course DB? [y/N]: ").strip().lower()
+        if add_more not in ("y", "yes"):
+            break
+        index += 1
+
+    updates["COURSE_SQLITE_DB_PATHS_JSON"] = json.dumps(paths)
+
+
 def step_env(env_vars: dict[str, str]) -> None:
     updates: dict[str, str] = {}
 
@@ -258,11 +302,7 @@ def step_env(env_vars: dict[str, str]) -> None:
         _prompt_sqlite_auth(env_vars, updates)
 
     # ── Course DB (always SQLite) ────────────────────────────────────────────
-    _header("Course Database (SQLite)")
-    updates["COURSE_DB_ENGINE"] = "sqlite"
-    updates["COURSE_SQLITE_DB_PATH"] = _prompt(
-        "COURSE_SQLITE_DB_PATH", env_vars.get("COURSE_SQLITE_DB_PATH", "")
-    )
+    _prompt_course_db_paths(env_vars, updates)
 
     # ── Shared fields ────────────────────────────────────────────────────────
     _header("Auth / JWT Settings")
