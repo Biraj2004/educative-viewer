@@ -81,6 +81,15 @@ class SQLiteCourseDatabase:
         columns = self._get_table_columns(conn, shard, table)
         return column in columns
 
+    def invalidate_table_columns(self, shard: CourseDbShard, table: str | None = None) -> None:
+        if table is None:
+            keys = [key for key in self._table_columns_cache if key[0] == shard.db_path]
+            for key in keys:
+                self._table_columns_cache.pop(key, None)
+            return
+
+        self._table_columns_cache.pop((shard.db_path, table), None)
+
     def _get_table_columns(
         self,
         conn: sqlite3.Connection,

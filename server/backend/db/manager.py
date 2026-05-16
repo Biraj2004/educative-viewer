@@ -67,6 +67,9 @@ class DBManager:
     def course_db_has_column(self, conn, shard: CourseDbShard, table: str, column: str) -> bool:
         return self.course_backend.has_column(conn, shard, table, column)
 
+    def course_db_invalidate_columns(self, shard: CourseDbShard, table: str | None = None) -> None:
+        self.course_backend.invalidate_table_columns(shard, table)
+
     def insert_user(self, conn, *, email: str, name: str | None) -> int:
         """Insert a user using SQL compatible with both Oracle and SQLite."""
         execute(

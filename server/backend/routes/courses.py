@@ -62,6 +62,40 @@ def _and_is_active(has_column: bool, admin: bool, column_ref: str) -> str:
     return f"AND {column_ref} = 1"
 
 
+def _project_is_active_for_course(
+    db_manager: DBManager,
+    conn,
+    shard,
+    local_course_id: int,
+    course_project_id: int | None,
+) -> bool | None:
+    has_projects_active = _has_is_active(db_manager, conn, shard, "projects")
+    has_projects_course_id = db_manager.course_db_has_column(
+        conn,
+        shard,
+        "projects",
+        "course_id",
+    )
+
+    if course_project_id is not None:
+        row = conn.execute(
+            "SELECT is_active FROM projects WHERE id = ?",
+            (course_project_id,),
+        ).fetchone()
+        if row is not None:
+            return True if not has_projects_active else bool(row["is_active"])
+
+    if has_projects_course_id:
+        row = conn.execute(
+            "SELECT is_active FROM projects WHERE course_id = ?",
+            (local_course_id,),
+        ).fetchone()
+        if row is not None:
+            return True if not has_projects_active else bool(row["is_active"])
+
+    return None
+
+
 def create_courses_blueprint(auth_service: AuthService, db_manager: DBManager) -> Blueprint:
     bp = Blueprint("courses_api", __name__, url_prefix="/api")
 
@@ -395,10 +429,18 @@ def create_courses_blueprint(auth_service: AuthService, db_manager: DBManager) -
         conn = db_manager.open_course_connection(shard)
         try:
             has_courses_active = _has_is_active(db_manager, conn, shard, "courses")
+            has_course_project_id = db_manager.course_db_has_column(
+                conn,
+                shard,
+                "courses",
+                "project_id",
+            )
             active_filter = _and_is_active(has_courses_active, admin, "c.is_active")
 
+            project_id_select = "c.project_id AS project_id" if has_course_project_id else "NULL AS project_id"
+
             row = conn.execute(
-                f"SELECT c.id, c.slug, c.title, c.type, c.toc_json, c.path_id "
+                f"SELECT c.id, c.slug, c.title, c.type, c.toc_json, c.path_id, {project_id_select} "
                 f"FROM courses c WHERE c.id = ? {active_filter}",
                 (local_course_id,),
             ).fetchone()
@@ -416,9 +458,21 @@ def create_courses_blueprint(auth_service: AuthService, db_manager: DBManager) -
                     if path_row and not path_row["is_active"]:
                         abort(404, description=f"Course id={course_id} not found or inactive")
 
+            if not admin:
+                project_active = _project_is_active_for_course(
+                    db_manager,
+                    conn,
+                    shard,
+                    local_course_id,
+                    row["project_id"],
+                )
+                if project_active is False:
+                    abort(404, description=f"Course id={course_id} not found or inactive")
+
             data = dict(row)
             data["id"] = course_id
             data.pop("path_id", None)
+            data.pop("project_id", None)
             data["toc"] = json.loads(data.pop("toc_json") or "[]")
             return jsonify(data)
         finally:
@@ -441,16 +495,23 @@ def create_courses_blueprint(auth_service: AuthService, db_manager: DBManager) -
         conn = db_manager.open_course_connection(shard)
         try:
             has_courses_active = _has_is_active(db_manager, conn, shard, "courses")
+            has_course_project_id = db_manager.course_db_has_column(
+                conn,
+                shard,
+                "courses",
+                "project_id",
+            )
+            project_id_select = "project_id" if has_course_project_id else "NULL AS project_id"
 
             if not admin:
                 if has_courses_active:
                     course_row = conn.execute(
-                        "SELECT id, path_id FROM courses WHERE id = ? AND is_active = 1",
+                        f"SELECT id, path_id, {project_id_select} FROM courses WHERE id = ? AND is_active = 1",
                         (local_course_id,),
                     ).fetchone()
                 else:
                     course_row = conn.execute(
-                        "SELECT id, path_id FROM courses WHERE id = ?",
+                        f"SELECT id, path_id, {project_id_select} FROM courses WHERE id = ?",
                         (local_course_id,),
                     ).fetchone()
 
@@ -466,6 +527,16 @@ def create_courses_blueprint(auth_service: AuthService, db_manager: DBManager) -
                         ).fetchone()
                         if path_row and not path_row["is_active"]:
                             abort(404, description=f"Course id={course_id} not found or inactive")
+
+                project_active = _project_is_active_for_course(
+                    db_manager,
+                    conn,
+                    shard,
+                    local_course_id,
+                    course_row["project_id"],
+                )
+                if project_active is False:
+                    abort(404, description=f"Course id={course_id} not found or inactive")
 
             topic = conn.execute(
                 """

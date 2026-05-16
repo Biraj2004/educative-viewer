@@ -75,6 +75,7 @@ def register_status_routes(
         conn = db_manager.open_course_connection(shard)
         try:
             _ensure_is_active_column(conn, table)
+            db_manager.course_db_invalidate_columns(shard, table)
 
             result = conn.execute(
                 f"UPDATE {table} SET is_active = ? WHERE {pk} = ?",
