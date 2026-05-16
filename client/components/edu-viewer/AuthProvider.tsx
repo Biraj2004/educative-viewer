@@ -2,7 +2,16 @@
 
 import { createContext, useContext, useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
-import { getUser, logout as logoutApi, getAuthToken, setUnauthorizedHandler, setForbiddenHandler, clearAuthToken } from "@/utils/authClient";
+import {
+  getUser,
+  logout as logoutApi,
+  getAuthToken,
+  setUnauthorizedHandler,
+  setForbiddenHandler,
+  clearAuthToken,
+  setDeactivatedFlag,
+  clearDeactivatedFlag,
+} from "@/utils/authClient";
 import type { AuthUser } from "@/utils/authClient";
 
 // ─── Context ──────────────────────────────────────────────────────────────────
@@ -45,10 +54,13 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
       clearAuthToken();
       window.location.replace("/auth?reason=session_expired");
     };
-    const handle403 = (message?: string) => {
-      if ((message ?? "").toLowerCase().includes("deactivated")) {
-        window.location.replace("/deactivated");
-      }
+    const handle403 = (_message?: string) => {
+      // Any 403 from a protected endpoint means access was revoked by admin.
+      // Always clear the token and set the deactivated flag so the AuthFlowGuard
+      // redirects correctly on every subsequent navigation.
+      clearAuthToken();
+      setDeactivatedFlag();
+      window.location.replace("/deactivated");
     };
     setUnauthorizedHandler(handle401);
     setForbiddenHandler(handle403);
@@ -63,11 +75,25 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
   // triggers this effect on every route change.
   useEffect(() => {
     let cancelled = false;
-    setAuthToken(getAuthToken());
+    const token = getAuthToken();
+    setAuthToken(token);
+
+    // Skip the API call if there is no token — the user is logged out or
+    // their token was cleared after a 403 (access revoked). Calling getUser()
+    // without a token would just 401/403 and re-trigger the forbidden handler.
+    if (!token) {
+      if (!cancelled) {
+        setUser(null);
+        setLoading(false);
+      }
+      return () => { cancelled = true; };
+    }
+
     getUser()
       .then((u) => {
         if (!cancelled) {
           setUser(u);
+          clearDeactivatedFlag();
           // Guard: first-login users must set their password before using the dashboard
           if (u.isFirstLogin && pathname !== "/auth/first-login") {
             window.location.replace("/auth/first-login");
@@ -98,6 +124,7 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
     } finally {
       setUser(null);
       setAuthToken(null);
+      clearDeactivatedFlag();
       window.location.href = "/auth";
     }
   }

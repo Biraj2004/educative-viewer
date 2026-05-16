@@ -16,6 +16,7 @@ const BACKEND = (process.env.NEXT_PUBLIC_BACKEND_API_BASE ?? "").replace(
 );
 const API = `${BACKEND}/api/auth`;
 const LS_KEY = "ev_token";
+const LS_DEACTIVATED_KEY = "ev_deactivated";
 const IS_BROWSER = typeof window !== "undefined";
 
 // ─── RSA password encryption ──────────────────────────────────────────────────
@@ -87,14 +88,15 @@ async function _encryptPassword(password: string): Promise<string> {
 // (expired token, or session superseded by a login from another browser).
 
 type UnauthorizedHandler = () => void | Promise<void>;
+type ForbiddenHandler = (message?: string) => void | Promise<void>;
 let _unauthorizedHandler: UnauthorizedHandler | null = null;
-let _forbiddenHandler: UnauthorizedHandler | null = null;
+let _forbiddenHandler: ForbiddenHandler | null = null;
 
 export function setUnauthorizedHandler(fn: UnauthorizedHandler | null): void {
   _unauthorizedHandler = fn;
 }
 
-export function setForbiddenHandler(fn: UnauthorizedHandler | null): void {
+export function setForbiddenHandler(fn: ForbiddenHandler | null): void {
   _forbiddenHandler = fn;
 }
 
@@ -109,10 +111,14 @@ async function _handleUnauthorized(): Promise<void> {
 }
 
 /** Called internally whenever an API call returns 403. */
-async function _handleForbidden(): Promise<void> {
+async function _handleForbidden(message?: string): Promise<void> {
   if (_forbiddenHandler) {
-    await _forbiddenHandler();
+    await _forbiddenHandler(message);
   } else {
+    // Fallback (no AuthProvider mounted): clear token + set flag so the
+    // AuthFlowGuard enforces the /deactivated lock on every subsequent navigation.
+    clearAuthToken();
+    setDeactivatedFlag();
     if (IS_BROWSER) window.location.replace("/deactivated");
   }
 }
@@ -132,6 +138,16 @@ export function storeAuthToken(token: string): void {
 export function clearAuthToken(): void {
   if (!IS_BROWSER) return;
   localStorage.removeItem(LS_KEY);
+}
+
+export function setDeactivatedFlag(): void {
+  if (!IS_BROWSER) return;
+  localStorage.setItem(LS_DEACTIVATED_KEY, "1");
+}
+
+export function clearDeactivatedFlag(): void {
+  if (!IS_BROWSER) return;
+  localStorage.removeItem(LS_DEACTIVATED_KEY);
 }
 
 export interface JwtPayload {
@@ -169,6 +185,7 @@ export function isRestrictedAuthFlow(payload: JwtPayload): boolean {
 export function canAccessDeactivatedPage(): boolean {
   // Determine if the current user session is allowed to sit on the /deactivated page.
   // We'll decode the current token and see if the token or local state marks them as deactivated.
+  if (IS_BROWSER && localStorage.getItem(LS_DEACTIVATED_KEY) === "1") return true;
   const token = getAuthToken();
   if (!token) return false;
   const payload = parseAuthTokenPayload(token);
@@ -249,7 +266,7 @@ async function apiPost<T>(
     throw new ApiError(data?.error ?? "Session expired.", 401);
   }
   if (res.status === 403) {
-    await _handleForbidden();
+    await _handleForbidden(data?.error ?? data?.message);
     throw new ApiError(data?.error ?? data?.message ?? "Access denied", 403);
   }
   if (!res.ok) {
@@ -280,7 +297,7 @@ async function apiGet<T>(path: string): Promise<T> {
         throw new ApiError(data?.error ?? "Session expired.", 401);
       }
       if (res.status === 403) {
-        await _handleForbidden();
+        await _handleForbidden(data?.error ?? data?.message);
         throw new ApiError(data?.error ?? data?.message ?? "Access denied", 403);
       }
       if (!res.ok) {

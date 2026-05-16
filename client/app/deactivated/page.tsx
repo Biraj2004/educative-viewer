@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import { clearAuthToken, clearDeactivatedFlag } from "@/utils/authClient";
 import AppNavbar from "@/components/edu-viewer/AppNavbar";
 
 // ─── Icons ────────────────────────────────────────────────────────────────────
@@ -74,7 +75,11 @@ export default function DeactivatedPage() {
               Contact Administration
             </button>
             <button 
-              onClick={() => window.location.href = "/auth"}
+              onClick={() => {
+                clearAuthToken();
+                clearDeactivatedFlag();
+                window.location.href = "/auth";
+              }}
               className="w-full sm:w-auto px-8 py-3 bg-white dark:bg-gray-900 text-gray-900 dark:text-white border border-gray-200 dark:border-gray-800 rounded-xl font-bold transition-all hover:border-gray-300 dark:hover:border-gray-700 active:scale-95 cursor-pointer"
             >
               Back to Sign In
