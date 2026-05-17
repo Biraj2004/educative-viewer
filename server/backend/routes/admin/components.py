@@ -141,16 +141,50 @@ def _upsert_test_component(
 
 
 def _fetch_pinned_components(db_manager: DBManager) -> list[dict]:
-        conn = db_manager.get_course_connection()
+        # test_components, components, topics, and courses all live in the same
+        # SQLite file (shard 0), so a single JOIN is correct and efficient.
+        # The component_id stored in test_components is the local ID for shard 0.
+        shard0 = db_manager.iter_course_shards()[0]
+        conn = db_manager.open_course_connection(shard0)
         try:
                 ensure_test_components_table(conn)
                 rows = conn.execute(
-                        "SELECT component_id, component_type, content_json, topic_url "
-                        "FROM test_components ORDER BY component_id"
+                        """
+                        SELECT
+                            tc.component_id,
+                            tc.component_type,
+                            tc.content_json,
+                            tc.topic_url,
+                            c.course_id,
+                            c.topic_index,
+                            t.topic_slug,
+                            co.slug AS course_slug
+                        FROM test_components AS tc
+                        LEFT JOIN components AS c
+                            ON tc.component_id = c.id
+                        LEFT JOIN topics AS t
+                            ON c.course_id = t.course_id
+                           AND c.topic_index = t.topic_index
+                        LEFT JOIN courses AS co
+                            ON c.course_id = co.id
+                        ORDER BY tc.component_id
+                        """
                 ).fetchall()
-                return [dict(r) for r in rows]
+                results = []
+                for r in rows:
+                        item = dict(r)
+                        # Apply the shard-0 global ID offset to course_id for
+                        # consistency with _fetch_random_components output.
+                        if item.get("course_id") is not None:
+                                item["course_id"] = db_manager.course_global_id(
+                                        shard0, int(item["course_id"])
+                                )
+                        results.append(item)
+                return results
         finally:
                 conn.close()
+
+
 
 
 def _fetch_random_components(db_manager: DBManager, per_type_limit: int) -> list[dict]:
@@ -164,6 +198,7 @@ def _fetch_random_components(db_manager: DBManager, per_type_limit: int) -> list
                 topics.course_id AS course_id,
                 topics.topic_index AS topic_index,
                 topics.topic_url AS topic_url,
+                topics.topic_slug AS topic_slug,
                 ROW_NUMBER() OVER (
                     PARTITION BY topics.course_id, topics.topic_index
                     ORDER BY topics.id
@@ -191,11 +226,15 @@ def _fetch_random_components(db_manager: DBManager, per_type_limit: int) -> list
             ranked_components.component_index,
             ranked_components.component_type,
             ranked_components.content_json,
-            ranked_topics.topic_url AS topic_url
+            ranked_topics.topic_url AS topic_url,
+            ranked_topics.topic_slug AS topic_slug,
+            courses.slug AS course_slug
         FROM ranked_components AS ranked_components
         JOIN ranked_topics AS ranked_topics
             ON ranked_components.course_id = ranked_topics.course_id
          AND ranked_components.topic_index = ranked_topics.topic_index
+        LEFT JOIN courses AS courses
+            ON ranked_components.course_id = courses.id
         WHERE ranked_components.row_number_within_type <= ?
             AND ranked_topics.row_number_within_course_topic = 1
         ORDER BY ranked_components.component_type, ranked_components.row_number_within_type
