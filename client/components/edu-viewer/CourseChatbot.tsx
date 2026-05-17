@@ -32,6 +32,23 @@ function ChatIcon() {
 
 export default function CourseChatbot({ topicTitle, topicContext }: CourseChatbotProps) {
   const [isOpen, setIsOpen] = useState(false);
+  const chatbotRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (chatbotRef.current && !chatbotRef.current.contains(event.target as Node)) {
+        setIsOpen(false);
+      }
+    }
+
+    if (isOpen) {
+      document.addEventListener("mousedown", handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [isOpen]);
+
   const [messages, setMessages] = useState<Message[]>([
     { role: "model", content: `Hi! I'm your AI assistant for this topic (**${topicTitle}**). Ask me anything about it!` }
   ]);
@@ -123,7 +140,7 @@ ${topicContext}
   )), [messages]);
 
   return (
-    <>
+    <div ref={chatbotRef}>
       {/* Floating Action Button */}
       <div className="fixed bottom-6 right-6 z-50">
         <button
@@ -221,6 +238,6 @@ ${topicContext}
 
         </div>
       )}
-    </>
+    </div>
   );
 }
