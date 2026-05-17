@@ -57,6 +57,25 @@ interface TestComponentRow {
   component_type: string;
   content_json: string;
   topic_url?: string | null;
+  // present on randomly-selected components (from the course DB query)
+  course_id?: number | null;
+  topic_index?: number | null;
+  topic_slug?: string | null;
+  course_slug?: string | null;
+  component_index?: number | null;
+}
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
+/**
+ * Build the local viewer URL for a topic using the fields returned directly
+ * from the API (course_id, course_slug, topic_index, topic_slug).
+ * Returns null if any required piece is missing.
+ */
+function buildLocalTopicUrl(component: TestComponentRow): string | null {
+  const { course_id, course_slug, topic_index, topic_slug } = component;
+  if (!course_id || !course_slug || topic_index == null || !topic_slug) return null;
+  return `/dashboard/courses/${course_id}/${course_slug}/topics/${topic_index}/${topic_slug}`;
 }
 
 function SectionHeader({ name, note, action }: { name: string; note?: string; action?: ReactNode }) {
@@ -295,28 +314,57 @@ export default function ComponentTestPage() {
             const topicUrl = component.topic_url?.trim() || topicUrlFromContent?.trim() || null;
             const hasTopicUrl = Boolean(topicUrl);
 
+            const localTopicUrl = buildLocalTopicUrl(component);
+            const hasLocalTopicUrl = Boolean(localTopicUrl);
+
             return (
               <section key={component.component_id}>
                 <SectionHeader
                   name={`<${component.component_type}-${component.component_id}>`}
                   action={
-                    <button
-                      type="button"
-                      onClick={() => handleOpenTopic(topicUrl)}
-                      disabled={!hasTopicUrl}
-                      className={[
-                        "inline-flex items-center gap-2 px-3 py-1.5 rounded-md border text-xs font-medium transition-colors",
-                        hasTopicUrl
-                          ? "bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:border-indigo-400 dark:hover:border-indigo-600 hover:text-indigo-700 dark:hover:text-indigo-400 cursor-pointer"
-                          : "bg-gray-100 dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-400 dark:text-gray-500 cursor-not-allowed",
-                      ].join(" ")}
-                      aria-label={`Open source topic for ${component.component_type} in a new tab`}
-                    >
-                      Open Topic
-                      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 6H18m0 0v4.5M18 6l-7.5 7.5M6.75 6h3M6 9.75V17.25A.75.75 0 006.75 18h7.5a.75.75 0 00.75-.75v-3" />
-                      </svg>
-                    </button>
+                    <div className="flex items-center gap-2">
+                      {/* Open Local Topic */}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (!localTopicUrl) return;
+                          const w = window.open(localTopicUrl, "_blank", "noopener,noreferrer");
+                          if (w) w.opener = null;
+                        }}
+                        disabled={!hasLocalTopicUrl}
+                        className={[
+                          "inline-flex items-center gap-2 px-3 py-1.5 rounded-md border text-xs font-medium transition-colors",
+                          hasLocalTopicUrl
+                            ? "bg-white dark:bg-gray-900 border-emerald-300 dark:border-emerald-700 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 cursor-pointer"
+                            : "bg-gray-100 dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-400 dark:text-gray-500 cursor-not-allowed",
+                        ].join(" ")}
+                        aria-label={`Open local topic for ${component.component_type} in a new tab`}
+                      >
+                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+                        </svg>
+                        Open Local
+                      </button>
+
+                      {/* Open Educative */}
+                      <button
+                        type="button"
+                        onClick={() => handleOpenTopic(topicUrl)}
+                        disabled={!hasTopicUrl}
+                        className={[
+                          "inline-flex items-center gap-2 px-3 py-1.5 rounded-md border text-xs font-medium transition-colors",
+                          hasTopicUrl
+                            ? "bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:border-indigo-400 dark:hover:border-indigo-600 hover:text-indigo-700 dark:hover:text-indigo-400 cursor-pointer"
+                            : "bg-gray-100 dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-400 dark:text-gray-500 cursor-not-allowed",
+                        ].join(" ")}
+                        aria-label={`Open Educative topic for ${component.component_type} in a new tab`}
+                      >
+                        Open Educative
+                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 6H18m0 0v4.5M18 6l-7.5 7.5M6.75 6h3M6 9.75V17.25A.75.75 0 006.75 18h7.5a.75.75 0 00.75-.75v-3" />
+                        </svg>
+                      </button>
+                    </div>
                   }
                 />
                 <div className="rounded-xl border border-gray-200 dark:border-gray-800 overflow-hidden bg-white dark:bg-gray-900">
