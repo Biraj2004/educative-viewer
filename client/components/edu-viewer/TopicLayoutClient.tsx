@@ -6,6 +6,7 @@ import AppNavbar from "@/components/edu-viewer/AppNavbar";
 import UserMenu from "@/components/edu-viewer/UserMenu";
 import { getRenderer, UnknownRenderer } from "@/utils/component-registry";
 import ComponentBadge from "@/components/edu-viewer/ComponentBadge";
+import CourseChatbot from "@/components/edu-viewer/CourseChatbot";
 import { recordTopicVisit, getAuthToken, clearAuthToken } from "@/utils/authClient";
 import { getBackendApiBase } from "@/utils/runtime-config";
 
@@ -112,6 +113,15 @@ export default function TopicLayoutClient({ courseId, slug, fromPath, course, to
     const base = `/dashboard/courses/${courseId}/${slug}/topics/${topicIndex}/${topicSlug}`;
     return validFromPath ? `${base}?from=${encodeURIComponent(validFromPath)}` : base;
   }, [courseId, slug, validFromPath]);
+
+  // Extract topic context for the AI Chatbot
+  const topicContext = typeof window !== "undefined" 
+    ? JSON.stringify(currentTopic.components, (key, value) => {
+        // Omit huge binary/unhelpful keys if needed, but for now just raw content is fine
+        if (key === "versions" || key === "images") return undefined;
+        return value;
+      }).substring(0, 50000) // limit to ~50k characters to be safe
+    : "";
 
   // Mark this topic as visited on every topic change (best-effort, don't block UI)
   // (Removed per user request: only mark complete on explicit interaction)
@@ -347,6 +357,9 @@ export default function TopicLayoutClient({ courseId, slug, fromPath, course, to
 
       </main>
       </div>
+
+      {/* Floating Course Chatbot */}
+      <CourseChatbot topicTitle={currentTopic.topic_name} topicContext={topicContext} />
     </div>
   );
 }

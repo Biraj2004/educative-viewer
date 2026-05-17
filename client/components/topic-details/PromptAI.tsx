@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
+import ReactMarkdown from "react-markdown";
 import { generateAIContent, AVAILABLE_MODELS } from "@/utils/aiClient";
 
 export interface PromptAIData {
@@ -50,14 +51,15 @@ export default function PromptAI({ data }: { data: PromptAIData }) {
   const [selectedModel, setSelectedModel] = useState(AVAILABLE_MODELS[0].id);
   const chatEndRef = useRef<HTMLDivElement>(null);
 
-  const maxTurns = data.turnLimit ?? 3;
-  const turnsUsed = messages.filter((m) => m.role === "user").length;
-  const attemptsRemaining = Math.max(0, maxTurns - turnsUsed);
-  const canChat = attemptsRemaining > 0;
+  // Remove turn limits entirely as per user request to treat it like a chatbot
+  const attemptsRemaining = "Unlimited";
+  const canChat = true;
+
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (chatEndRef.current) {
-      chatEndRef.current.scrollIntoView({ behavior: "smooth" });
+    if (scrollContainerRef.current) {
+      scrollContainerRef.current.scrollTop = scrollContainerRef.current.scrollHeight;
     }
   }, [messages, loading]);
 
@@ -103,6 +105,25 @@ export default function PromptAI({ data }: { data: PromptAIData }) {
     setError(null);
   }
 
+  const renderedMessages = useMemo(() => messages.map((msg, idx) => (
+    <div
+      key={idx}
+      className={`max-w-[85%] rounded-lg px-4 py-3 text-sm ${
+        msg.role === "user"
+          ? "bg-blue-500 text-white self-end rounded-br-none"
+          : "bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-200 self-start rounded-bl-none"
+      }`}
+    >
+      <div className="whitespace-pre-wrap leading-relaxed prose prose-sm dark:prose-invert max-w-none prose-p:leading-relaxed prose-pre:bg-gray-800 prose-pre:text-gray-100">
+        {msg.role === "model" ? (
+          <ReactMarkdown>{msg.content}</ReactMarkdown>
+        ) : (
+          msg.content
+        )}
+      </div>
+    </div>
+  )), [messages]);
+
   return (
     <div className="max-w-4xl mx-auto my-8 flex flex-col gap-6">
       {/* Top Banner */}
@@ -142,7 +163,7 @@ export default function PromptAI({ data }: { data: PromptAIData }) {
               <CheckIcon /> Saved
             </span>
             <span className="text-gray-500 dark:text-gray-400">
-              {attemptsRemaining} Attempts Remaining
+              {attemptsRemaining} Attempts
             </span>
             <button
               onClick={handleReset}
@@ -154,24 +175,14 @@ export default function PromptAI({ data }: { data: PromptAIData }) {
         </div>
 
         {/* Chat History */}
-        <div className="h-80 overflow-y-auto p-4 flex flex-col gap-4">
+        <div ref={scrollContainerRef} className="h-80 overflow-y-auto p-4 flex flex-col gap-4 relative scroll-smooth">
           {messages.length === 0 ? (
             <div className="h-full flex items-center justify-center text-gray-400 dark:text-gray-500 text-sm italic">
               Start a conversation...
             </div>
           ) : (
-            messages.map((msg, idx) => (
-              <div
-                key={idx}
-                className={`max-w-[85%] rounded-lg px-4 py-3 text-sm ${
-                  msg.role === "user"
-                    ? "bg-blue-500 text-white self-end rounded-br-none"
-                    : "bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-200 self-start rounded-bl-none"
-                }`}
-              >
-                <div className="whitespace-pre-wrap leading-relaxed">{msg.content}</div>
-              </div>
-            ))
+            // Rendered messages to prevent input lag
+            renderedMessages
           )}
           {loading && (
             <div className="bg-gray-100 dark:bg-gray-800 text-gray-500 self-start rounded-lg rounded-bl-none px-4 py-3 text-sm flex items-center gap-2">
@@ -184,7 +195,6 @@ export default function PromptAI({ data }: { data: PromptAIData }) {
               {error}
             </div>
           )}
-          <div ref={chatEndRef} />
         </div>
 
         {/* Input Area */}
@@ -209,11 +219,6 @@ export default function PromptAI({ data }: { data: PromptAIData }) {
               <SendIcon />
             </button>
           </div>
-          {!canChat && (
-            <p className="text-xs text-red-500 mt-2 ml-1">
-              You have reached the maximum number of attempts. Please reset to try again.
-            </p>
-          )}
         </div>
       </div>
     </div>
