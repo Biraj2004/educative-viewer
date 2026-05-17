@@ -31,8 +31,16 @@ function asString(value: unknown): string {
 function normalizeRows(value: unknown): string[][] {
   if (!Array.isArray(value)) return [];
   return value
-    .filter((row) => Array.isArray(row))
-    .map((row) => (row as unknown[]).map((cell) => asString(cell)));
+    .map((row) => {
+      if (Array.isArray(row)) {
+        return row.map((cell) => asString(cell));
+      } else if (row && typeof row === "object") {
+         const keys = Object.keys(row).filter(key => !isNaN(Number(key))).sort((a, b) => parseInt(a) - parseInt(b));
+         return keys.map((key) => asString((row as any)[key]));
+      }
+      return [];
+    })
+    .filter((row) => row.length > 0);
 }
 
 function normalizeColumnWidths(value: unknown, colCount: number): number[] {
@@ -47,8 +55,14 @@ function normalizeColumnWidths(value: unknown, colCount: number): number[] {
 function normalizeStyles(value: unknown): Record<string, string>[][] {
   if (!Array.isArray(value)) return [];
   return value.map((row) => {
-    if (!Array.isArray(row)) return [];
-    return row.map((cell) => {
+    let cells: unknown[] = [];
+    if (Array.isArray(row)) {
+      cells = row;
+    } else if (row && typeof row === "object") {
+      const keys = Object.keys(row).filter(key => !isNaN(Number(key))).sort((a, b) => parseInt(a) - parseInt(b));
+      cells = keys.map((key) => (row as any)[key]);
+    }
+    return cells.map((cell) => {
       if (!cell || typeof cell !== "object") return {};
       return cell as Record<string, string>;
     });

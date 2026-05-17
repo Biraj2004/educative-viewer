@@ -30,6 +30,7 @@ const clientPort = parsePort(args['client-port'] || process.env.EV_CLIENT_PORT, 
 const skipBuild = !!args['skip-build'] || process.env.EV_SKIP_BUILD === '1';
 const forceBuild = !!args['force-build'] || process.env.EV_FORCE_BUILD === '1';
 const editEnv = !!args['edit-env'] || process.env.EV_EDIT_ENV === '1';
+const devOnly = !!args['dev-only'] || process.env.EV_DEV_ONLY === '1';
 
 const children = [];
 let proxyServer = null;
@@ -85,7 +86,7 @@ async function main() {
   });
 
   const backendProcess = startBackend(venvPython);
-  const clientProcess = await startClient({ skipBuild, forceBuild, clientPort });
+  const clientProcess = await startClient({ skipBuild, forceBuild, devOnly, clientPort });
 
   proxyServer = startProxyServer({
     proxyPort,
@@ -114,6 +115,7 @@ function printUsage() {
   console.log('  --proxy-port <port>    Proxy port (default: 80)');
   console.log('  --backend-port <port>  Flask port (default: 5000)');
   console.log('  --client-port <port>   Next.js port (default: 3000)');
+  console.log('  --dev-only             Start Next.js in development mode with auto-reload');
   console.log('  --skip-build           Skip Next.js build (requires existing .next)');
   console.log('  --force-build          Rebuild Next.js even if .next exists');
   console.log('  --edit-env             Prompt to edit server env values (invite codes, JWT secret, DB paths, static root)');
@@ -589,7 +591,7 @@ function startBackend(venvPython) {
   return child;
 }
 
-async function startClient({ skipBuild, forceBuild, clientPort }) {
+async function startClient({ skipBuild, forceBuild, devOnly, clientPort }) {
   console.log('[setup] Installing client dependencies if needed...');
   if (!fs.existsSync(path.join(CLIENT_DIR, 'node_modules'))) {
     const installResult = spawnSync('npm install', {
@@ -601,6 +603,17 @@ async function startClient({ skipBuild, forceBuild, clientPort }) {
       console.error('[error] npm install failed.');
       process.exit(installResult.status ?? 1);
     }
+  }
+
+  if (devOnly) {
+    console.log('[start] Next.js dev server (auto-reloading)');
+    const child = spawn('npx', ['next', 'dev', '-p', String(clientPort)], {
+      cwd: CLIENT_DIR,
+      stdio: 'inherit',
+      shell: true,
+    });
+    child.on('exit', (code) => handleChildExit('client', code));
+    return child;
   }
 
   const nextDir = path.join(CLIENT_DIR, '.next');
