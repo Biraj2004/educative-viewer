@@ -21,14 +21,10 @@ export const AVAILABLE_MODELS = [
   { id: "gemini-3-flash-preview", name: "Gemini 3 Flash", provider: "gemini" },
 
   // ── Rest of Groq Models ──
-  { id: "allam-2-7b", name: "Allam 2 7B (Groq)", provider: "groq" },
   { id: "groq/compound", name: "Compound (Groq)", provider: "groq" },
   { id: "groq/compound-mini", name: "Compound Mini (Groq)", provider: "groq" },
-  { id: "meta-llama/llama-prompt-guard-2-22m", name: "Prompt Guard 2 22M (Groq)", provider: "groq" },
-  { id: "meta-llama/llama-prompt-guard-2-86m", name: "Prompt Guard 2 86M (Groq)", provider: "groq" },
   { id: "openai/gpt-oss-120b", name: "GPT-OSS 120B (Groq)", provider: "groq" },
   { id: "openai/gpt-oss-20b", name: "GPT-OSS 20B (Groq)", provider: "groq" },
-  { id: "openai/gpt-oss-safeguard-20b", name: "GPT-OSS Safeguard 20B (Groq)", provider: "groq" },
   { id: "qwen/qwen3-32b", name: "Qwen 3 32B (Groq)", provider: "groq" },
 ];
 
