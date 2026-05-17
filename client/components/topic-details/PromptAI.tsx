@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { generateGeminiContent, AVAILABLE_MODELS } from "@/utils/geminiClient";
+import { generateAIContent, AVAILABLE_MODELS } from "@/utils/aiClient";
 
 export interface PromptAIData {
   comp_id: string;
@@ -76,11 +76,13 @@ export default function PromptAI({ data }: { data: PromptAIData }) {
       // Send only previous messages as history to API
       const history = messages.map(m => ({ role: m.role, content: m.content }));
       
-      const response = await generateGeminiContent({
+      const selectedModelObj = AVAILABLE_MODELS.find(m => m.id === selectedModel);
+      const response = await generateAIContent({
         systemPrompt: data.systemPrompt,
         userPrompt: userMessage.content,
         history: history,
         model: selectedModel,
+        provider: selectedModelObj?.provider ?? "gemini",
         temperature: data.temperature ?? 0.2,
       });
 

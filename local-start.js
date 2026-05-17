@@ -719,7 +719,7 @@ const BACKEND_API_PATTERNS = [
   /^\/api\/admin\/set-course-status\/?$/i,
   /^\/api\/admin\/test-components\/?$/i,
   /^\/api\/admin\/test-components\/\d+\/?$/i,
-  /^\/api\/gemini\/generate\/?$/i,
+  /^\/api\/ai\/generate\/?$/i,
 ];
 
 function isBackendApi(pathname) {
@@ -802,7 +802,7 @@ function sniffAndServe(filePath, res) {
 
     const buf = Buffer.alloc(SNIFF_BYTES);
     fs.read(fdNum, buf, 0, SNIFF_BYTES, 0, (readErr, bytesRead) => {
-      fs.close(fdNum, () => {});
+      fs.close(fdNum, () => { });
 
       if (readErr) {
         res.statusCode = 500;

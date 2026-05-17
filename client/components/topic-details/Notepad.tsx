@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { generateGeminiContent, AVAILABLE_MODELS } from "@/utils/geminiClient";
+import { generateAIContent, AVAILABLE_MODELS } from "@/utils/aiClient";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -86,10 +86,12 @@ export default function Notepad({ data }: { data: NotepadData }) {
       setAiError(null);
       setAiFeedback(null);
       try {
-        const result = await generateGeminiContent({
+        const selectedModelObj = AVAILABLE_MODELS.find(m => m.id === selectedModel);
+        const result = await generateAIContent({
           systemPrompt: data.systemPrompt,
           userPrompt: value,
           model: selectedModel,
+          provider: selectedModelObj?.provider ?? "gemini",
           temperature: data.temperature ?? 0.2,
         });
         setAiFeedback(result);

@@ -11,7 +11,7 @@ from backend.routes.admin import create_admin_blueprint
 from backend.routes.auth import create_auth_blueprint
 from backend.routes.courses import create_courses_blueprint
 from backend.routes.contact import create_contact_blueprint
-from backend.routes.gemini import gemini_bp
+from backend.routes.ai import ai_bp
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 log = logging.getLogger(__name__)
@@ -59,7 +59,7 @@ def create_app(
     app.register_blueprint(create_auth_blueprint(auth_service, db_manager))
     app.register_blueprint(create_admin_blueprint(auth_service, db_manager))
     app.register_blueprint(create_contact_blueprint())
-    app.register_blueprint(gemini_bp, url_prefix="/api/gemini")
+    app.register_blueprint(ai_bp, url_prefix="/api/ai")
 
     if initialize_db:
         db_manager.init_auth_db()

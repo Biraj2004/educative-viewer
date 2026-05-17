@@ -47,6 +47,7 @@ class AppConfig:
 
     rsa_private_key: str
     gemini_api_key: str
+    groq_api_key: str
 
 
 def load_env_file(env_path: Path | None = None) -> None:
@@ -165,4 +166,5 @@ def load_config() -> AppConfig:
 
         rsa_private_key=os.environ.get("RSA_PRIVATE_KEY", "").replace("\\n", "\n").strip(),
         gemini_api_key=os.environ.get("GEMINI_API_KEY", "").strip(),
+        groq_api_key=os.environ.get("GROQ_API_KEY", "").strip(),
     )
