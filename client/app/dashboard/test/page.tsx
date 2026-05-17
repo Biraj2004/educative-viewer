@@ -47,6 +47,7 @@ import Mermaid, { MermaidData } from '@/components/topic-details/Mermaid';
 import MarkMap, { MarkMapData } from '@/components/topic-details/MarkMap';
 import D2Diagram, { D2DiagramData } from '@/components/topic-details/D2Diagram';
 import SequenceDiagrams, { SequenceDiagramData } from "@/components/topic-details/SequenceDiagrams";
+import PromptAI, { PromptAIData } from "@/components/topic-details/PromptAI";
 import { getBackendApiBase } from "@/utils/runtime-config";
 
 interface TestComponentRow {
@@ -123,6 +124,7 @@ const componentMapping: { [key: string]: React.ComponentType<any> } = {
     "MarkMap": (props: { data: MarkMapData }) => <MarkMap {...props} />,
     "D2Diagram": (props: { data: D2DiagramData }) => <D2Diagram {...props} />,
     "SequenceDiagrams": (props: { data: SequenceDiagramData }) => <SequenceDiagrams {...props} />,
+    "PromptAI": (props: { data: PromptAIData }) => <PromptAI {...props} />,
 };
 
 type FetchStatus = "idle" | "loading" | "forbidden" | "empty" | "ok" | "error";

@@ -719,6 +719,7 @@ const BACKEND_API_PATTERNS = [
   /^\/api\/admin\/set-course-status\/?$/i,
   /^\/api\/admin\/test-components\/?$/i,
   /^\/api\/admin\/test-components\/\d+\/?$/i,
+  /^\/api\/gemini\/generate\/?$/i,
 ];
 
 function isBackendApi(pathname) {

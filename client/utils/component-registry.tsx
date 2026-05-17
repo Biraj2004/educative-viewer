@@ -43,6 +43,7 @@ import Mermaid from "@/components/topic-details/Mermaid";
 import MarkMap from "@/components/topic-details/MarkMap";
 import D2Diagram from "@/components/topic-details/D2Diagram";
 import SequenceDiagrams from "@/components/topic-details/SequenceDiagrams";
+import PromptAI from "@/components/topic-details/PromptAI";
 import "katex/dist/katex.min.css";
 
 // ─── Component Feature Flags ─────────────────────────────────────────────────
@@ -120,6 +121,7 @@ export const COMPONENT_REGISTRY: Record<string, RendererFn> = {
   Mermaid:               (c) => <div data-component-type="Mermaid">              <Mermaid                data={c as any} /></div>,
   MarkMap:               (c) => <div data-component-type="MarkMap">              <MarkMap                data={c as any} /></div>,
   D2Diagram:             (c) => <div data-component-type="D2Diagram">            <D2Diagram              data={c as any} /></div>,
+  PromptAI:              (c) => <div data-component-type="PromptAI">             <PromptAI               data={c as any} /></div>,
 };
 
 // ─── Lookup Helper ───────────────────────────────────────────────────────────

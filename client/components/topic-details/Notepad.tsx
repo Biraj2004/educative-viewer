@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { generateGeminiContent, AVAILABLE_MODELS } from "@/utils/geminiClient";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -27,6 +28,7 @@ export interface NotepadData {
   systemPrompt?: string;
   turnLimit?: number;
   version?: string;
+  temperature?: number;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -66,14 +68,38 @@ export default function Notepad({ data }: { data: NotepadData }) {
   const initText = data.editorText?.length ? slateToText(data.editorText) : "";
   const [value, setValue] = useState(initText);
   const [submitted, setSubmitted] = useState(false);
+  const [loadingAI, setLoadingAI] = useState(false);
+  const [aiFeedback, setAiFeedback] = useState<string | null>(null);
+  const [aiError, setAiError] = useState<string | null>(null);
+  const [selectedModel, setSelectedModel] = useState(AVAILABLE_MODELS[0].id);
   const charLimit = data.characterLimit ?? 0;
 
   const remaining = charLimit > 0 ? charLimit - value.length : null;
   const overLimit = remaining !== null && remaining < 0;
 
-  function handleSubmit() {
+  async function handleSubmit() {
     if (!value.trim() || overLimit) return;
     setSubmitted(true);
+
+    if (data.enableAI) {
+      setLoadingAI(true);
+      setAiError(null);
+      setAiFeedback(null);
+      try {
+        const result = await generateGeminiContent({
+          systemPrompt: data.systemPrompt,
+          userPrompt: value,
+          model: selectedModel,
+          temperature: data.temperature ?? 0.2,
+        });
+        setAiFeedback(result);
+      } catch (err: any) {
+        setAiError(err.message || "An error occurred while generating AI feedback.");
+        // If the error is API key missing, it should show up here.
+      } finally {
+        setLoadingAI(false);
+      }
+    }
   }
 
   function handleReset() {
@@ -113,15 +139,23 @@ export default function Notepad({ data }: { data: NotepadData }) {
             <div className="flex items-center justify-between px-3 py-2 border-t border-gray-100 dark:border-gray-700">
               <div className="flex items-center gap-2">
                 {data.enableAI && (
-                  <span className="flex items-center gap-1 text-xs text-indigo-500 dark:text-indigo-400 font-medium">
-                    <BotIcon />
-                    AI Feedback
-                    {data.selectedAIModel && (
-                      <span className="text-gray-400 dark:text-gray-500 font-normal">
-                        · {data.selectedAIModel}
-                      </span>
-                    )}
-                  </span>
+                  <>
+                    <span className="flex items-center gap-1 text-xs text-indigo-500 dark:text-indigo-400 font-medium mr-2">
+                      <BotIcon />
+                      AI Feedback
+                    </span>
+                    <select
+                      value={selectedModel}
+                      onChange={(e) => setSelectedModel(e.target.value)}
+                      className="bg-transparent border border-gray-200 dark:border-gray-700 rounded px-1.5 py-0.5 text-xs text-gray-600 dark:text-gray-300 outline-none focus:border-indigo-400"
+                    >
+                      {AVAILABLE_MODELS.map((m) => (
+                        <option key={m.id} value={m.id} className="bg-white dark:bg-gray-800">
+                          {m.name}
+                        </option>
+                      ))}
+                    </select>
+                  </>
                 )}
               </div>
               <div className="flex items-center gap-3">
@@ -163,15 +197,29 @@ export default function Notepad({ data }: { data: NotepadData }) {
               <div className="flex items-center gap-2 mb-2 text-indigo-600 dark:text-indigo-400">
                 <BotIcon />
                 <span className="text-xs font-semibold uppercase tracking-wide">AI Feedback</span>
-                {data.selectedAIModel && (
-                  <span className="text-xs text-gray-400 dark:text-gray-500 font-normal ml-auto">
-                    {data.selectedAIModel}
-                  </span>
-                )}
+                <span className="text-xs text-gray-400 dark:text-gray-500 font-normal ml-auto">
+                  {AVAILABLE_MODELS.find(m => m.id === selectedModel)?.name}
+                </span>
               </div>
-              <p className="text-xs text-indigo-500 dark:text-indigo-400 italic">
-                AI feedback is not available in offline viewing mode.
-              </p>
+              
+              {loadingAI ? (
+                <div className="flex items-center gap-2 text-sm text-indigo-500 dark:text-indigo-400">
+                  <div className="w-4 h-4 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
+                  Generating feedback...
+                </div>
+              ) : aiError ? (
+                <p className="text-sm text-red-500 dark:text-red-400 whitespace-pre-wrap font-medium">
+                  {aiError}
+                </p>
+              ) : aiFeedback ? (
+                <p className="text-sm text-indigo-900 dark:text-indigo-200 whitespace-pre-wrap leading-relaxed">
+                  {aiFeedback}
+                </p>
+              ) : (
+                <p className="text-xs text-indigo-500 dark:text-indigo-400 italic">
+                  AI feedback is not available.
+                </p>
+              )}
             </div>
           )}
 

@@ -46,6 +46,7 @@ class AppConfig:
     invite_codes: set[str]
 
     rsa_private_key: str
+    gemini_api_key: str
 
 
 def load_env_file(env_path: Path | None = None) -> None:
@@ -163,4 +164,5 @@ def load_config() -> AppConfig:
         invite_codes=_parse_csv_codes(os.environ.get("INVITE_CODES", "")),
 
         rsa_private_key=os.environ.get("RSA_PRIVATE_KEY", "").replace("\\n", "\n").strip(),
+        gemini_api_key=os.environ.get("GEMINI_API_KEY", "").strip(),
     )
