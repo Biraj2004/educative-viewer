@@ -55,11 +55,11 @@ const componentTypes = [
   "Video Player", "Stack", "RunJS", "Notepad",
   "Matrix", "NaryTree", "LinkedList", "Graphviz",
   "BinaryTree", "CodeTest", "Chart", "ButtonLink",
-  "CodeDrawing", "Adaptive",
+  "CodeDrawing", "Adaptive", "UML", "WorkPreview",
 ];
 
 const stats = [
-  { value: "30+", label: "Rich Components" },
+  { value: "32+", label: "Rich Components" },
   { value: "0ms", label: "Latency Execution" },
   { value: "100%", label: "Dark Mode Native" },
 ];

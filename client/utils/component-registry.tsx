@@ -44,6 +44,8 @@ import MarkMap from "@/components/topic-details/MarkMap";
 import D2Diagram from "@/components/topic-details/D2Diagram";
 import SequenceDiagrams from "@/components/topic-details/SequenceDiagrams";
 import PromptAI from "@/components/topic-details/PromptAI";
+import UML from "@/components/topic-details/UML";
+import WorkPreview from "@/components/topic-details/WorkPreview";
 import "katex/dist/katex.min.css";
 
 // ─── Component Feature Flags ─────────────────────────────────────────────────
@@ -122,6 +124,8 @@ export const COMPONENT_REGISTRY: Record<string, RendererFn> = {
   MarkMap:               (c) => <div data-component-type="MarkMap">              <MarkMap                data={c as any} /></div>,
   D2Diagram:             (c) => <div data-component-type="D2Diagram">            <D2Diagram              data={c as any} /></div>,
   PromptAI:              (c) => <div data-component-type="PromptAI">             <PromptAI               data={c as any} /></div>,
+  UML:                   (c) => <div data-component-type="UML">                  <UML                    data={c as any} /></div>,
+  WorkPreview:           (c) => <div data-component-type="WorkPreview">          <WorkPreview           data={c as any} /></div>,
 };
 
 // ─── Lookup Helper ───────────────────────────────────────────────────────────

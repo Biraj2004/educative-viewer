@@ -48,6 +48,8 @@ import MarkMap, { MarkMapData } from '@/components/topic-details/MarkMap';
 import D2Diagram, { D2DiagramData } from '@/components/topic-details/D2Diagram';
 import SequenceDiagrams, { SequenceDiagramData } from "@/components/topic-details/SequenceDiagrams";
 import PromptAI, { PromptAIData } from "@/components/topic-details/PromptAI";
+import UML, { UMLData } from "@/components/topic-details/UML";
+import WorkPreview, { WorkPreviewData } from "@/components/topic-details/WorkPreview";
 import { getBackendApiBase } from "@/utils/runtime-config";
 
 interface TestComponentRow {
@@ -125,6 +127,8 @@ const componentMapping: { [key: string]: React.ComponentType<any> } = {
     "D2Diagram": (props: { data: D2DiagramData }) => <D2Diagram {...props} />,
     "SequenceDiagrams": (props: { data: SequenceDiagramData }) => <SequenceDiagrams {...props} />,
     "PromptAI": (props: { data: PromptAIData }) => <PromptAI {...props} />,
+    "UML": (props: { data: UMLData }) => <UML {...props} />,
+    "WorkPreview": (props: { data: WorkPreviewData }) => <WorkPreview {...props} />,
 };
 
 type FetchStatus = "idle" | "loading" | "forbidden" | "empty" | "ok" | "error";
