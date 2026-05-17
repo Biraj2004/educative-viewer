@@ -2,6 +2,9 @@
 
 A local viewer for structured educational content. One script starts everything.
 
+## Updates
+- From v1.0.66+ : Please rebuild the project using --force-build command as environment variables were updated.
+
 ## Requirements
 
 Install these before running:
