@@ -138,3 +138,9 @@ input:-webkit-autofill:active {
   caret-color: #f3f4f6;
   transition: background-color 9999s ease-in-out 0s;
 }
+
+/* ─── Global Strong Tag Dark Mode Fix ───────────────────────────────────── */
+.dark b,
+.dark strong {
+  color: #f1f5f9;
+}
