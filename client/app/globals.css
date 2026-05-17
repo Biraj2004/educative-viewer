@@ -144,3 +144,10 @@ input:-webkit-autofill:active {
 .dark strong {
   color: #f1f5f9;
 }
+
+/* ─── Data Structure SVG Auto-scaling ───────────────────────────────────── */
+/* Ensure inline SVGs in data structure components scale down instead of causing horizontal scroll */
+.overflow-x-auto > svg {
+  max-width: 100%;
+  height: auto;
+}

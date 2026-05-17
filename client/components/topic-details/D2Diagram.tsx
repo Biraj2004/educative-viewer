@@ -207,7 +207,7 @@ export default function D2Diagram({ data }: { data: D2DiagramData }) {
   }
 
   return (
-    <div className="w-full mx-auto px-6 py-4">
+    <div className="max-w-6xl mx-auto px-6 py-4">
       <div className="flex flex-col items-center gap-3">
 
         {loadState === "loading" && (
@@ -218,13 +218,12 @@ export default function D2Diagram({ data }: { data: D2DiagramData }) {
 
         {loadState === "loaded" && imageSrc && (
           // Horizontally scrollable so very wide diagrams don't overflow the page
-          <div className="w-full overflow-x-auto">
+          <div className="w-full overflow-x-auto flex justify-center">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={imageSrc}
               alt={captionText ?? "D2 diagram"}
-              // width:100% fills the column; height:auto keeps the SVG aspect ratio.
-              style={{ width: "100%", height: "auto", display: "block" }}
+              className="w-full max-w-full h-auto max-h-[70vh] object-contain block mx-auto"
             />
           </div>
         )}

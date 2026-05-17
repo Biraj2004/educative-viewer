@@ -25,8 +25,26 @@ export default function ButtonLink({ data }: { data: ButtonLinkData }) {
   const [loading, setLoading] = useState(false);
 
   const handleClick = async (e: React.MouseEvent<HTMLAnchorElement>) => {
+    let isApiUrl = false;
+    let apiPath = "";
+
+    try {
+      if (safeUrl.startsWith("/api")) {
+        isApiUrl = true;
+        apiPath = safeUrl;
+      } else if (safeUrl.includes("/api")) {
+        const parsed = new URL(safeUrl);
+        if (parsed.pathname.startsWith("/api")) {
+          isApiUrl = true;
+          apiPath = parsed.pathname + parsed.search;
+        }
+      }
+    } catch {
+      // ignore
+    }
+
     // If it's an API route for download, handle it via fetch to inject Auth Headers
-    if (safeUrl.startsWith("/api")) {
+    if (isApiUrl) {
       e.preventDefault();
       if (loading) return;
       setLoading(true);
@@ -36,9 +54,8 @@ export default function ButtonLink({ data }: { data: ButtonLinkData }) {
         const headers: Record<string, string> = {};
         if (token) headers["Authorization"] = `Bearer ${token}`;
 
-        // Fallback to absolute backend URL if needed, depending on mapping
-        const backendBase = getBackendApiBase();
-        const targetUrl = safeUrl.startsWith("/") ? `${backendBase}${safeUrl}` : safeUrl;
+        // Use the current browser domain instead of localhost from json or config
+        const targetUrl = `${window.location.origin}${apiPath}`;
 
         const res = await fetch(targetUrl, { headers });
         if (!res.ok) throw new Error("API request failed");
@@ -53,7 +70,7 @@ export default function ButtonLink({ data }: { data: ButtonLinkData }) {
         if (disposition && disposition.includes("filename=")) {
           filename = disposition.split("filename=")[1].replace(/"/g, "");
         } else {
-          const parts = safeUrl.split("/");
+          const parts = apiPath.split("/");
           const last = parts.pop();
           if (last && last !== "download") filename = last;
         }
@@ -65,7 +82,6 @@ export default function ButtonLink({ data }: { data: ButtonLinkData }) {
         document.body.removeChild(a);
       } catch (err) {
         console.error("ButtonLink download error:", err);
-        // Fallback if fetch fails (e.g. CORS issues, missing proxy)
         window.open(safeUrl, "_blank");
       } finally {
         setLoading(false);
