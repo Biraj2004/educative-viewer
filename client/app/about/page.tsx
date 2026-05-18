@@ -1,15 +1,27 @@
 "use client";
 
-import React from "react";
 import Image from "next/image";
 import AppNavbar from "@/components/edu-viewer/AppNavbar";
 import { HomeAuthProvider } from "@/components/edu-viewer/HomeAuthSection";
 import { motion, Variants } from "framer-motion";
-import { ExternalLink, Globe, Lock, Code2, Layers } from "lucide-react";
+import {
+  ExternalLink,
+  Lock,
+  Code2,
+  Terminal,
+  MonitorPlay,
+  Video,
+  FileText,
+  ServerOff,
+} from "lucide-react";
 
 function IconGitHub({ className }: { className?: string }) {
   return (
-    <svg className={className || "w-5 h-5"} viewBox="0 0 24 24" fill="currentColor">
+    <svg
+      className={className || "w-5 h-5"}
+      viewBox="0 0 24 24"
+      fill="currentColor"
+    >
       <path
         fillRule="evenodd"
         clipRule="evenodd"
@@ -31,10 +43,10 @@ const containerVariants: Variants = {
 
 const itemVariants: Variants = {
   hidden: { opacity: 0, y: 20 },
-  visible: { 
-    opacity: 1, 
+  visible: {
+    opacity: 1,
     y: 0,
-    transition: { type: "spring", stiffness: 100, damping: 20 }
+    transition: { type: "spring", stiffness: 100, damping: 20 },
   },
 };
 
@@ -50,25 +62,19 @@ const builders = [
     color: "from-indigo-500 to-violet-500",
     shadowColor: "shadow-indigo-500/10",
     hoverShadow: "hover:shadow-indigo-500/20",
-    textGradient: "from-indigo-500 to-violet-500 dark:from-indigo-400 dark:to-violet-400",
+    textGradient:
+      "from-indigo-500 to-violet-500 dark:from-indigo-400 dark:to-violet-400",
     projects: [
       {
-        name: "EducativeViewer",
-        type: "Public Release",
-        icon: Globe,
-        iconColor: "text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-900/20",
-        href: "https://github.com/Biraj2004/EducativeViewer",
-        isCurrent: true,
-      },
-      {
         name: "educative-viewer",
-        type: "Private Repository",
+        type: "Public Repository",
         icon: Lock,
-        iconColor: "text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20",
+        iconColor:
+          "text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20",
         href: "https://github.com/Biraj2004/educative-viewer",
         isCurrent: true,
-      }
-    ]
+      },
+    ],
   },
   {
     name: "Anilabha Datta",
@@ -79,26 +85,59 @@ const builders = [
     color: "from-violet-500 to-fuchsia-500",
     shadowColor: "shadow-violet-500/10",
     hoverShadow: "hover:shadow-violet-500/20",
-    textGradient: "from-violet-500 to-fuchsia-500 dark:from-violet-400 dark:to-fuchsia-400",
+    textGradient:
+      "from-violet-500 to-fuchsia-500 dark:from-violet-400 dark:to-fuchsia-400",
     projects: [
       {
         name: "educative.io_scraper",
         type: "Data Extraction Tool",
         icon: Code2,
-        iconColor: "text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20",
+        iconColor:
+          "text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20",
         href: "https://github.com/anilabhadatta/educative.io_scraper",
         isCurrent: false,
       },
-      {
-        name: "educative-viewer",
-        type: "Legacy Viewer",
-        icon: Layers,
-        iconColor: "text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-900/20",
-        href: "https://github.com/anilabhadatta/educative-viewer",
-        isCurrent: false,
-      }
-    ]
-  }
+    ],
+  },
+];
+
+const unsupportedComponents = [
+  {
+    name: "TerminalWidget",
+    icon: Terminal,
+    description:
+      "Requires live, secure SSH connections to backend compute instances. Provisioning remote servers is out of scope for a static viewer.",
+  },
+  {
+    name: "LiveApp",
+    icon: ServerOff,
+    description:
+      "Needs container orchestration (like Kubernetes) to run and expose live server ports dynamically for web applications.",
+  },
+  {
+    name: "ProjectCodeContent",
+    icon: Code2,
+    description:
+      "Demands a full server-side IDE backend to execute and validate code in real-time within an isolated environment.",
+  },
+  {
+    name: "VNC",
+    icon: MonitorPlay,
+    description:
+      "Requires spinning up headless Linux VMs and streaming the desktop environment via WebSockets, which is massively resource-intensive.",
+  },
+  {
+    name: "VideoRecorder",
+    icon: Video,
+    description:
+      "Requires cloud streaming servers and massive storage infrastructure for real-time media encoding and playback.",
+  },
+  {
+    name: "HubspotForm",
+    icon: FileText,
+    description:
+      "A proprietary marketing and CRM integration tool that serves no educational purpose in a standalone open-source viewer.",
+  },
 ];
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -107,19 +146,23 @@ export default function AboutPage() {
   return (
     <HomeAuthProvider>
       <div className="min-h-screen bg-[#fafafa] dark:bg-[#030712] text-gray-900 dark:text-gray-100 font-sans selection:bg-indigo-500/30 flex flex-col">
-        <AppNavbar crumbs={[{ label: "About Us" }]} backHref="/" backLabel="Home" />
+        <AppNavbar
+          crumbs={[{ label: "About Us" }]}
+          backHref="/"
+          backLabel="Home"
+        />
 
         {/* ── Hero Section ───────────────────────────────────────────────── */}
-        <section className="relative flex flex-col justify-center overflow-hidden border-b border-gray-200/50 dark:border-white/5 pt-20 pb-24">
+        <section className="relative flex flex-col justify-center overflow-hidden border-b border-gray-200/50 dark:border-white/5 pt-20 pb-16">
           <div className="absolute inset-0 bg-[radial-gradient(ellipse_80%_60%_at_50%_-20%,rgba(99,102,241,0.08),transparent)] dark:bg-[radial-gradient(ellipse_80%_60%_at_50%_-20%,rgba(99,102,241,0.15),transparent)] pointer-events-none" />
-          
-          <motion.div 
+
+          <motion.div
             variants={containerVariants}
             initial="hidden"
             animate="visible"
             className="relative max-w-4xl mx-auto px-6 text-center z-10"
           >
-            <motion.h1 
+            <motion.h1
               variants={itemVariants}
               className="text-4xl sm:text-6xl font-extrabold tracking-tight text-gray-900 dark:text-white mb-6"
             >
@@ -128,32 +171,94 @@ export default function AboutPage() {
                 Open-Source Learning
               </span>
             </motion.h1>
-            <motion.p 
+            <motion.p
               variants={itemVariants}
               className="text-lg sm:text-xl text-gray-600 dark:text-gray-400 max-w-2xl mx-auto leading-relaxed"
             >
-              Edu-Viewer PRO is a community-driven open-source initiative dedicated to bringing rich, 
-              interactive, code-first educational content to everyone. Build locally, host seamlessly, and learn flawlessly.
+              Edu-Viewer PRO is a community-driven open-source initiative
+              dedicated to bringing rich, interactive, code-first educational
+              content to everyone. Build locally, host seamlessly, and learn
+              flawlessly.
             </motion.p>
           </motion.div>
         </section>
 
-        {/* ── Contributors Section ────────────────────────────────────────── */}
-        <section className="py-24 relative flex-1">
+        {/* ── Unsupported Components Section ────────────────────────────────────────── */}
+        <section className="py-16 border-t border-gray-200/50 dark:border-white/5 relative bg-white/30 dark:bg-gray-950/20">
           <div className="max-w-5xl mx-auto px-6">
-            <motion.div 
+            <motion.div
               initial={{ opacity: 0, y: 20 }}
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true, margin: "-100px" }}
               className="text-center mb-16"
             >
-              <h2 className="text-3xl sm:text-4xl font-bold text-gray-900 dark:text-white mb-4">Meet the Builders</h2>
-              <p className="text-lg text-gray-500 dark:text-gray-400 max-w-2xl mx-auto">
-                The core maintainers and visionaries driving the ecosystem behind <span className="whitespace-nowrap font-medium text-gray-700 dark:text-gray-300">Edu-Viewer PRO.</span>
+              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-rose-50 dark:bg-rose-500/10 text-rose-600 dark:text-rose-400 text-xs font-bold uppercase tracking-wider mb-4 border border-rose-200/50 dark:border-rose-500/20">
+                Architectural Limitations
+              </div>
+              <h2 className="text-3xl sm:text-4xl font-bold text-gray-900 dark:text-white mb-4">
+                Unsupported Components
+              </h2>
+              <p className="text-lg text-gray-600 dark:text-gray-400 max-w-3xl mx-auto">
+                While Edu-Viewer PRO faithfully replicates the vast majority of
+                the learning experience, certain components from the original
+                platform fundamentally require{" "}
+                <span className="font-medium text-gray-800 dark:text-gray-200">
+                  heavy, paid cloud infrastructure
+                </span>{" "}
+                and cannot be replicated in a static, offline-first open-source
+                viewer.
               </p>
             </motion.div>
 
-            <motion.div 
+            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {unsupportedComponents.map((item, idx) => (
+                <motion.div
+                  key={idx}
+                  initial={{ opacity: 0, y: 20 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  viewport={{ once: true }}
+                  transition={{ delay: idx * 0.1 }}
+                  className="p-6 rounded-3xl border border-gray-200/60 dark:border-white/5 bg-white/60 dark:bg-[#080b14]/60 backdrop-blur-md shadow-sm hover:shadow-md transition-shadow"
+                >
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className="w-10 h-10 rounded-xl bg-gray-100 dark:bg-gray-800/80 flex items-center justify-center shrink-0 text-gray-600 dark:text-gray-400 border border-gray-200/50 dark:border-gray-700/50">
+                      <item.icon className="w-5 h-5" />
+                    </div>
+                    <h3 className="font-bold text-gray-900 dark:text-white text-lg">
+                      {item.name}
+                    </h3>
+                  </div>
+                  <p className="text-sm text-gray-600 dark:text-gray-400 leading-relaxed">
+                    {item.description}
+                  </p>
+                </motion.div>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        {/* ── Contributors Section ────────────────────────────────────────── */}
+        <section className="py-16 relative flex-1">
+          <div className="max-w-5xl mx-auto px-6">
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true, margin: "-100px" }}
+              className="text-center mb-16"
+            >
+              <h2 className="text-3xl sm:text-4xl font-bold text-gray-900 dark:text-white mb-4">
+                Meet the Builders
+              </h2>
+              <p className="text-lg text-gray-500 dark:text-gray-400 max-w-2xl mx-auto">
+                The core maintainers and visionaries driving the ecosystem
+                behind{" "}
+                <span className="whitespace-nowrap font-medium text-gray-700 dark:text-gray-300">
+                  Edu-Viewer PRO.
+                </span>
+              </p>
+            </motion.div>
+
+            <motion.div
               variants={containerVariants}
               initial="hidden"
               whileInView="visible"
@@ -161,7 +266,7 @@ export default function AboutPage() {
               className="grid md:grid-cols-2 gap-8"
             >
               {builders.map((col, idx) => (
-                <motion.div 
+                <motion.div
                   key={idx}
                   variants={itemVariants}
                   whileHover={{ y: -4 }}
@@ -170,55 +275,73 @@ export default function AboutPage() {
                   <div className="absolute top-0 right-0 p-6 opacity-5 group-hover:opacity-10 transition-opacity">
                     <IconGitHub className="w-24 h-24" />
                   </div>
-                  
+
                   <div className="relative z-10 flex flex-col flex-1">
                     <div className="flex items-center gap-5 mb-6 shrink-0">
-                      <div className={`w-16 h-16 rounded-full bg-linear-to-br ${col.color} p-0.5 shrink-0 shadow-lg ${col.shadowColor}`}>
+                      <div
+                        className={`w-16 h-16 rounded-full bg-linear-to-br ${col.color} p-0.5 shrink-0 shadow-lg ${col.shadowColor}`}
+                      >
                         <div className="w-full h-full rounded-full bg-white dark:bg-gray-900 flex items-center justify-center overflow-hidden">
-                          <Image 
-                            src={col.avatar} 
-                            alt={col.name} 
-                            width={64} 
-                            height={64} 
+                          <Image
+                            src={col.avatar}
+                            alt={col.name}
+                            width={64}
+                            height={64}
                             className="object-cover no-dark-invert"
                             unoptimized
                           />
                         </div>
                       </div>
                       <div>
-                        <h3 className="text-xl font-bold text-gray-900 dark:text-white">{col.name}</h3>
+                        <h3 className="text-xl font-bold text-gray-900 dark:text-white">
+                          {col.name}
+                        </h3>
                         <div className="flex items-center gap-2 mt-1">
-                          <p className={`text-sm font-bold bg-clip-text text-transparent bg-linear-to-r ${col.textGradient}`}>{col.role}</p>
-                          <span className="text-gray-300 dark:text-gray-700 text-[10px]">•</span>
-                          <a href={`https://github.com/${col.github}`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 text-sm font-medium text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200 transition-colors cursor-pointer">
-                            <IconGitHub className="w-3.5 h-3.5" />
-                            @{col.github}
+                          <p
+                            className={`text-sm font-bold bg-clip-text text-transparent bg-linear-to-r ${col.textGradient}`}
+                          >
+                            {col.role}
+                          </p>
+                          <span className="text-gray-300 dark:text-gray-700 text-[10px]">
+                            •
+                          </span>
+                          <a
+                            href={`https://github.com/${col.github}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1.5 text-sm font-medium text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200 transition-colors cursor-pointer"
+                          >
+                            <IconGitHub className="w-3.5 h-3.5" />@{col.github}
                           </a>
                         </div>
                       </div>
                     </div>
-                    
+
                     <p className="text-sm sm:text-base text-gray-600 dark:text-gray-400 leading-relaxed mb-8 flex-1">
                       {col.bio}
                     </p>
 
                     <div className="space-y-3 mt-auto shrink-0">
                       {col.projects.map((proj, pIdx) => (
-                        <a 
+                        <a
                           key={pIdx}
-                          href={proj.href} 
-                          target="_blank" 
+                          href={proj.href}
+                          target="_blank"
                           rel="noopener noreferrer"
                           className="flex items-center justify-between group/link p-3 rounded-2xl bg-white/50 dark:bg-gray-950/40 border border-gray-200/50 dark:border-white/5 hover:bg-white dark:hover:bg-gray-900 hover:border-indigo-300/50 dark:hover:border-indigo-500/30 transition-all cursor-pointer shadow-xs shadow-black/5 dark:shadow-none hover:shadow-md"
                         >
                           <div className="flex items-center gap-3">
-                            <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${proj.iconColor}`}>
+                            <div
+                              className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${proj.iconColor}`}
+                            >
                               <proj.icon className="w-4 h-4" />
                             </div>
                             <div className="min-w-0 pr-2">
                               {/* Parent provides gap-2, but inside gap-2 min-w-0 wrapper allows truncate */}
                               <div className="flex items-center flex-wrap gap-2">
-                                <span className="text-sm font-semibold max-w-37.5 truncate text-gray-900 dark:text-gray-100 group-hover/link:text-indigo-600 dark:group-hover/link:text-indigo-400 transition-colors">{proj.name}</span>
+                                <span className="text-sm font-semibold max-w-37.5 truncate text-gray-900 dark:text-gray-100 group-hover/link:text-indigo-600 dark:group-hover/link:text-indigo-400 transition-colors">
+                                  {proj.name}
+                                </span>
                                 {proj.isCurrent && (
                                   <span className="inline-flex items-center shrink-0 gap-1.5 px-2 py-0.5 rounded font-bold uppercase tracking-wider text-[9px] bg-indigo-50 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-500/20">
                                     <span className="relative flex h-1.5 w-1.5 shrink-0">
@@ -229,7 +352,9 @@ export default function AboutPage() {
                                   </span>
                                 )}
                               </div>
-                              <div className="text-xs text-gray-500 dark:text-gray-500 mt-0.5 truncate">{proj.type}</div>
+                              <div className="text-xs text-gray-500 dark:text-gray-500 mt-0.5 truncate">
+                                {proj.type}
+                              </div>
                             </div>
                           </div>
                           <ExternalLink className="w-4 h-4 text-gray-400 group-hover/link:text-indigo-500 transition-colors shrink-0" />
@@ -240,13 +365,40 @@ export default function AboutPage() {
                 </motion.div>
               ))}
             </motion.div>
+
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              className="mt-12 text-center"
+            >
+              <a
+                href="https://educative-viewer-guide.vercel.app/"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-3 px-8 py-4 bg-white/40 dark:bg-[#080b14]/50 border border-gray-200/50 dark:border-white/5 backdrop-blur-xl rounded-2xl hover:bg-white/80 dark:hover:bg-gray-900/80 hover:border-indigo-300/50 dark:hover:border-indigo-500/30 transition-all shadow-sm hover:shadow-md text-gray-900 dark:text-white font-bold group"
+              >
+                <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 overflow-hidden border border-gray-200/50 dark:border-white/10 shadow-sm">
+                  <Image
+                    src="https://raw.githubusercontent.com/Biraj2004/Educative-Viewer-Guide/main/public/logo.jpg"
+                    alt="Guide Logo"
+                    width={40}
+                    height={40}
+                    className="w-full h-full object-cover no-dark-invert"
+                    unoptimized
+                  />
+                </div>
+                Read the Official Setup Guide
+                <ExternalLink className="w-4 h-4 text-gray-400 group-hover:text-indigo-500 transition-colors shrink-0 ml-1" />
+              </a>
+            </motion.div>
           </div>
         </section>
 
         {/* ── Contact Section ────────────────────────────────────────────── */}
-        <section className="py-24 border-t border-gray-200/50 dark:border-white/5 bg-gray-50/50 dark:bg-[#030712]/50 relative overflow-hidden">
+        <section className="py-16 border-t border-gray-200/50 dark:border-white/5 bg-gray-50/50 dark:bg-[#030712]/50 relative overflow-hidden">
           <div className="absolute inset-0 bg-[radial-gradient(circle_at_bottom,rgba(99,102,241,0.05),transparent_40%)] pointer-events-none" />
-          <motion.div 
+          <motion.div
             initial={{ opacity: 0, scale: 0.95 }}
             whileInView={{ opacity: 1, scale: 1 }}
             viewport={{ once: true, margin: "-50px" }}
@@ -256,26 +408,29 @@ export default function AboutPage() {
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-50 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 text-xs font-bold uppercase tracking-wider mb-6 border border-indigo-200/50 dark:border-indigo-500/20">
               Get in Touch
             </div>
-            <h2 className="text-3xl md:text-5xl font-bold text-gray-900 dark:text-white mb-6">Have Questions or Feedback?</h2>
+            <h2 className="text-3xl md:text-5xl font-bold text-gray-900 dark:text-white mb-6">
+              Have Questions or Feedback?
+            </h2>
             <p className="text-lg text-gray-600 dark:text-gray-400 mb-10 leading-relaxed max-w-2xl mx-auto">
-              We&apos;re constantly evolving Edu-Viewer PRO based on community input. 
-              Whether you&apos;ve found a bug, have a feature idea, or just want to say hi, we&apos;re all ears.
+              We&apos;re constantly evolving Edu-Viewer PRO based on community
+              input. Whether you&apos;ve found a bug, have a feature idea, or
+              just want to say hi, we&apos;re all ears.
             </p>
             <div className="flex flex-wrap justify-center gap-4">
-              <motion.button 
+              <motion.button
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
-                onClick={() => window.location.href = "/contact"}
+                onClick={() => (window.location.href = "/contact")}
                 className="px-8 py-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl font-bold transition-all shadow-lg shadow-indigo-500/25 flex items-center gap-2"
               >
                 Contact Support
                 <ExternalLink className="w-5 h-5" />
               </motion.button>
-              <motion.a 
+              <motion.a
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
-                href="https://github.com/Biraj2004/EducativeViewer" 
-                target="_blank" 
+                href="https://github.com/Biraj2004/educative-viewer"
+                target="_blank"
                 rel="noopener noreferrer"
                 className="px-8 py-4 bg-white dark:bg-[#030712] text-gray-900 dark:text-white border border-gray-200 dark:border-white/5 backdrop-blur-md rounded-2xl font-bold transition-all hover:bg-gray-50 dark:hover:bg-gray-900 hover:border-indigo-300 dark:hover:border-indigo-500/50 flex items-center gap-2"
               >
