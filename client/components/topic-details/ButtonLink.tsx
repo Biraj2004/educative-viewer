@@ -1,8 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import { getAuthToken } from "@/utils/authClient";
-import { getBackendApiBase } from "@/utils/runtime-config";
+import { getBackendApiBase, getStaticFilesBase, getStaticBasicAuth } from "@/utils/runtime-config";
 
 export interface ButtonLinkData {
   comp_id: string;
@@ -17,31 +16,37 @@ function asString(value: unknown): string {
 }
 
 export default function ButtonLink({ data }: { data: ButtonLinkData }) {
-  const safeUrl = asString((data as unknown as Record<string, unknown>)?.url) || "#";
+  let safeUrl = asString((data as unknown as Record<string, unknown>)?.url) || "#";
   const safeButtonText = asString((data as unknown as Record<string, unknown>)?.buttonText) || "Open link";
   const safeButtonType = asString((data as unknown as Record<string, unknown>)?.buttonType);
   const isPrimary = safeButtonType === "Primary";
   const safeLoginRequired = !!(data as unknown as Record<string, unknown>)?.loginRequired;
   const [loading, setLoading] = useState(false);
 
-  const handleClick = async (e: React.MouseEvent<HTMLAnchorElement>) => {
-    let isApiUrl = false;
-    let apiPath = "";
+  let isApiUrl = false;
+  let apiPath = "";
 
-    try {
-      if (safeUrl.startsWith("/api")) {
+  try {
+    if (safeUrl.startsWith("/api")) {
+      isApiUrl = true;
+      apiPath = safeUrl;
+    } else if (safeUrl.includes("/api")) {
+      const parsed = new URL(safeUrl);
+      if (parsed.pathname.startsWith("/api")) {
         isApiUrl = true;
-        apiPath = safeUrl;
-      } else if (safeUrl.includes("/api")) {
-        const parsed = new URL(safeUrl);
-        if (parsed.pathname.startsWith("/api")) {
-          isApiUrl = true;
-          apiPath = parsed.pathname + parsed.search;
-        }
+        apiPath = parsed.pathname + parsed.search;
       }
-    } catch {
-      // ignore
     }
+  } catch {
+    // ignore
+  }
+
+  if (isApiUrl) {
+    const staticBase = getStaticFilesBase().replace(/\/$/, "");
+    safeUrl = `${staticBase}${apiPath}`;
+  }
+
+  const handleClick = async (e: React.MouseEvent<HTMLAnchorElement>) => {
 
     // If it's an API route for download, handle it via fetch to inject Auth Headers
     if (isApiUrl) {
@@ -50,12 +55,12 @@ export default function ButtonLink({ data }: { data: ButtonLinkData }) {
       setLoading(true);
 
       try {
-        const token = getAuthToken();
         const headers: Record<string, string> = {};
-        if (token) headers["Authorization"] = `Bearer ${token}`;
+        const staticAuth = getStaticBasicAuth();
+        if (staticAuth) headers["Authorization"] = staticAuth;
 
-        // Use the current browser domain instead of localhost from json or config
-        const targetUrl = `${window.location.origin}${apiPath}`;
+        // Use the static files domain
+        const targetUrl = safeUrl;
 
         const res = await fetch(targetUrl, { headers });
         if (!res.ok) throw new Error("API request failed");
@@ -64,7 +69,7 @@ export default function ButtonLink({ data }: { data: ButtonLinkData }) {
         const blobUrl = window.URL.createObjectURL(blob);
         const a = document.createElement("a");
         a.href = blobUrl;
-        
+
         let filename = "download.pdf";
         const disposition = res.headers.get("Content-Disposition");
         if (disposition && disposition.includes("filename=")) {
@@ -96,13 +101,11 @@ export default function ButtonLink({ data }: { data: ButtonLinkData }) {
         onClick={handleClick}
         target="_blank"
         rel="noopener noreferrer"
-        className={`px-6 py-2.5 rounded-lg text-sm font-semibold transition-colors duration-200 shadow-sm border flex items-center justify-center gap-2 ${
-          loading ? "opacity-75 cursor-wait" : "cursor-pointer"
-        } ${
-          isPrimary
+        className={`px-6 py-2.5 rounded-lg text-sm font-semibold transition-colors duration-200 shadow-sm border flex items-center justify-center gap-2 ${loading ? "opacity-75 cursor-wait" : "cursor-pointer"
+          } ${isPrimary
             ? "bg-indigo-600 text-white hover:bg-indigo-700 border-indigo-700 dark:border-indigo-500"
             : "bg-white text-gray-700 hover:bg-gray-50 border-gray-300 dark:bg-gray-800 dark:text-gray-200 dark:border-gray-700 dark:hover:bg-gray-700"
-        }`}
+          }`}
       >
         {loading ? "Processing..." : safeButtonText}
         {safeLoginRequired && !loading && (
