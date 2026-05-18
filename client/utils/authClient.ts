@@ -262,6 +262,9 @@ async function apiPost<T>(
   });
   const data = await res.json().catch(() => ({}));
   if (res.status === 401 && token) {
+    if (path.endsWith("/2fa/verify") && data?.error !== "Not authenticated") {
+      throw new ApiError(data?.error ?? "Invalid authenticator code", 401);
+    }
     await _handleUnauthorized();
     throw new ApiError(data?.error ?? "Session expired.", 401);
   }
