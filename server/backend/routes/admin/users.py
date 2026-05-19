@@ -68,6 +68,10 @@ def register_user_routes(bp: Blueprint, auth_service: AuthService, db_manager: D
         if is_active is None:
             abort(400, description="is_active is required")
 
+        current_admin, _ = auth_service.resolve_user(require_full=True)
+        if current_admin and current_admin.get("id") == user_id:
+            abort(403, description="You cannot change your own active status")
+
         success = db_manager.auth_backend.update_user_status(user_id, bool(is_active))
 
         if not success:

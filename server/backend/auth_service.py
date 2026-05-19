@@ -223,8 +223,7 @@ class AuthService:
         if not user:
             return None, payload
 
-        # Admins bypass "active" check; regular users must be active.
-        if user.get("role") != "admin" and not user.get("is_active", True):
+        if not user.get("is_active", True):
             abort(403, description="Account is deactivated. Please contact an administrator.")
 
         if not payload.get("partial"):
