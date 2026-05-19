@@ -118,7 +118,7 @@ function printUsage() {
   console.log('  --dev-only             Start Next.js in development mode with auto-reload');
   console.log('  --skip-build           Skip Next.js build (requires existing .next)');
   console.log('  --force-build          Rebuild Next.js even if .next exists');
-  console.log('  --edit-env             Prompt to edit server env values (invite codes, JWT secret, DB paths, static root)');
+  console.log('  --edit-env             Prompt to edit server env values (invite codes, JWT secret, DB paths, AI API keys, static root)');
 }
 
 function parseArgs(argv) {
@@ -327,9 +327,24 @@ async function promptCourseDbPaths(rl, existingPaths, defaultPath) {
     }
     paths.push(trimmed);
 
-    const addMore = (await ask(rl, '  Add another course DB? [y/N]: ')).trim().toLowerCase();
-    if (addMore !== 'y' && addMore !== 'yes') {
-      break;
+    if (index < existingPaths.length) {
+      const keepRest = (await ask(rl, `  Keep remaining ${existingPaths.length - index} course DB(s) without editing? [Y/n]: `)).trim().toLowerCase();
+      if (keepRest !== 'n' && keepRest !== 'no') {
+        for (let i = index; i < existingPaths.length; i++) {
+          paths.push(existingPaths[i]);
+        }
+        const addMore = (await ask(rl, '  Add another course DB? [y/N]: ')).trim().toLowerCase();
+        if (addMore === 'y' || addMore === 'yes') {
+          index = existingPaths.length + 1;
+          continue;
+        }
+        break;
+      }
+    } else {
+      const addMore = (await ask(rl, '  Add another course DB? [y/N]: ')).trim().toLowerCase();
+      if (addMore !== 'y' && addMore !== 'yes') {
+        break;
+      }
     }
     index += 1;
   }
@@ -370,13 +385,34 @@ async function ensureServerEnv({ backendPort, pythonExec, rl, editEnv }) {
 
   if (isPlaceholder(current.COURSE_DB_ENGINE)) updates.COURSE_DB_ENGINE = 'sqlite';
   if (rl) {
-    const shouldPromptCourse =
-      editEnv ||
+    const isFirstStartup =
       currentCourseDbPaths.length === 0 ||
       isPlaceholder(currentCourseDbPathsRaw);
+
+    const shouldPromptCourse = editEnv || isFirstStartup;
     if (shouldPromptCourse) {
       const chosenPaths = await promptCourseDbPaths(rl, currentCourseDbPaths, defaultCourseDbPath);
       updates.COURSE_SQLITE_DB_PATHS_JSON = JSON.stringify(chosenPaths);
+    }
+
+    const shouldPromptAI =
+      editEnv ||
+      isFirstStartup ||
+      current.GEMINI_API_KEY === undefined ||
+      current.GROQ_API_KEY === undefined;
+
+    if (shouldPromptAI) {
+      const currentGemini = current.GEMINI_API_KEY || updates.GEMINI_API_KEY || '';
+      updates.GEMINI_API_KEY = await promptValue(rl, 'Gemini API Key (Optional)', currentGemini, {
+        sensitive: true,
+        allowEmpty: true,
+      });
+
+      const currentGroq = current.GROQ_API_KEY || updates.GROQ_API_KEY || '';
+      updates.GROQ_API_KEY = await promptValue(rl, 'Groq API Key (Optional)', currentGroq, {
+        sensitive: true,
+        allowEmpty: true,
+      });
     }
   }
 
