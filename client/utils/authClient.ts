@@ -581,11 +581,12 @@ export async function adminEditUser(
   userId: number,
   email: string,
   name: string | null,
+  role_id: number,
 ): Promise<{ success: boolean }> {
   return adminApiCall<{ success: boolean }>(
     `${ADMIN_API}/users/${userId}/edit`,
     "PATCH",
-    { email, name },
+    { email, name, role_id },
   );
 }
 

@@ -313,15 +313,22 @@ class OracleAuthDatabase:
         finally:
             conn.close()
 
-    def update_user_profile(self, user_id: int, name: str | None, email: str) -> bool:
+    def update_user_profile(self, user_id: int, name: str | None, email: str, role_id: int | None = None) -> bool:
+        """Update a user's display name, email, and optionally role_id."""
         conn = self.get_connection()
         try:
             cursor = conn.cursor()
             try:
-                cursor.execute(
-                    "UPDATE users SET name = :1, email = :2 WHERE id = :3",
-                    (name, email, user_id),
-                )
+                if role_id is not None:
+                    cursor.execute(
+                        "UPDATE users SET name = :1, email = :2, role_id = :3 WHERE id = :4",
+                        (name, email, role_id, user_id),
+                    )
+                else:
+                    cursor.execute(
+                        "UPDATE users SET name = :1, email = :2 WHERE id = :3",
+                        (name, email, user_id),
+                    )
                 conn.commit()
                 return cursor.rowcount > 0
             finally:

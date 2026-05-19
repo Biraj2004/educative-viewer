@@ -168,18 +168,21 @@ function CreateUserModal({ onClose, onCreated }: { onClose: () => void; onCreate
 
 // ─── Edit User Modal ──────────────────────────────────────────────────────────
 
-function EditUserModal({ user, onClose, onSaved }: { user: AdminUser; onClose: () => void; onSaved: () => void }) {
+function EditUserModal({ user, currentUser, onClose, onSaved }: { user: AdminUser; currentUser: any; onClose: () => void; onSaved: () => void }) {
   const [email, setEmail] = useState(user.email);
   const [name, setName] = useState(user.name ?? "");
+  const [roleId, setRoleId] = useState(user.role_id);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+
+  const isSelf = currentUser && currentUser.id === user.id;
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError("");
     setLoading(true);
     try {
-      await adminEditUser(user.id, email.trim().toLowerCase(), name.trim() || null);
+      await adminEditUser(user.id, email.trim().toLowerCase(), name.trim() || null, roleId);
       onSaved();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to update user");
@@ -198,6 +201,20 @@ function EditUserModal({ user, onClose, onSaved }: { user: AdminUser; onClose: (
         <div>
           <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1.5">Full Name</label>
           <input type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder="(none)" className={inputCls} />
+        </div>
+        <div>
+          <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1.5">Role</label>
+          <select 
+            value={roleId} 
+            onChange={(e) => setRoleId(Number(e.target.value))} 
+            className={inputCls}
+            disabled={isSelf}
+            title={isSelf ? "You cannot change your own role" : ""}
+          >
+            <option value={1}>User</option>
+            <option value={2}>Admin</option>
+          </select>
+          {isSelf && <p className="text-[10px] text-gray-500 mt-1">You cannot change your own role.</p>}
         </div>
         {error && <p className="text-xs text-red-600 dark:text-red-400">{error}</p>}
         <div className="flex gap-2 justify-end pt-1">
@@ -538,6 +555,7 @@ export default function AdminUsersPage() {
       {editUser && (
         <EditUserModal
           user={editUser}
+          currentUser={currentUser}
           onClose={() => setEditUser(null)}
           onSaved={() => { setEditUser(null); fetchUsers(); }}
         />

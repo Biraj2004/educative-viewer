@@ -48,6 +48,10 @@ The proxy templates only forward these routes to Flask:
 
 ### Admin APIs
 - `GET /api/admin/users`
+- `POST /api/admin/users/create`
+- `PATCH /api/admin/users/{user_id}/edit`
+- `DELETE /api/admin/users/{user_id}`
+- `POST /api/admin/users/{user_id}/reset-password`
 - `PATCH /api/admin/set-user-status`
 - `PATCH /api/admin/set-course-status`
 - `GET /api/admin/test-components`

@@ -213,14 +213,20 @@ class SQLiteAuthDatabase:
         finally:
             conn.close()
 
-    def update_user_profile(self, user_id: int, name: str | None, email: str) -> bool:
+    def update_user_profile(self, user_id: int, name: str | None, email: str, role_id: int | None = None) -> bool:
         """Update a user's display name and email."""
         conn = self.get_connection()
         try:
-            cur = conn.execute(
-                "UPDATE users SET name = ?, email = ? WHERE id = ?",
-                (name, email, user_id),
-            )
+            if role_id is not None:
+                cur = conn.execute(
+                    "UPDATE users SET name = ?, email = ?, role_id = ? WHERE id = ?",
+                    (name, email, role_id, user_id),
+                )
+            else:
+                cur = conn.execute(
+                    "UPDATE users SET name = ?, email = ? WHERE id = ?",
+                    (name, email, user_id),
+                )
             conn.commit()
             return cur.rowcount > 0
         finally:

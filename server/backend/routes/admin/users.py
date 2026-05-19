@@ -122,18 +122,31 @@ def register_user_routes(bp: Blueprint, auth_service: AuthService, db_manager: D
 
     @bp.route("/users/<int:user_id>/edit", methods=["PATCH"])
     def edit_user(user_id: int):
-        """Update a user's display name and/or email."""
+        """Update a user's display name, email, and/or role."""
         require_admin(auth_service)
 
         body = get_json_body()
         email = str(body.get("email", "")).strip().lower()
         name = str(body.get("name", "")).strip() or None
+        
+        # Don't allow an admin to change their own role
+        current_admin, _ = auth_service.resolve_user(require_full=True)
+        role_id = None
+        if "role_id" in body:
+            raw_role_id = parse_int_field(body, "role_id")
+            if current_admin and current_admin.get("id") == user_id:
+                # Prevent self role-change
+                abort(403, description="Cannot change your own role")
+            # Only allow roles 1 (user) or 2 (admin)
+            if raw_role_id not in (1, 2):
+                abort(400, description="Invalid role_id")
+            role_id = raw_role_id
 
         if not email or not EMAIL_RE.match(email):
             abort(400, description="A valid email address is required")
 
         try:
-            success = db_manager.auth_backend.update_user_profile(user_id, name=name, email=email)
+            success = db_manager.auth_backend.update_user_profile(user_id, name=name, email=email, role_id=role_id)
         except Exception as exc:
             if db_manager.auth_backend.is_integrity_error(exc):
                 abort(409, description="That email is already in use by another account")
