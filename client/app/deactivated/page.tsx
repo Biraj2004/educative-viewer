@@ -30,11 +30,28 @@ function IconMail() {
 export default function DeactivatedPage() {
   return (
     <div className="min-h-screen bg-white dark:bg-gray-950 flex flex-col font-sans text-gray-900 dark:text-gray-100">
-      <AppNavbar crumbs={[{ label: "Access Restricted" }]} backHref="/auth" backLabel="Sign In" />
+      <AppNavbar
+        crumbs={[{ label: "Access Restricted" }]}
+        backHref="/"
+        backLabel="Home"
+        logoHref="/"
+        onLogoClick={(e) => {
+          e.preventDefault();
+          clearAuthToken();
+          clearDeactivatedFlag();
+          window.location.href = "/";
+        }}
+        onBackClick={(e) => {
+          e.preventDefault();
+          clearAuthToken();
+          clearDeactivatedFlag();
+          window.location.href = "/";
+        }}
+      />
 
       <main className="flex-1 flex items-center justify-center p-6">
         <div className="max-w-2xl w-full text-center space-y-6 animate-in fade-in slide-in-from-bottom-8 duration-700">
-          
+
           <div className="relative inline-block">
             <div className="absolute inset-0 bg-rose-500/20 blur-3xl rounded-full scale-150" />
             <div className="relative w-24 h-24 bg-rose-50 dark:bg-rose-500/10 rounded-full flex items-center justify-center mx-auto border border-rose-100 dark:border-rose-500/20 shadow-xl">
@@ -67,14 +84,18 @@ export default function DeactivatedPage() {
           </div>
 
           <div className="pt-2 flex flex-col sm:flex-row items-center justify-center gap-4">
-            <button 
-              onClick={() => window.location.href = "/contact"}
+            <button
+              onClick={() => {
+                clearAuthToken();
+                clearDeactivatedFlag();
+                window.location.href = "/contact";
+              }}
               className="w-full sm:w-auto px-8 py-3 bg-gray-900 dark:bg-white text-white dark:text-gray-950 rounded-xl font-bold transition-all shadow-lg active:scale-95 flex items-center justify-center gap-2 cursor-pointer"
             >
               <IconMail />
               Contact Administration
             </button>
-            <button 
+            <button
               onClick={() => {
                 clearAuthToken();
                 clearDeactivatedFlag();

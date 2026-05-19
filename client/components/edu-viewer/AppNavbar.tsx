@@ -24,6 +24,12 @@ interface AppNavbarProps {
   actions?: React.ReactNode;
   /** Button rendered to the LEFT of the logo on mobile/tablet (hidden on desktop) */
   mobileMenuTrigger?: React.ReactNode;
+  /** Optional custom URL for the logo click. Defaults to "/" */
+  logoHref?: string;
+  /** Optional custom click handler for the logo */
+  onLogoClick?: (e: React.MouseEvent<HTMLAnchorElement>) => void;
+  /** Optional custom click handler for the back button */
+  onBackClick?: (e: React.MouseEvent<HTMLButtonElement>) => void;
 }
 
 // ─── Icons ────────────────────────────────────────────────────────────────────
@@ -52,6 +58,9 @@ export default function AppNavbar({
   backLabel = "Back",
   actions,
   mobileMenuTrigger,
+  logoHref,
+  onLogoClick,
+  onBackClick,
 }: AppNavbarProps) {
   return (
     <div className="sticky top-0 z-50 bg-white/60 dark:bg-[#030712]/60 backdrop-blur-2xl border-b border-gray-200/50 dark:border-white/5 dark:supports-backdrop-filter:bg-[#030712]/40 shadow-sm dark:shadow-[0_4px_24px_-8px_rgba(0,0,0,0.5)] transition-all duration-500">
@@ -67,7 +76,7 @@ export default function AppNavbar({
           )}
           {/* Logo */}
           {/* eslint-disable-next-line @next/next/no-html-link-for-pages */}
-          <a href="/" className="flex items-center gap-2 group shrink-0">
+          <a href={logoHref || "/"} onClick={onLogoClick} className="flex items-center gap-2 group shrink-0">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={BRAND_ICON_URL}
@@ -116,7 +125,7 @@ export default function AppNavbar({
         <div className="flex items-center gap-4 shrink-0">
           {actions}
           {backHref && (
-            <BackButton href={backHref} label={backLabel} icon={<ChevronLeft />} />
+            <BackButton href={backHref} label={backLabel} icon={<ChevronLeft />} onClick={onBackClick} />
           )}
           <span className="ml-2">
             <DarkModeToggle />

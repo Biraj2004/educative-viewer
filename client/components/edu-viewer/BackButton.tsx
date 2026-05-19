@@ -63,10 +63,12 @@ export default function BackButton({
   href,
   label,
   icon,
+  onClick,
 }: {
   href: string;
   label: string;
   icon?: React.ReactNode;
+  onClick?: (e: React.MouseEvent<HTMLButtonElement>) => void;
 }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -92,7 +94,12 @@ export default function BackButton({
     return label;
   }, [label, previousPath]);
 
-  const handleBack = () => {
+  const handleBack = (e: React.MouseEvent<HTMLButtonElement>) => {
+    if (onClick) {
+      onClick(e);
+      if (e.defaultPrevented) return;
+    }
+
     // Topic pages can add in-page history entries when navigating between topics.
     // For navbar back there, users expect to jump straight to the course page.
     if (isTopicDetailPath(pathname) && href && href !== "back" && !isAuthPath(href)) {
