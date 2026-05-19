@@ -715,10 +715,12 @@ const BACKEND_API_PATTERNS = [
   /^\/api\/auth\/forgot-password\/verify\/?$/i,
   /^\/api\/auth\/forgot-password\/reset\/?$/i,
   /^\/api\/admin\/users\/?$/i,
+  /^\/api\/admin\/users\/\d+\/?$/i,
   /^\/api\/admin\/set-user-status\/?$/i,
   /^\/api\/admin\/set-course-status\/?$/i,
   /^\/api\/admin\/test-components\/?$/i,
   /^\/api\/admin\/test-components\/\d+\/?$/i,
+  /^\/api\/admin\/settings\/?$/i,
   /^\/api\/ai\/generate\/?$/i,
 ];
 

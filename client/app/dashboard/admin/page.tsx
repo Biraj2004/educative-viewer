@@ -183,16 +183,16 @@ export default function AdminDashboardPage() {
             </div>
           </Link>
 
-          {/* Settings Placeholder Card */}
-          <div className="opacity-60 cursor-not-allowed group block animate-in slide-in-from-bottom-4 fade-in duration-700 delay-100">
-            <div className="h-full relative overflow-hidden bg-white dark:bg-gray-900/50 rounded-2xl border border-gray-200 dark:border-gray-800 p-6 transition-all duration-300">
-              <div className="absolute top-0 right-0 p-4 opacity-5 transition-opacity duration-300">
-                <SettingsIcon className="w-32 h-32 text-gray-600 dark:text-gray-400" />
+          {/* Settings Card */}
+          <Link href="/dashboard/admin/settings" className="group block animate-in slide-in-from-bottom-4 fade-in duration-700 delay-100">
+            <div className="h-full relative overflow-hidden bg-white dark:bg-gray-900/50 rounded-2xl border border-gray-200 dark:border-gray-800 p-6 transition-all duration-300 hover:shadow-xl hover:shadow-indigo-500/10 dark:hover:shadow-indigo-500/5 hover:-translate-y-1 hover:bg-gray-50 dark:hover:bg-gray-800">
+              <div className="absolute top-0 right-0 p-4 opacity-0 group-hover:opacity-5 transition-opacity duration-300 transform group-hover:scale-110">
+                <SettingsIcon className="w-32 h-32 text-indigo-600 dark:text-indigo-400" />
               </div>
               
               <div className="flex items-center gap-4 mb-4 relative z-10">
-                <div className="w-12 h-12 rounded-xl bg-gray-100 dark:bg-gray-800 flex items-center justify-center">
-                  <SettingsIcon className="w-6 h-6 text-gray-500 dark:text-gray-400" />
+                <div className="w-12 h-12 rounded-xl bg-indigo-50 dark:bg-indigo-500/10 flex items-center justify-center transition-transform group-hover:scale-110 duration-300">
+                  <SettingsIcon className="w-6 h-6 text-indigo-600 dark:text-indigo-400" />
                 </div>
                 <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100">Global Settings</h2>
               </div>
@@ -201,12 +201,14 @@ export default function AdminDashboardPage() {
                 Configure global platform preferences, authentication policies, and UI themes.
               </p>
 
-              <div className="flex items-center text-sm font-semibold text-gray-500 dark:text-gray-500 relative z-10">
-                Coming Soon
+              <div className="flex items-center text-sm font-semibold text-indigo-600 dark:text-indigo-400 relative z-10 group-hover:translate-x-1 transition-transform duration-300">
+                Manage Settings
+                <svg className="ml-2 w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M14 5l7 7m0 0l-7 7m7-7H3" />
+                </svg>
               </div>
             </div>
-          </div>
-
+          </Link>
         </div>
       </main>
     </div>

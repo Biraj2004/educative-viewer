@@ -596,3 +596,11 @@ export async function adminDeleteUser(userId: number): Promise<{ success: boolea
 export async function adminResetUserPassword(userId: number): Promise<AdminResetResult> {
   return adminApiCall<AdminResetResult>(`${ADMIN_API}/users/${userId}/reset-password`, "POST");
 }
+
+export async function adminGetSettings(): Promise<any> {
+  return adminApiCall<any>(`${ADMIN_API}/settings`, "GET");
+}
+
+export async function adminSaveSettings(settings: any): Promise<{ success: boolean }> {
+  return adminApiCall<{ success: boolean }>(`${ADMIN_API}/settings`, "POST", settings);
+}

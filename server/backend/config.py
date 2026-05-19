@@ -26,7 +26,7 @@ class OracleAuthConfig:
         return bool(self.user and self.password and self.dsn)
 
 
-@dataclass(frozen=True)
+@dataclass
 class AppConfig:
     flask_port: int
     flask_debug: bool

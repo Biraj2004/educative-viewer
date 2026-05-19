@@ -36,7 +36,7 @@ def create_auth_blueprint(auth_service: AuthService, db_manager: DBManager) -> B
             abort(400, description="Password must be 8-72 characters")
 
         if auth_service.invite_codes and invite not in auth_service.invite_codes:
-            abort(403, description="Invalid invite code")
+            abort(400, description="Invalid invite code")
         if not invite:
             abort(400, description="Invite code is required")
 

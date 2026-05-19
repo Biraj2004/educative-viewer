@@ -15,6 +15,7 @@ from backend.db.manager import DBManager
 from backend.routes.admin.components import register_test_component_routes
 from backend.routes.admin.status import register_status_routes
 from backend.routes.admin.users import register_user_routes
+from backend.routes.admin.settings import register_settings_routes
 from flask import Blueprint
 
 
@@ -26,5 +27,6 @@ def create_admin_blueprint(auth_service: AuthService, db_manager: DBManager) -> 
     register_test_component_routes(bp, auth_service, db_manager)
     register_status_routes(bp, auth_service, db_manager)
     register_user_routes(bp, auth_service, db_manager)
+    register_settings_routes(bp, auth_service)
 
     return bp
