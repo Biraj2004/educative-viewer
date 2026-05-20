@@ -92,7 +92,7 @@ export default function TopicSidebar({
                                                         <Link
                                                             ref={isActive ? activeRef : null}
                                                             href={topicHref}
-                                                            prefetch={false}
+                                                            prefetch={true}
                                                             onClick={(e) => {
                                                                 if (onTopicClick) {
                                                                     e.preventDefault();
@@ -141,7 +141,7 @@ export default function TopicSidebar({
                                             <Link
                                                 ref={isActive ? activeRef : null}
                                                 href={topicHref}
-                                                prefetch={false}
+                                                prefetch={true}
                                                 onClick={(e) => {
                                                     if (onTopicClick) {
                                                         e.preventDefault();

@@ -69,6 +69,7 @@ export default function TopicLayoutClient({ courseId, slug, fromPath, course, to
   const [topicChanging, setTopicChanging] = useState(false);
   const [completed, setCompleted] = useState<Set<number>>(() => new Set(initialCompleted));
   const [isCompleted, setIsCompleted] = useState(() => new Set(initialCompleted).has(topic.topic_index));
+  const [scrollProgress, setScrollProgress] = useState(0);
   const navigatingRef = useRef(false);
   const completedRef = useRef<Set<number>>(new Set(initialCompleted));
   const validFromPath = fromPath && fromPath.startsWith("/") && !fromPath.startsWith("//") ? fromPath : null;
@@ -189,6 +190,43 @@ export default function TopicLayoutClient({ courseId, slug, fromPath, course, to
     return () => window.removeEventListener("popstate", onPop);
   }, [currentTopic.topic_index, handleTopicNav]);
 
+  // Track and Restore Reading Progress (Scroll Depth + Progress Bar)
+  useEffect(() => {
+    const scrollKey = `edu_scroll_${courseId}_${currentTopic.topic_index}`;
+    const saved = localStorage.getItem(scrollKey);
+    
+    if (saved && !window.location.hash) {
+      // Delay slightly so layout can stabilize
+      setTimeout(() => {
+        window.scrollTo({ top: parseInt(saved, 10), behavior: "smooth" });
+      }, 300);
+    }
+
+    let timeout: ReturnType<typeof setTimeout>;
+    const handleScroll = () => {
+      // Update reading progress bar
+      const winScroll = document.documentElement.scrollTop;
+      const height = document.documentElement.scrollHeight - document.documentElement.clientHeight;
+      const scrolled = height > 0 ? (winScroll / height) * 100 : 0;
+      setScrollProgress(scrolled);
+
+      // Debounce saving scroll exact depth to localStorage
+      clearTimeout(timeout);
+      timeout = setTimeout(() => {
+        localStorage.setItem(scrollKey, window.scrollY.toString());
+      }, 500);
+    };
+
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    // Trigger once on mount to set initial progress bar width
+    handleScroll();
+
+    return () => {
+      window.removeEventListener("scroll", handleScroll);
+      clearTimeout(timeout);
+    };
+  }, [courseId, currentTopic.topic_index]);
+
   return (
     <div className="min-h-screen flex flex-col bg-gray-50 dark:bg-gray-950">
 
@@ -219,6 +257,14 @@ export default function TopicLayoutClient({ courseId, slug, fromPath, course, to
         }
         actions={<UserMenu />}
       />
+
+      {/* Reading Progress Indicator */}
+      <div className="sticky top-14 left-0 right-0 z-20 h-1 bg-gray-200 dark:bg-gray-800 pointer-events-none">
+        <div
+          className="h-full bg-emerald-500 transition-all duration-150 ease-out"
+          style={{ width: `${scrollProgress}%` }}
+        />
+      </div>
 
       {/* Tablet drawer overlay — only on < lg, offset below navbar */}
       {drawerOpen && course && (

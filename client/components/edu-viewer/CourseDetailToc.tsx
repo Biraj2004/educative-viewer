@@ -185,7 +185,7 @@ export default function CourseDetailToc({ toc, courseId, slug, fromPath, complet
                         >
                           <Link
                             href={buildTopicHref(courseId, slug, topic.topic_index, topic.slug, fromPath)}
-                            prefetch={false}
+                            prefetch={true}
                             className={[
                               "flex items-center gap-3 px-4 py-2.5 text-sm transition-colors border-l-2",
                               isDone
