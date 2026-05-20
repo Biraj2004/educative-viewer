@@ -216,10 +216,12 @@ export default function TopicLayoutClient({ courseId, slug, fromPath, course, to
         localStorage.setItem(scrollKey, window.scrollY.toString());
       }, 500);
     };
-
     window.addEventListener("scroll", handleScroll, { passive: true });
     // Trigger once on mount to set initial progress bar width
     handleScroll();
+
+    // Also track that this was the last topic visited in this course
+    localStorage.setItem(`edu_last_topic_${courseId}`, currentTopic.topic_index.toString());
 
     return () => {
       window.removeEventListener("scroll", handleScroll);

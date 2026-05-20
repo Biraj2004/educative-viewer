@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 
 interface Topic {
@@ -74,6 +74,24 @@ function buildTopicHref(
 
 export default function CourseDetailToc({ toc, courseId, slug, fromPath, completedTopicIndices }: Props) {
   const [q, setQ] = useState("");
+  const [lastVisitedIndex, setLastVisitedIndex] = useState<number | null>(null);
+
+  useEffect(() => {
+    // Read the last visited topic index on mount
+    const saved = localStorage.getItem(`edu_last_topic_${courseId}`);
+    if (saved) {
+      const idx = parseInt(saved, 10);
+      setLastVisitedIndex(idx);
+      
+      // Auto-scroll to that item after a tiny delay for mounting
+      setTimeout(() => {
+        const el = document.getElementById(`toc-item-${idx}`);
+        if (el) {
+          el.scrollIntoView({ behavior: "smooth", block: "center" });
+        }
+      }, 300);
+    }
+  }, [courseId]);
 
   const normalised = q.toLowerCase().trim();
 
@@ -174,9 +192,11 @@ export default function CourseDetailToc({ toc, courseId, slug, fromPath, complet
                   <ul>
                     {entry.topics.map((topic, j) => {
                       const isDone = completedTopicIndices?.has(topic.topic_index);
+                      const isLastVisited = lastVisitedIndex === topic.topic_index;
                       return (
                         <li
                           key={j}
+                          id={`toc-item-${topic.topic_index}`}
                           className={
                             j < entry.topics.length - 1
                               ? "border-b border-gray-100 dark:border-gray-800"
@@ -187,12 +207,20 @@ export default function CourseDetailToc({ toc, courseId, slug, fromPath, complet
                             href={buildTopicHref(courseId, slug, topic.topic_index, topic.slug, fromPath)}
                             prefetch={true}
                             className={[
-                              "flex items-center gap-3 px-4 py-2.5 text-sm transition-colors border-l-2",
+                              "flex items-center gap-3 px-4 py-2.5 text-sm transition-colors border-l-2 relative",
                               isDone
                                 ? "border-l-emerald-400 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-900/20"
                                 : "border-l-transparent text-gray-700 dark:text-gray-300 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 hover:text-indigo-700 dark:hover:text-indigo-400",
+                              isLastVisited && !isDone
+                                ? "bg-amber-50/50 dark:bg-amber-900/10 border-l-amber-400"
+                                : ""
                             ].join(" ")}
                           >
+                            {isLastVisited && !isDone && (
+                              <span className="absolute right-4 text-[10px] font-medium px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-400">
+                                Last visited
+                              </span>
+                            )}
                             {isDone ? (
                               <svg className="w-3.5 h-3.5 shrink-0 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                                 <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -218,21 +246,31 @@ export default function CourseDetailToc({ toc, courseId, slug, fromPath, complet
               );
             } else {
               const isDone = completedTopicIndices?.has(entry.topic_index);
+              const isLastVisited = lastVisitedIndex === entry.topic_index;
               return (
                 <div
                   key={i}
+                  id={`toc-item-${entry.topic_index}`}
                   className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden"
                 >
                   <Link
                     href={buildTopicHref(courseId, slug, entry.topic_index, entry.slug, fromPath)}
-                    prefetch={false}
+                    prefetch={true}
                     className={[
-                      "flex items-center gap-3 px-4 py-2.5 text-sm transition-colors border-l-2",
+                      "flex items-center gap-3 px-4 py-2.5 text-sm transition-colors border-l-2 relative",
                       isDone
                         ? "border-l-emerald-400 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-900/20"
                         : "border-l-transparent text-gray-700 dark:text-gray-300 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 hover:text-indigo-700 dark:hover:text-indigo-400",
+                      isLastVisited && !isDone
+                        ? "bg-amber-50/50 dark:bg-amber-900/10 border-l-amber-400"
+                        : ""
                     ].join(" ")}
                   >
+                    {isLastVisited && !isDone && (
+                      <span className="absolute right-4 text-[10px] font-medium px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-400">
+                        Last visited
+                      </span>
+                    )}
                     {isDone ? (
                       <svg className="w-3.5 h-3.5 shrink-0 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                         <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
