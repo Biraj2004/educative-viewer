@@ -58,6 +58,7 @@ function SlidesViewer({ data }: { data: DrawIOWidgetData }) {
           >
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
+              key={activeSrc}
               src={activeSrc}
               alt={caption ?? `Slide ${idx + 1}`}
               className="max-w-full h-auto object-contain dark:brightness-90"
@@ -128,6 +129,7 @@ function SingleImageViewer({ data }: { data: DrawIOWidgetData }) {
       <div className="flex flex-col items-center gap-3">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
+          key={preparedSrc}
           src={preparedSrc}
           alt={altText}
           width={data.width || undefined}

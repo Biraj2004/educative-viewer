@@ -144,6 +144,7 @@ export default function CanvasAnimation({ data }: { data: CanvasAnimationData })
                             ) : !isPreparing && preparedUrls[idx] ? (
                                 // eslint-disable-next-line @next/next/no-img-element
                                 <img
+                                    key={preparedUrls[idx]}
                                     src={preparedUrls[idx]}
                                     alt={`Canvas slide ${idx + 1}`}
                                     className="max-w-full h-auto object-contain"

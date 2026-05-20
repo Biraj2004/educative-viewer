@@ -44,6 +44,7 @@ export default function Image({ data }: { data: ImageComponentData }) {
         >
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
+            key={data.path}
             src={src}
             alt={alt}
             className="max-w-full no-dark-invert h-auto block dark:brightness-90 dark:contrast-95"

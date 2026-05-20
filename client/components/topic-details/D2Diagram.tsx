@@ -221,6 +221,7 @@ export default function D2Diagram({ data }: { data: D2DiagramData }) {
           <div className="w-full overflow-x-auto flex justify-center">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
+              key={imageSrc}
               src={imageSrc}
               alt={captionText ?? "D2 diagram"}
               className="w-full max-w-full h-auto max-h-[70vh] object-contain block mx-auto"
