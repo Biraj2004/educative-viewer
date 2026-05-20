@@ -190,31 +190,14 @@ export default function TopicLayoutClient({ courseId, slug, fromPath, course, to
     return () => window.removeEventListener("popstate", onPop);
   }, [currentTopic.topic_index, handleTopicNav]);
 
-  // Track and Restore Reading Progress (Scroll Depth + Progress Bar)
+  // Track Reading Progress Bar and Last Visited Topic
   useEffect(() => {
-    const scrollKey = `edu_scroll_${courseId}_${currentTopic.topic_index}`;
-    const saved = localStorage.getItem(scrollKey);
-    
-    if (saved && !window.location.hash) {
-      // Delay slightly so layout can stabilize
-      setTimeout(() => {
-        window.scrollTo({ top: parseInt(saved, 10), behavior: "smooth" });
-      }, 300);
-    }
-
-    let timeout: ReturnType<typeof setTimeout>;
     const handleScroll = () => {
       // Update reading progress bar
       const winScroll = document.documentElement.scrollTop;
       const height = document.documentElement.scrollHeight - document.documentElement.clientHeight;
       const scrolled = height > 0 ? (winScroll / height) * 100 : 0;
       setScrollProgress(scrolled);
-
-      // Debounce saving scroll exact depth to localStorage
-      clearTimeout(timeout);
-      timeout = setTimeout(() => {
-        localStorage.setItem(scrollKey, window.scrollY.toString());
-      }, 500);
     };
     window.addEventListener("scroll", handleScroll, { passive: true });
     // Trigger once on mount to set initial progress bar width
@@ -225,7 +208,6 @@ export default function TopicLayoutClient({ courseId, slug, fromPath, course, to
 
     return () => {
       window.removeEventListener("scroll", handleScroll);
-      clearTimeout(timeout);
     };
   }, [courseId, currentTopic.topic_index]);
 
