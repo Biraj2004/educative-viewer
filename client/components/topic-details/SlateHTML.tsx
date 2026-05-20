@@ -1,130 +1,58 @@
 "use client";
 
-import { useMemo } from "react";
 
 export interface SlateHtmlData {
   comp_id: string;
   html: string;
 }
 
-// ─── Types ────────────────────────────────────────────────────────────────────
-
-interface HeadingNode {
-  type: "h2";
-  text: string;
-}
-
-interface ParagraphNode {
-  type: "p";
-  text: string;
-}
-
-interface ListNode {
-  type: "ul";
-  items: string[];
-}
-
-type ContentNode = HeadingNode | ParagraphNode | ListNode;
-
-// ─── HTML Parsing Utilities ───────────────────────────────────────────────────
-
-function decodeEntities(str: string): string {
-  return str
-    .replace(/&amp;/g, "&")
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
-    .replace(/&nbsp;/g, " ");
-}
-
-function stripTags(html: string): string {
-  return html.replace(/<[^>]+>/g, "");
-}
-
-function extractText(html: string): string {
-  return decodeEntities(stripTags(html)).trim();
-}
-
-function parseListItems(ulInner: string): string[] {
-  const items: string[] = [];
-  const liRegex = /<li(?:[^>]*)>([\s\S]*?)<\/li>/g;
-  let match: RegExpExecArray | null;
-  while ((match = liRegex.exec(ulInner)) !== null) {
-    const text = extractText(match[1]);
-    if (text) items.push(text);
-  }
-  return items;
-}
-
-function parseHtml(html: string): ContentNode[] {
-  const nodes: ContentNode[] = [];
-  // Matches top-level h2, p, ul tags (backreference ensures correct closing tag)
-  const tagRegex = /<(h2|p|ul)(?:[^>]*)>([\s\S]*?)<\/\1>/g;
-  let match: RegExpExecArray | null;
-  while ((match = tagRegex.exec(html)) !== null) {
-    const tag = match[1] as "h2" | "p" | "ul";
-    const inner = match[2];
-    if (tag === "ul") {
-      const items = parseListItems(inner);
-      if (items.length) nodes.push({ type: "ul", items });
-    } else {
-      const text = extractText(inner);
-      if (text) nodes.push({ type: tag, text });
-    }
-  }
-  return nodes;
-}
-
-// ─── Sub-components ───────────────────────────────────────────────────────────
-
-function SectionHeading({ text }: { text: string }) {
-  return (
-    <h2 className="text-[22px] font-bold text-gray-900 dark:text-gray-100 mt-10 mb-3 leading-snug">
-      {text}
-    </h2>
-  );
-}
-
-function BodyParagraph({ text }: { text: string }) {
-  return (
-    <p className="text-[15px] text-gray-600 dark:text-gray-300 leading-[1.8] mb-4">{text}</p>
-  );
-}
-
-function BulletList({ items }: { items: string[] }) {
-  return (
-    <ul className="list-disc pl-6 mb-5 space-y-2">
-      {items.map((item, i) => (
-        <li key={i} className="text-[15px] text-gray-600 dark:text-gray-300 leading-[1.8]">
-          {item}
-        </li>
-      ))}
-    </ul>
-  );
-}
-
-// ─── Main Component ───────────────────────────────────────────────────────────
-
 export default function SlateHTML({ data }: { data: SlateHtmlData }) {
-  const nodes = useMemo(() => parseHtml(data.html), [data.html]);
-
-  if (nodes.length === 0) return null;
+  if (!data?.html?.trim()) return null;
 
   return (
     <article className="max-w-6xl mx-auto px-6 py-2">
-      {nodes.map((node, i) => {
-        switch (node.type) {
-          case "h2":
-            return <SectionHeading key={i} text={node.text} />;
-          case "p":
-            return <BodyParagraph key={i} text={node.text} />;
-          case "ul":
-            return <BulletList key={i} items={node.items} />;
-          default:
-            return null;
-        }
-      })}
+      <div 
+        className="
+          prose max-w-none text-gray-900 dark:text-gray-200
+          [&_h1]:text-2xl [&_h1]:font-bold [&_h1]:text-gray-900 [&_h1]:mt-6 [&_h1]:mb-3
+          dark:[&_h1]:text-gray-100
+          [&_h2]:text-xl [&_h2]:font-bold [&_h2]:text-gray-900 [&_h2]:mt-5 [&_h2]:mb-2
+          dark:[&_h2]:text-gray-100
+          [&_h3]:text-lg [&_h3]:font-bold [&_h3]:text-gray-900 [&_h3]:mt-4 [&_h3]:mb-2
+          dark:[&_h3]:text-gray-100
+          [&_h4]:text-base [&_h4]:font-semibold [&_h4]:text-gray-900 [&_h4]:mt-3 [&_h4]:mb-1
+          dark:[&_h4]:text-gray-100
+          [&_p]:text-[15px] [&_p]:text-gray-900 [&_p]:leading-[1.8] [&_p]:mb-4
+          dark:[&_p]:text-gray-300
+          [&_p>em]:italic [&_p>em]:text-gray-800
+          dark:[&_p>em]:text-gray-400
+          [&_ul]:list-disc [&_ul]:pl-6 [&_ul]:mb-4 [&_ul>li]:text-gray-900 [&_ul>li]:mb-1
+          dark:[&_ul>li]:text-gray-300
+          [&_ol]:list-decimal [&_ol]:pl-6 [&_ol]:mb-4 [&_ol>li]:text-gray-900 [&_ol>li]:mb-1
+          dark:[&_ol>li]:text-gray-300
+          [&_blockquote]:border-l-4 [&_blockquote]:border-gray-300 [&_blockquote]:pl-4 [&_blockquote]:italic [&_blockquote]:text-gray-700 [&_blockquote]:my-4
+          dark:[&_blockquote]:border-gray-600 dark:[&_blockquote]:text-gray-400
+          [&_hr]:border-t [&_hr]:border-gray-300 [&_hr]:my-6
+          dark:[&_hr]:border-gray-700
+          [&_table]:border-collapse [&_table]:w-auto [&_table]:my-6 [&_table]:text-[14px] [&_table]:text-gray-900
+          dark:[&_table]:text-gray-200
+          [&_thead]:bg-gray-50
+          dark:[&_thead]:bg-gray-800
+          [&_th]:border [&_th]:border-gray-300 [&_th]:px-4 [&_th]:py-2 [&_th]:text-left [&_th]:font-semibold [&_th]:text-gray-900
+          dark:[&_th]:border-gray-700 dark:[&_th]:text-gray-100
+          [&_td]:border [&_td]:border-gray-300 [&_td]:px-4 [&_td]:py-2 [&_td]:text-gray-900
+          dark:[&_td]:border-gray-700 dark:[&_td]:text-gray-300
+          [&_code]:bg-gray-100 [&_code]:text-gray-900 [&_code]:px-1 [&_code]:py-0.5 [&_code]:rounded [&_code]:text-[13px] [&_code]:font-mono
+          dark:[&_code]:bg-gray-800 dark:[&_code]:text-gray-200
+          [&_pre]:bg-[#0f172a] [&_pre]:text-gray-100 [&_pre]:rounded [&_pre]:p-4 [&_pre]:overflow-x-auto [&_pre]:my-4
+          dark:[&_pre]:bg-[#0d1117]
+          [&_pre_code]:bg-transparent [&_pre_code]:text-gray-100 [&_pre_code]:p-0 [&_pre_code]:rounded-none
+          dark:[&_pre_code]:bg-transparent dark:[&_pre_code]:text-gray-100
+          [&_a]:text-blue-600 [&_a]:underline [&_a:hover]:text-blue-800
+          dark:[&_a]:text-blue-400 dark:[&_a:hover]:text-blue-300
+        "
+        dangerouslySetInnerHTML={{ __html: data.html }}
+      />
     </article>
   );
 }
