@@ -7,6 +7,7 @@ import UserMenu from "@/components/edu-viewer/UserMenu";
 import { getRenderer, UnknownRenderer } from "@/utils/component-registry";
 import ComponentBadge from "@/components/edu-viewer/ComponentBadge";
 import CourseChatbot from "@/components/edu-viewer/CourseChatbot";
+import FontManager from "@/components/edu-viewer/FontManager";
 import { recordTopicVisit, getAuthToken, clearAuthToken } from "@/utils/authClient";
 import { getBackendApiBase } from "@/utils/runtime-config";
 
@@ -239,7 +240,12 @@ export default function TopicLayoutClient({ courseId, slug, fromPath, course, to
             </button>
           ) : undefined
         }
-        actions={<UserMenu />}
+        actions={
+          <div className="flex items-center gap-2">
+            <FontManager />
+            <UserMenu />
+          </div>
+        }
       />
 
       {/* Reading Progress Indicator */}
@@ -295,7 +301,7 @@ export default function TopicLayoutClient({ courseId, slug, fromPath, course, to
       <main className="flex-1 min-w-0">
 
           {/* Components */}
-        <div className="max-w-6xl mx-auto px-6 py-8 space-y-6">
+        <div className="max-w-6xl mx-auto px-6 py-8 space-y-6 topic-content-wrapper">
           {currentComponents.map((comp, i) => {
             const renderer = getRenderer(comp.type);
             const subType =
