@@ -232,8 +232,8 @@ All variables below are prompted during every build. Defaults for a purely local
 
 | Variable | Description | Local Default |
 |---|---|---|
-| `NEXT_PUBLIC_BACKEND_API_BASE` | Base URL of the Flask backend | `http://localhost/` |
-| `NEXT_PUBLIC_STATIC_FILES_BASE` | Base URL for static/image assets | `http://localhost/` |
+| `NEXT_PUBLIC_BACKEND_API_BASE` | Base URL of the Flask backend | `https://localhost/` |
+| `NEXT_PUBLIC_STATIC_FILES_BASE` | Base URL for static/image assets | `https://localhost/` |
 | `NEXT_PUBLIC_RSA_PUBLIC_KEY` | RSA public key printed by `setup_and_run.py` | *(paste from server log)* |
 | `NEXT_PUBLIC_STATIC_BASIC_AUTH` | Optional Basic Auth header for protected static worker | *(leave blank if unused)* |
 | `PROXY_SECRET` | Shared secret for Cloudflare Worker `x-edu-proxy` header | *(not required locally)* |
@@ -245,7 +245,7 @@ All variables below are prompted during every build. Defaults for a purely local
 
 ## 🔀 Local Proxy Setup
 
-Use this when you need a single `http://localhost` URL that:
+Use this when you need a single `https://localhost` URL that:
 
 - Routes known backend API paths (`/api/*`) to Flask on port `5000`
 - Serves image/static files from local disk under `/api`
@@ -340,10 +340,11 @@ httpd -k restart
 **4 — Open the app**
 
 ```
-http://localhost
+https://localhost
 ```
 
-> Always use `http://localhost` (through the proxy) — not `http://localhost:3000` — to get full routing including API calls and static assets.
+> Always use `https://localhost` (through the proxy) - not `http://localhost:3000` - to get full 
+routing including API calls and static assets. You will need to accept the self-signed certificate warning.
 
 ---
 
@@ -358,7 +359,7 @@ C:/inetpub/wwwroot/educativeviewer/api/images/logo.png
 Then open in your browser:
 
 ```
-http://localhost/api/images/logo.png
+https://localhost/api/images/logo.png
 ```
 
 If the image renders correctly, local proxy static file serving is working.
@@ -370,7 +371,7 @@ If the image renders correctly, local proxy static file serving is working.
 ### API calls fail from the frontend
 
 - Confirm Flask is running on port `5000`.
-- Confirm `NEXT_PUBLIC_BACKEND_API_BASE=http://localhost/` is set in `client/.env.local`.
+- Confirm `NEXT_PUBLIC_BACKEND_API_BASE=https://localhost/` is set in `client/.env.local`.
 - Confirm the proxy is running and routing `/api/*` to Flask.
 
 ### Frontend does not start

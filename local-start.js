@@ -8,6 +8,7 @@ const path = require('path');
 const readline = require('readline');
 const { spawn, spawnSync } = require('child_process');
 const os = require('os');
+const https = require('https');
 
 function getLanIp() {
   const interfaces = os.networkInterfaces();
@@ -81,6 +82,9 @@ async function main() {
 
   rl.close();
 
+  const lanIp = getLanIp();
+  const { certPath, keyPath } = ensureSslCerts(venvPython, lanIp);
+
   ensureClientEnv({
     proxyPort,
     publicKeyOneline,
@@ -106,11 +110,14 @@ async function main() {
     backendPort,
     clientPort,
     staticRoot,
+    certPath,
+    keyPath,
   });
 
   console.log('');
   console.log('[ready] Local environment is starting.');
-  console.log(`[ready] Proxy:  http://localhost:${proxyPort}`);
+  console.log(`[ready] Proxy:  https://localhost:${proxyPort}`);
+  console.log(`[ready] Proxy:  https://${lanIp}:${proxyPort}`);
   console.log(`[ready] Client: http://localhost:${clientPort}`);
   console.log(`[ready] Flask:  http://localhost:${backendPort}`);
   console.log(`[ready] Static root: ${staticRoot}`);
@@ -575,6 +582,30 @@ function runPythonSnippet(pythonExec, code, extraEnv) {
   return (result.stdout || '').toString().trim();
 }
 
+function ensureSslCerts(pythonExec, lanIp) {
+  const certPath = path.join(SERVER_DIR, 'cert.pem');
+  const keyPath = path.join(SERVER_DIR, 'key.pem');
+  if (fs.existsSync(certPath) && fs.existsSync(keyPath)) return { certPath, keyPath };
+
+  console.log('[setup] Generating local self-signed SSL certificates for HTTPS...');
+  const code = [
+    'import datetime',
+    'import ipaddress',
+    'from cryptography import x509',
+    'from cryptography.x509.oid import NameOID',
+    'from cryptography.hazmat.primitives import hashes, serialization',
+    'from cryptography.hazmat.primitives.asymmetric import rsa',
+    'key = rsa.generate_private_key(public_exponent=65537, key_size=2048)',
+    'subject = issuer = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, "' + lanIp + '")])',
+    'cert = x509.CertificateBuilder().subject_name(subject).issuer_name(issuer).public_key(key.public_key()).serial_number(x509.random_serial_number()).not_valid_before(datetime.datetime.utcnow()).not_valid_after(datetime.datetime.utcnow() + datetime.timedelta(days=3650)).add_extension(x509.SubjectAlternativeName([x509.DNSName("localhost"), x509.IPAddress(ipaddress.IPv4Address("' + lanIp + '")), x509.IPAddress(ipaddress.IPv4Address("127.0.0.1"))]), critical=False).sign(key, hashes.SHA256())',
+    'with open("cert.pem", "wb") as f: f.write(cert.public_bytes(serialization.Encoding.PEM))',
+    'with open("key.pem", "wb") as f: f.write(key.private_bytes(encoding=serialization.Encoding.PEM, format=serialization.PrivateFormat.TraditionalOpenSSL, encryption_algorithm=serialization.NoEncryption()))',
+  ].join('\n');
+
+  runPythonSnippet(pythonExec, code, {});
+  return { certPath, keyPath };
+}
+
 function ensureClientEnv({ proxyPort, publicKeyOneline }) {
   ensureEnvFile(CLIENT_ENV_PATH, CLIENT_ENV_EXAMPLE_PATH);
 
@@ -585,8 +616,8 @@ function ensureClientEnv({ proxyPort, publicKeyOneline }) {
   
   const updates = {
     PROXY_SECRET: 'local-proxy',
-    NEXT_PUBLIC_BACKEND_API_BASE: `http://${lanIp}:${proxyPort}/`,
-    NEXT_PUBLIC_STATIC_FILES_BASE: `http://${lanIp}:${proxyPort}/`,
+    NEXT_PUBLIC_BACKEND_API_BASE: `https://${lanIp}:${proxyPort}/`,
+    NEXT_PUBLIC_STATIC_FILES_BASE: `https://${lanIp}:${proxyPort}/`,
     NEXT_PUBLIC_STATIC_BASIC_AUTH: '',
     VERCEL_ENV: 'development',
     NEXT_PUBLIC_RSA_PUBLIC_KEY: publicKeyOneline,
@@ -701,12 +732,17 @@ async function startClient({ skipBuild, forceBuild, devOnly, clientPort }) {
   return child;
 }
 
-function startProxyServer({ proxyPort, backendPort, clientPort, staticRoot }) {
+function startProxyServer({ proxyPort, backendPort, clientPort, staticRoot, certPath, keyPath }) {
   const backendTarget = { host: '127.0.0.1', port: backendPort };
   const clientTarget = { host: '127.0.0.1', port: clientPort };
 
-  const server = http.createServer((req, res) => {
-    const url = new URL(req.url, 'http://localhost');
+  const options = {
+    key: fs.readFileSync(keyPath),
+    cert: fs.readFileSync(certPath)
+  };
+
+  const server = https.createServer(options, (req, res) => {
+    const url = new URL(req.url, `https://localhost`);
     const pathname = url.pathname || '/';
 
     if (isBackendApi(pathname)) {

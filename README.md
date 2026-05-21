@@ -39,7 +39,9 @@ The script is fully automated. It will:
 5. **Build the Next.js bundle** — takes ~1–2 min the first time.
 6. Start Flask, Next.js, and the embedded proxy.
 
-Once done, open **http://localhost** and log in with invite code **`local`**.
+Once done, open **https://localhost** (or your machine's LAN IP, e.g., `https://192.168.x.x`) and log in with invite code **`local`**.
+
+> **Note:** The local server automatically generates self-signed SSL certificates to enable proper cross-device testing and unlock browser features like Sandpack/Web Crypto. Your browser will show a **"Connection is Not Private"** warning. This is expected. Click "Advanced" or "Show Details" and proceed to the site.
 
 On **subsequent runs** all prompts are skipped — it starts straight away.
 
