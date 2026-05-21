@@ -4,23 +4,20 @@ import { useEffect, useState } from "react";
 import { useAuth } from "@/components/edu-viewer/AuthProvider";
 import { setTheme as syncThemeToBackend } from "@/utils/authClient";
 
-function saveTheme(theme: "dark" | "light") {
+export function saveTheme(theme: "dark" | "light") {
   try { localStorage.setItem("theme", theme); } catch {}
   document.cookie = `theme=${theme}; path=/; max-age=31536000; SameSite=Lax`;
 }
 
-function readSavedTheme(): "dark" | "light" | null {
+export function readSavedTheme(): "dark" | "light" | null {
   try {
     const ls = localStorage.getItem("theme");
     if (ls === "dark" || ls === "light") return ls;
   } catch {}
-  // fall back to cookie
   const match = document.cookie.match(/(?:^|;\s*)theme=(dark|light)/);
   if (match) return match[1] as "dark" | "light";
   return null;
 }
-
-let hasSyncedUserTheme = false;
 
 export default function DarkModeToggle() {
   const { user } = useAuth();
@@ -35,19 +32,13 @@ export default function DarkModeToggle() {
     if (!saved) saveTheme("light");
   }, []);
 
-  // When user data arrives (or changes), apply the stored theme from the DB.
-  // This overrides the local cookie/localStorage value so the DB is the source
-  // of truth for logged-in users, but only once per session so opening the 
-  // menu doesn't force a re-sync if they went out of sync.
+  // The DB hydration logic has been moved to AuthProvider so it happens globally
+  // immediately after login, instead of waiting for the UserMenu to be opened.
+  // We keep the local hook here so the toggle button stays in sync if AuthProvider changes it.
   useEffect(() => {
-    if (!user?.theme) return;
-    if (hasSyncedUserTheme) return;
-    hasSyncedUserTheme = true;
-
-    const useDark = user.theme === "dark";
-    setIsDark(useDark);
-    document.documentElement.classList.toggle("dark", useDark);
-    saveTheme(user.theme);
+    if (user?.theme) {
+      setIsDark(user.theme === "dark");
+    }
   }, [user?.theme]);
 
   const toggle = () => {

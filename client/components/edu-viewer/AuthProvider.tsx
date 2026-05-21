@@ -109,6 +109,17 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
     return () => { cancelled = true; };
   }, [pathname]);
 
+  // Hydrate global theme when the user object is loaded/updated.
+  // This ensures the theme applies instantly on login without waiting for DarkModeToggle.
+  useEffect(() => {
+    if (user?.theme) {
+      const useDark = user.theme === "dark";
+      document.documentElement.classList.toggle("dark", useDark);
+      try { localStorage.setItem("theme", user.theme); } catch {}
+      document.cookie = `theme=${user.theme}; path=/; max-age=31536000; SameSite=Lax`;
+    }
+  }, [user?.theme]);
+
   async function refresh() {
     try {
       const u = await getUser();
