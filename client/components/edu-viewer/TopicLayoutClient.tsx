@@ -7,7 +7,6 @@ import UserMenu from "@/components/edu-viewer/UserMenu";
 import { getRenderer, UnknownRenderer } from "@/utils/component-registry";
 import ComponentBadge from "@/components/edu-viewer/ComponentBadge";
 import CourseChatbot from "@/components/edu-viewer/CourseChatbot";
-import FontManager from "@/components/edu-viewer/FontManager";
 import { recordTopicVisit, getAuthToken, clearAuthToken } from "@/utils/authClient";
 import { getBackendApiBase } from "@/utils/runtime-config";
 
@@ -240,12 +239,7 @@ export default function TopicLayoutClient({ courseId, slug, fromPath, course, to
             </button>
           ) : undefined
         }
-        actions={
-          <div className="flex items-center gap-2">
-            <FontManager />
-            <UserMenu />
-          </div>
-        }
+        actions={<UserMenu />}
       />
 
       {/* Reading Progress Indicator */}

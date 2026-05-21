@@ -16,7 +16,7 @@ const DEFAULT_SETTINGS: FontSettings = {
   fontWeight: "normal",
 };
 
-export default function FontManager() {
+export default function FontManager({ inline = false }: { inline?: boolean }) {
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const [settings, setSettings] = useState<FontSettings>(DEFAULT_SETTINGS);
@@ -80,28 +80,143 @@ export default function FontManager() {
     { label: "Fira Code", value: "'Fira Code', monospace" },
   ];
 
+  const styleTag = (
+    <style suppressHydrationWarning>{`
+      .topic-content-wrapper *:not(pre):not(code):not(.font-mono):not(svg):not(path) {
+         font-family: ${settings.fontFamily} !important;
+      }
+      .topic-content-wrapper p, 
+      .topic-content-wrapper span, 
+      .topic-content-wrapper li, 
+      .topic-content-wrapper td, 
+      .topic-content-wrapper th, 
+      .topic-content-wrapper div:not(.font-mono) {
+         font-size: ${settings.fontSize}px !important;
+         line-height: ${settings.lineHeight} !important;
+         font-weight: ${settings.fontWeight} !important;
+      }
+      .topic-content-wrapper h1 { font-size: ${settings.fontSize * 1.6}px !important; }
+      .topic-content-wrapper h2 { font-size: ${settings.fontSize * 1.4}px !important; }
+      .topic-content-wrapper h3 { font-size: ${settings.fontSize * 1.2}px !important; }
+      .topic-content-wrapper h4 { font-size: ${settings.fontSize * 1.1}px !important; }
+    `}</style>
+  );
+
+  const settingsContent = (
+    <div className="space-y-4">
+      {/* Font Family */}
+      <div>
+        <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-2">
+          Font Family
+        </label>
+        <select
+          value={settings.fontFamily}
+          onChange={(e) => updateSetting("fontFamily", e.target.value)}
+          className="w-full text-sm rounded-md border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-gray-100 p-1.5 focus:ring-2 focus:ring-indigo-500 outline-none transition"
+        >
+          {fonts.map((f) => (
+            <option key={f.value} value={f.value}>
+              {f.label}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      {/* Font Size */}
+      <div>
+        <div className="flex justify-between items-center mb-2">
+          <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300">
+            Size ({settings.fontSize}px)
+          </label>
+        </div>
+        <input
+          type="range"
+          min="12"
+          max="24"
+          step="1"
+          value={settings.fontSize}
+          onChange={(e) => updateSetting("fontSize", parseInt(e.target.value))}
+          className="w-full accent-indigo-600"
+        />
+        <div className="flex justify-between text-[10px] text-gray-400 mt-1">
+          <span>A</span>
+          <span className="text-sm">A</span>
+        </div>
+      </div>
+
+      {/* Font Weight */}
+      <div>
+        <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-2">
+          Font Weight
+        </label>
+        <div className="flex gap-2">
+          {[
+            { label: "Light", value: "300" },
+            { label: "Normal", value: "normal" },
+            { label: "Medium", value: "500" },
+          ].map((fw) => (
+            <button
+              key={fw.value}
+              onClick={() => updateSetting("fontWeight", fw.value)}
+              className={`flex-1 py-1 rounded border text-xs transition-colors ${
+                settings.fontWeight === fw.value
+                  ? "bg-indigo-50 border-indigo-200 text-indigo-700 dark:bg-indigo-900/30 dark:border-indigo-700/50 dark:text-indigo-300"
+                  : "bg-white border-gray-200 text-gray-600 hover:bg-gray-50 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-700"
+              }`}
+            >
+              {fw.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Line Height */}
+      <div>
+        <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-2">
+          Line Height
+        </label>
+        <div className="flex gap-2">
+          {[1.4, 1.6, 1.8, 2.0].map((lh) => (
+            <button
+              key={lh}
+              onClick={() => updateSetting("lineHeight", lh)}
+              className={`flex-1 py-1 rounded border transition-colors ${
+                settings.lineHeight === lh
+                  ? "bg-indigo-50 border-indigo-200 text-indigo-700 dark:bg-indigo-900/30 dark:border-indigo-700/50 dark:text-indigo-300"
+                  : "bg-white border-gray-200 text-gray-600 hover:bg-gray-50 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-700"
+              }`}
+            >
+              {lh}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Reset Button */}
+      <button
+        onClick={() => setSettings(DEFAULT_SETTINGS)}
+        className="w-full py-1.5 mt-2 text-xs text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 transition-colors"
+      >
+        Reset to defaults
+      </button>
+    </div>
+  );
+
+  if (inline) {
+    return (
+      <>
+        {styleTag}
+        <div className="px-4 pb-3 pt-1">
+          {settingsContent}
+        </div>
+      </>
+    );
+  }
+
   return (
     <div ref={containerRef} className="relative">
       {/* Target content dynamically */}
-      <style suppressHydrationWarning>{`
-        .topic-content-wrapper *:not(pre):not(code):not(.font-mono):not(svg):not(path) {
-           font-family: ${settings.fontFamily} !important;
-        }
-        .topic-content-wrapper p, 
-        .topic-content-wrapper span, 
-        .topic-content-wrapper li, 
-        .topic-content-wrapper td, 
-        .topic-content-wrapper th, 
-        .topic-content-wrapper div:not(.font-mono) {
-           font-size: ${settings.fontSize}px !important;
-           line-height: ${settings.lineHeight} !important;
-           font-weight: ${settings.fontWeight} !important;
-        }
-        .topic-content-wrapper h1 { font-size: ${settings.fontSize * 1.6}px !important; }
-        .topic-content-wrapper h2 { font-size: ${settings.fontSize * 1.4}px !important; }
-        .topic-content-wrapper h3 { font-size: ${settings.fontSize * 1.2}px !important; }
-        .topic-content-wrapper h4 { font-size: ${settings.fontSize * 1.1}px !important; }
-      `}</style>
+      {styleTag}
 
       {/* Trigger Button */}
       <button
@@ -121,104 +236,7 @@ export default function FontManager() {
       {/* Popover Menu */}
       {open && (
         <div className="absolute right-0 top-full mt-2 w-64 rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 shadow-lg shadow-gray-100/50 dark:shadow-black/30 overflow-hidden z-50 p-4">
-          <div className="space-y-4">
-            
-            {/* Font Family */}
-            <div>
-              <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-2">
-                Font Family
-              </label>
-              <select
-                value={settings.fontFamily}
-                onChange={(e) => updateSetting("fontFamily", e.target.value)}
-                className="w-full text-sm rounded-md border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-gray-100 p-1.5 focus:ring-2 focus:ring-indigo-500 outline-none transition"
-              >
-                {fonts.map((f) => (
-                  <option key={f.value} value={f.value}>
-                    {f.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {/* Font Size */}
-            <div>
-              <div className="flex justify-between items-center mb-2">
-                <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300">
-                  Size ({settings.fontSize}px)
-                </label>
-              </div>
-              <input
-                type="range"
-                min="12"
-                max="24"
-                step="1"
-                value={settings.fontSize}
-                onChange={(e) => updateSetting("fontSize", parseInt(e.target.value))}
-                className="w-full accent-indigo-600"
-              />
-              <div className="flex justify-between text-[10px] text-gray-400 mt-1">
-                <span>A</span>
-                <span className="text-sm">A</span>
-              </div>
-            </div>
-
-            {/* Font Weight */}
-            <div>
-              <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-2">
-                Font Weight
-              </label>
-              <div className="flex gap-2">
-                {[
-                  { label: "Light", value: "300" },
-                  { label: "Normal", value: "normal" },
-                  { label: "Medium", value: "500" },
-                ].map((fw) => (
-                  <button
-                    key={fw.value}
-                    onClick={() => updateSetting("fontWeight", fw.value)}
-                    className={`flex-1 py-1 rounded border text-xs transition-colors ${
-                      settings.fontWeight === fw.value
-                        ? "bg-indigo-50 border-indigo-200 text-indigo-700 dark:bg-indigo-900/30 dark:border-indigo-700/50 dark:text-indigo-300"
-                        : "bg-white border-gray-200 text-gray-600 hover:bg-gray-50 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-700"
-                    }`}
-                  >
-                    {fw.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Line Height */}
-            <div>
-              <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-2">
-                Line Height
-              </label>
-              <div className="flex gap-2">
-                {[1.4, 1.6, 1.8, 2.0].map((lh) => (
-                  <button
-                    key={lh}
-                    onClick={() => updateSetting("lineHeight", lh)}
-                    className={`flex-1 py-1 rounded border transition-colors ${
-                      settings.lineHeight === lh
-                        ? "bg-indigo-50 border-indigo-200 text-indigo-700 dark:bg-indigo-900/30 dark:border-indigo-700/50 dark:text-indigo-300"
-                        : "bg-white border-gray-200 text-gray-600 hover:bg-gray-50 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-700"
-                    }`}
-                  >
-                    {lh}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Reset Button */}
-            <button
-              onClick={() => setSettings(DEFAULT_SETTINGS)}
-              className="w-full py-1.5 mt-2 text-xs text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 transition-colors"
-            >
-              Reset to defaults
-            </button>
-          </div>
+          {settingsContent}
         </div>
       )}
     </div>

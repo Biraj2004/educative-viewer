@@ -1,6 +1,9 @@
+"use client";
+
 import DarkModeToggle from "./DarkModeToggle";
 import BackButton from "@/components/edu-viewer/BackButton";
 import { BRAND_ICON_URL } from "@/utils/branding";
+import { useAuth } from "@/components/edu-viewer/AuthProvider";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -62,6 +65,8 @@ export default function AppNavbar({
   onLogoClick,
   onBackClick,
 }: AppNavbarProps) {
+  const { user } = useAuth();
+
   return (
     <div className="sticky top-0 z-50 bg-white/60 dark:bg-[#030712]/60 backdrop-blur-2xl border-b border-gray-200/50 dark:border-white/5 dark:supports-backdrop-filter:bg-[#030712]/40 shadow-sm dark:shadow-[0_4px_24px_-8px_rgba(0,0,0,0.5)] transition-all duration-500">
       <div className="w-full px-8 h-14 flex items-center justify-between gap-5 relative">
@@ -127,9 +132,11 @@ export default function AppNavbar({
           {backHref && (
             <BackButton href={backHref} label={backLabel} icon={<ChevronLeft />} onClick={onBackClick} />
           )}
-          <span className="ml-2">
-            <DarkModeToggle />
-          </span>
+          {!user && (
+            <span className="ml-2">
+              <DarkModeToggle />
+            </span>
+          )}
         </div>
 
       </div>
