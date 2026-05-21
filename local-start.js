@@ -693,6 +693,7 @@ async function startClient({ skipBuild, forceBuild, devOnly, clientPort }) {
     console.log('[start] Next.js dev server (auto-reloading)');
     const child = spawn('npx', ['next', 'dev', '-H', '0.0.0.0', '-p', String(clientPort)], {
       cwd: CLIENT_DIR,
+      env: { ...process.env, NODE_TLS_REJECT_UNAUTHORIZED: '0' },
       stdio: 'inherit',
       shell: true,
     });
@@ -710,6 +711,7 @@ async function startClient({ skipBuild, forceBuild, devOnly, clientPort }) {
       shell: true,
       stdio: 'inherit',
       cwd: CLIENT_DIR,
+      env: { ...process.env, NODE_TLS_REJECT_UNAUTHORIZED: '0' },
     });
     if (buildResult.status !== 0) {
       console.error('[error] Next.js build failed.');
@@ -725,6 +727,7 @@ async function startClient({ skipBuild, forceBuild, devOnly, clientPort }) {
   console.log('[start] Next.js server');
   const child = spawn('npx', ['next', 'start', '-H', '0.0.0.0', '-p', String(clientPort)], {
     cwd: CLIENT_DIR,
+    env: { ...process.env, NODE_TLS_REJECT_UNAUTHORIZED: '0' },
     stdio: 'inherit',
     shell: true,
   });
