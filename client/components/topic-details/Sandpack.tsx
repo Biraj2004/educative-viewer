@@ -100,6 +100,15 @@ function useMounted(): boolean {
 
 type FileMap = Record<string, { code: string; hidden?: boolean; active?: boolean; readOnly?: boolean }>;
 
+function isLocalhostOrPrivate(hostname: string): boolean {
+  if (hostname === "localhost" || hostname === "127.0.0.1") return true;
+  if (hostname.startsWith("192.168.")) return true;
+  if (hostname.startsWith("10.")) return true;
+  if (hostname.match(/^172\.(1[6-9]|2[0-9]|3[0-1])\./)) return true;
+  // If it's anything else (e.g. a public domain), return false
+  return false;
+}
+
 async function resolveLocalMediaToDataUris(files: FileMap): Promise<FileMap> {
   console.log("[Sandpack] resolveLocalMediaToDataUris — scanning", Object.keys(files).length, "files");
 
@@ -124,6 +133,13 @@ async function resolveLocalMediaToDataUris(files: FileMap): Promise<FileMap> {
   await Promise.all(Array.from(urls).map(async (url) => {
     try {
       const fetchUrl = encodeURI(url.trim());
+      
+      // If the domain is correctly configured as a public domain, Sandpack iframe
+      // will NOT be blocked by Chrome PNA rules. Thus, we should skip base64 
+      // conversion entirely so that devices like iPads can stream the video normally.
+      const parsedUrl = new URL(fetchUrl);
+      if (!isLocalhostOrPrivate(parsedUrl.hostname)) return;
+
       const res = await fetch(fetchUrl);
       if (!res.ok) return;
       const buf = await res.arrayBuffer();
