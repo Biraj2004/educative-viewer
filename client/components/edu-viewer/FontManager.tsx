@@ -21,6 +21,8 @@ export default function FontManager({ inline = false }: { inline?: boolean }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [settings, setSettings] = useState<FontSettings>(DEFAULT_SETTINGS);
 
+  const isFirstRender = useRef(true);
+
   // Load from local storage on mount
   useEffect(() => {
     const saved = localStorage.getItem("edu_font_settings");
@@ -28,15 +30,18 @@ export default function FontManager({ inline = false }: { inline?: boolean }) {
       try {
         const parsed = JSON.parse(saved);
         setSettings({ ...DEFAULT_SETTINGS, ...parsed });
-      } catch (e) {
-        // ignore invalid json
-      }
+      } catch (e) {}
     }
   }, []);
 
   // Save to local storage on change
   useEffect(() => {
+    if (isFirstRender.current) {
+      isFirstRender.current = false;
+      return;
+    }
     localStorage.setItem("edu_font_settings", JSON.stringify(settings));
+    window.dispatchEvent(new Event("edu_font_sync"));
   }, [settings]);
 
   // Close on outside click
@@ -240,5 +245,47 @@ export default function FontManager({ inline = false }: { inline?: boolean }) {
         </div>
       )}
     </div>
+  );
+}
+
+export function FontInjector() {
+  const [settings, setSettings] = useState<FontSettings>(DEFAULT_SETTINGS);
+
+  useEffect(() => {
+    const loadSettings = () => {
+      const saved = localStorage.getItem("edu_font_settings");
+      if (saved) {
+        try {
+          const parsed = JSON.parse(saved);
+          setSettings({ ...DEFAULT_SETTINGS, ...parsed });
+        } catch (e) {}
+      }
+    };
+
+    loadSettings();
+    window.addEventListener("edu_font_sync", loadSettings);
+    return () => window.removeEventListener("edu_font_sync", loadSettings);
+  }, []);
+
+  return (
+    <style suppressHydrationWarning>{`
+      .topic-content-wrapper *:not(pre):not(code):not(.font-mono):not(svg):not(path) {
+         font-family: ${settings.fontFamily} !important;
+      }
+      .topic-content-wrapper p, 
+      .topic-content-wrapper span, 
+      .topic-content-wrapper li, 
+      .topic-content-wrapper td, 
+      .topic-content-wrapper th, 
+      .topic-content-wrapper div:not(.font-mono) {
+         font-size: ${settings.fontSize}px !important;
+         line-height: ${settings.lineHeight} !important;
+         font-weight: ${settings.fontWeight} !important;
+      }
+      .topic-content-wrapper h1 { font-size: ${settings.fontSize * 1.6}px !important; }
+      .topic-content-wrapper h2 { font-size: ${settings.fontSize * 1.4}px !important; }
+      .topic-content-wrapper h3 { font-size: ${settings.fontSize * 1.2}px !important; }
+      .topic-content-wrapper h4 { font-size: ${settings.fontSize * 1.1}px !important; }
+    `}</style>
   );
 }
