@@ -151,3 +151,11 @@ input:-webkit-autofill:active {
   max-width: 100%;
   height: auto;
 }
+
+/* ─── Prevent Theme Toggle Flashing ──────────────────────────────────────── */
+.disable-theme-transitions,
+.disable-theme-transitions *,
+.disable-theme-transitions *::before,
+.disable-theme-transitions *::after {
+  transition: none !important;
+}

@@ -20,6 +20,8 @@ function readSavedTheme(): "dark" | "light" | null {
   return null;
 }
 
+let hasSyncedUserTheme = false;
+
 export default function DarkModeToggle() {
   const { user } = useAuth();
   const [isDark, setIsDark] = useState(false);
@@ -35,9 +37,13 @@ export default function DarkModeToggle() {
 
   // When user data arrives (or changes), apply the stored theme from the DB.
   // This overrides the local cookie/localStorage value so the DB is the source
-  // of truth for logged-in users.
+  // of truth for logged-in users, but only once per session so opening the 
+  // menu doesn't force a re-sync if they went out of sync.
   useEffect(() => {
     if (!user?.theme) return;
+    if (hasSyncedUserTheme) return;
+    hasSyncedUserTheme = true;
+
     const useDark = user.theme === "dark";
     setIsDark(useDark);
     document.documentElement.classList.toggle("dark", useDark);
@@ -45,11 +51,18 @@ export default function DarkModeToggle() {
   }, [user?.theme]);
 
   const toggle = () => {
+    document.documentElement.classList.add("disable-theme-transitions");
+
     const next = !isDark;
     setIsDark(next);
     document.documentElement.classList.toggle("dark", next);
     const theme = next ? "dark" : "light";
     saveTheme(theme);
+    
+    setTimeout(() => {
+      document.documentElement.classList.remove("disable-theme-transitions");
+    }, 50);
+
     // Persist to database (fire-and-forget — don't block the toggle)
     syncThemeToBackend(theme).catch(() => {});
   };
