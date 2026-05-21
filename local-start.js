@@ -7,6 +7,19 @@ const http = require('http');
 const path = require('path');
 const readline = require('readline');
 const { spawn, spawnSync } = require('child_process');
+const os = require('os');
+
+function getLanIp() {
+  const interfaces = os.networkInterfaces();
+  for (const name of Object.keys(interfaces)) {
+    for (const iface of interfaces[name]) {
+      if (iface.family === 'IPv4' && !iface.internal) {
+        return iface.address;
+      }
+    }
+  }
+  return 'localhost';
+}
 
 const ROOT = path.resolve(__dirname);
 const SERVER_DIR = path.join(ROOT, 'server');
@@ -566,10 +579,14 @@ function ensureClientEnv({ proxyPort, publicKeyOneline }) {
   ensureEnvFile(CLIENT_ENV_PATH, CLIENT_ENV_EXAMPLE_PATH);
 
   const current = parseEnvFile(CLIENT_ENV_PATH);
+  
+  const lanIp = getLanIp();
+  console.log(`[info] Auto-detected local network IP: ${lanIp}`);
+  
   const updates = {
     PROXY_SECRET: 'local-proxy',
-    NEXT_PUBLIC_BACKEND_API_BASE: `http://localhost:${proxyPort}/`,
-    NEXT_PUBLIC_STATIC_FILES_BASE: `http://localhost:${proxyPort}/`,
+    NEXT_PUBLIC_BACKEND_API_BASE: `http://${lanIp}:${proxyPort}/`,
+    NEXT_PUBLIC_STATIC_FILES_BASE: `http://${lanIp}:${proxyPort}/`,
     NEXT_PUBLIC_STATIC_BASIC_AUTH: '',
     VERCEL_ENV: 'development',
     NEXT_PUBLIC_RSA_PUBLIC_KEY: publicKeyOneline,
@@ -643,7 +660,7 @@ async function startClient({ skipBuild, forceBuild, devOnly, clientPort }) {
 
   if (devOnly) {
     console.log('[start] Next.js dev server (auto-reloading)');
-    const child = spawn('npx', ['next', 'dev', '-p', String(clientPort)], {
+    const child = spawn('npx', ['next', 'dev', '-H', '0.0.0.0', '-p', String(clientPort)], {
       cwd: CLIENT_DIR,
       stdio: 'inherit',
       shell: true,
@@ -675,7 +692,7 @@ async function startClient({ skipBuild, forceBuild, devOnly, clientPort }) {
   }
 
   console.log('[start] Next.js server');
-  const child = spawn('npx', ['next', 'start', '-p', String(clientPort)], {
+  const child = spawn('npx', ['next', 'start', '-H', '0.0.0.0', '-p', String(clientPort)], {
     cwd: CLIENT_DIR,
     stdio: 'inherit',
     shell: true,
