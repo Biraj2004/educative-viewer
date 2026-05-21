@@ -105,7 +105,6 @@ function isLocalhostOrPrivate(hostname: string): boolean {
   if (hostname.startsWith("192.168.")) return true;
   if (hostname.startsWith("10.")) return true;
   if (hostname.match(/^172\.(1[6-9]|2[0-9]|3[0-1])\./)) return true;
-  // If it's anything else (e.g. a public domain), return false
   return false;
 }
 
@@ -123,6 +122,13 @@ async function resolveLocalMediaToDataUris(files: FileMap): Promise<FileMap> {
     gif: "image/gif", webp: "image/webp", svg: "image/svg+xml",
   };
 
+  // iOS/iPadOS WebKit does not enforce Chrome's Private Network Access (PNA) blocks,
+  // but it DOES severely choke on large Base64 media streams. We can safely skip
+  // conversion entirely on iOS devices.
+  const isIOS = typeof navigator !== "undefined" && 
+    (/iPad|iPhone|iPod/i.test(navigator.userAgent) || 
+    (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1));
+
   const urls = new Set<string>();
   for (const { code } of Object.values(files)) {
     for (const m of code.matchAll(new RegExp(URL_RE.source, "gi"))) urls.add(m[0]);
@@ -134,12 +140,20 @@ async function resolveLocalMediaToDataUris(files: FileMap): Promise<FileMap> {
     try {
       const fetchUrl = encodeURI(url.trim());
       
-      // If the domain is correctly configured as a public domain, Sandpack iframe
-      // will NOT be blocked by Chrome PNA rules. Thus, we should skip base64 
-      // conversion entirely so that devices like iPads can stream the video normally.
+      // 1. If it's a Public Domain OR an iOS device:
+      //    We use the Next.js CORS proxy. This injects wildcard CORS headers for public domains,
+      //    and completely avoids Base64 so iPads don't crash, preserving byte-range streams.
+      // 2. If it's a Local Network (localhost/LAN) AND NOT iOS:
+      //    We MUST use Base64. Strict browsers (Chrome/Brave) completely block public iframes
+      //    from fetching local IPs (PNA block) regardless of CORS headers. Base64 is the only bypass.
       const parsedUrl = new URL(fetchUrl);
-      if (!isLocalhostOrPrivate(parsedUrl.hostname)) return;
+      if (!isLocalhostOrPrivate(parsedUrl.hostname) || isIOS) {
+        const proxyUrl = `${window.location.origin}/proxy/asset?url=${encodeURIComponent(fetchUrl)}`;
+        replacements.set(url.trim(), proxyUrl);
+        return;
+      }
 
+      // --- Base64 Fallback for Local Desktop Browsers ---
       const res = await fetch(fetchUrl);
       if (!res.ok) return;
       const buf = await res.arrayBuffer();
