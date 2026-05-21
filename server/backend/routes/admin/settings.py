@@ -91,13 +91,22 @@ def register_settings_routes(bp: Blueprint, auth_service: AuthService) -> None:
         if "groq_api_key" in data:
             cfg.groq_api_key = str(data["groq_api_key"])
             
+        course_db_updated = False
         if "course_db_engine" in data:
             cfg.course_db_engine = str(data["course_db_engine"]).strip().lower()
+            course_db_updated = True
 
         if "course_sqlite_db_paths_json" in data:
             try:
                 cfg.course_sqlite_db_paths = _parse_sqlite_db_paths(str(data["course_sqlite_db_paths_json"]))
+                course_db_updated = True
             except Exception:
                 pass
+
+        if course_db_updated:
+            try:
+                auth_service.db_manager.reload_course_backend()
+            except Exception as e:
+                return jsonify({"error": str(e)}), 400
 
         return jsonify({"success": True})
