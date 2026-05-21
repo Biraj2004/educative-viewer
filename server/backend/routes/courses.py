@@ -565,11 +565,12 @@ def create_courses_blueprint(auth_service: AuthService, db_manager: DBManager) -
                 (local_course_id, topic_index),
             ).fetchall()
 
+            from ..utils import process_content_json
             components = [
                 {
                     "index": row["component_index"],
                     "type": row["type"],
-                    "content": json.loads(row["content_json"] or "{}"),
+                    "content": json.loads(process_content_json(row["content_json"]) or "{}"),
                 }
                 for row in component_rows
             ]
