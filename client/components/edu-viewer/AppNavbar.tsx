@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import DarkModeToggle from "./DarkModeToggle";
 import BackButton from "@/components/edu-viewer/BackButton";
 import { BRAND_ICON_URL } from "@/utils/branding";
@@ -80,8 +81,7 @@ export default function AppNavbar({
             <span className="lg:hidden shrink-0">{mobileMenuTrigger}</span>
           )}
           {/* Logo */}
-          {/* eslint-disable-next-line @next/next/no-html-link-for-pages */}
-          <a href={logoHref || "/"} onClick={onLogoClick} className="flex items-center gap-2 group shrink-0">
+          <Link href={logoHref || "/"} onClick={onLogoClick as any} className="flex items-center gap-2 group shrink-0">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={BRAND_ICON_URL}
@@ -104,19 +104,19 @@ export default function AppNavbar({
                 </span>
               )}
             </span>
-          </a>
+          </Link>
 
           {/* Breadcrumbs */}
           {crumbs?.map((crumb, i) => (
             <span key={i} className="flex items-center min-w-0">
               <span className="mx-2.5 text-gray-300 dark:text-gray-700 select-none text-sm shrink-0">/</span>
               {crumb.href ? (
-                <a
+                <Link
                   href={crumb.href}
                   className="text-sm font-medium text-gray-500 dark:text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors truncate max-w-45"
                 >
                   {crumb.label}
-                </a>
+                </Link>
               ) : (
                 <span className="text-sm font-semibold text-gray-900 dark:text-gray-100 truncate max-w-45">
                   {crumb.label}
