@@ -21,10 +21,29 @@ export function getRuntimePublicEnv(key: RuntimePublicEnvKey): string {
   return typeof value === "string" ? value : "";
 }
 
+function isPrivateHost(hostname: string): boolean {
+  return (
+    hostname === "localhost" ||
+    hostname === "127.0.0.1" ||
+    hostname === "::1" ||
+    // 192.168.x.x, 10.x.x.x, 172.16-31.x.x
+    /^192\.168\./.test(hostname) ||
+    /^10\./.test(hostname) ||
+    /^172\.(1[6-9]|2\d|3[01])\./.test(hostname)
+  );
+}
+
 function rewriteHostname(urlStr: string): string {
   if (!urlStr || typeof window === "undefined") return urlStr;
+  // Only rewrite when the browser is on a local/private address.
+  // If the user is accessing from a public domain (e.g. a Cloudflare Worker),
+  // keep the env-configured URL exactly as-is so backend calls go to the right host.
+  if (!isPrivateHost(window.location.hostname)) return urlStr;
   try {
     const url = new URL(urlStr);
+    // Also only rewrite if the configured URL itself points to a local/private host,
+    // not if it's already pointing to a specific public server.
+    if (!isPrivateHost(url.hostname)) return urlStr;
     url.hostname = window.location.hostname;
     return url.toString();
   } catch {
