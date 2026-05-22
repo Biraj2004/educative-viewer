@@ -21,8 +21,20 @@ export function getRuntimePublicEnv(key: RuntimePublicEnvKey): string {
   return typeof value === "string" ? value : "";
 }
 
+function rewriteHostname(urlStr: string): string {
+  if (!urlStr || typeof window === "undefined") return urlStr;
+  try {
+    const url = new URL(urlStr);
+    url.hostname = window.location.hostname;
+    return url.toString();
+  } catch {
+    return urlStr;
+  }
+}
+
 export function getBackendApiBase(): string {
-  return getRuntimePublicEnv("NEXT_PUBLIC_BACKEND_API_BASE").replace(/\/$/, "");
+  const base = getRuntimePublicEnv("NEXT_PUBLIC_BACKEND_API_BASE");
+  return rewriteHostname(base).replace(/\/$/, "");
 }
 
 export function getRsaPublicKey(): string {
@@ -30,7 +42,8 @@ export function getRsaPublicKey(): string {
 }
 
 export function getStaticFilesBase(): string {
-  return getRuntimePublicEnv("NEXT_PUBLIC_STATIC_FILES_BASE");
+  const base = getRuntimePublicEnv("NEXT_PUBLIC_STATIC_FILES_BASE");
+  return rewriteHostname(base);
 }
 
 export function getStaticBasicAuth(): string {

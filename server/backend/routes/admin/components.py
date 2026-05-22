@@ -65,7 +65,7 @@ def register_test_component_routes(
 
         _upsert_test_component(db_manager, component_id, component["type"], component["content_json"] or "{}", topic_url)
 
-        from ..utils import process_content_json
+        from backend.utils import process_content_json
         return (
             jsonify({
                 "component_id": component_id,
@@ -172,7 +172,7 @@ def _fetch_pinned_components(db_manager: DBManager) -> list[dict]:
                         """
                 ).fetchall()
                 results = []
-                from ..utils import process_content_json
+                from backend.utils import process_content_json
                 for r in rows:
                         item = dict(r)
                         if "content_json" in item:
@@ -248,7 +248,7 @@ def _fetch_random_components(db_manager: DBManager, per_type_limit: int) -> list
                 conn = db_manager.open_course_connection(shard)
                 try:
                         shard_rows = conn.execute(query, (per_type_limit,)).fetchall()
-                        from ..utils import process_content_json
+                        from backend.utils import process_content_json
                         for row in shard_rows:
                                 item = dict(row)
                                 if "content_json" in item:
