@@ -712,6 +712,10 @@ async function startClient({ skipBuild, forceBuild, devOnly, clientPort }) {
   const shouldBuild = forceBuild || (!hasBuild && !skipBuild);
 
   if (shouldBuild) {
+    if (forceBuild && hasBuild) {
+      console.log('[build] Cleaning .next before rebuild...');
+      fs.rmSync(nextDir, { recursive: true, force: true });
+    }
     console.log('[build] Next.js build');
     const buildResult = spawnSync('npx next build', {
       shell: true,
