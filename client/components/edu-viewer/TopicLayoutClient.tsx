@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import TopicSidebar from "@/components/edu-viewer/TopicSidebar";
 import AppNavbar from "@/components/edu-viewer/AppNavbar";
 import UserMenu from "@/components/edu-viewer/UserMenu";
@@ -12,6 +12,70 @@ import { recordTopicVisit, getAuthToken, clearAuthToken } from "@/utils/authClie
 import { getBackendApiBase } from "@/utils/runtime-config";
 
 const BACKEND = getBackendApiBase();
+
+// ─── Heavy component types that benefit from deferred mounting ────────────────
+// These involve Monaco, iframes, canvas, or large SVG libraries.
+// Lightweight types (MarkdownEditor, SlateHTML, Latex, Code, Table...) render eagerly.
+const HEAVY_COMPONENT_TYPES = new Set([
+  "EditorCode",
+  "CodeTest",
+  "Sandpack",
+  "WebpackBin",
+  "Android",
+  "RunJS",
+  "CanvasAnimation",
+  "Video",
+  "DrawIOWidget",
+  "MxGraphWidget",
+  "Graphviz",
+  "D2Diagram",
+  "Mermaid",
+  "MarkMap",
+  "SequenceDiagrams",
+  "UML",
+  "WorkPreview",
+  "CanvasAnimation",
+  "ChartComponent",
+  "Chart",
+  "InstaCalc",
+  "MatchTheAnswers",
+]);
+
+// ─── LazyComponent ────────────────────────────────────────────────────────────
+// Renders a skeleton until the element is within 400px of the viewport,
+// then mounts the real component and never unmounts it again.
+function LazyComponent({ children, estimatedHeight = 300 }: { children: React.ReactNode; estimatedHeight?: number }) {
+  const [mounted, setMounted] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (mounted) return;
+    const el = ref.current;
+    if (!el) return;
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          setMounted(true);
+          observer.disconnect();
+        }
+      },
+      { rootMargin: "400px" } // start mounting 400px before entering viewport
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [mounted]);
+
+  if (mounted) return <>{children}</>;
+
+  return (
+    <div
+      ref={ref}
+      style={{ minHeight: estimatedHeight }}
+      className="rounded-lg bg-gray-100 dark:bg-gray-800 animate-pulse"
+    />
+  );
+}
 
 interface Component {
   type: string;
@@ -81,7 +145,7 @@ export default function TopicLayoutClient({ courseId, slug, fromPath, course, to
     ? { label: "Paths", href: validFromPath ?? "/dashboard/paths" }
     : fromProjectsPage
       ? { label: "Projects", href: validFromPath ?? "/dashboard/projects" }
-    : { label: "Courses", href: "/dashboard/courses" };
+      : { label: "Courses", href: "/dashboard/courses" };
   const courseBaseHref = `/dashboard/courses/${courseId}/${slug}`;
   const courseHref = validFromPath
     ? `${courseBaseHref}?from=${encodeURIComponent(validFromPath)}`
@@ -104,8 +168,8 @@ export default function TopicLayoutClient({ courseId, slug, fromPath, course, to
 
   const allTopics = course
     ? (Array.isArray(course.toc) ? course.toc : []).flatMap((entry) =>
-        "topics" in entry ? (Array.isArray(entry.topics) ? entry.topics : []) : [entry as Topic]
-      )
+      "topics" in entry ? (Array.isArray(entry.topics) ? entry.topics : []) : [entry as Topic]
+    )
     : [];
   const currentPos = allTopics.findIndex((t) => t.topic_index === currentTopic.topic_index);
   const prev = currentPos > 0 ? allTopics[currentPos - 1] : null;
@@ -117,12 +181,12 @@ export default function TopicLayoutClient({ courseId, slug, fromPath, course, to
   }, [courseId, slug, validFromPath]);
 
   // Extract topic context for the AI Chatbot
-  const topicContext = typeof window !== "undefined" 
+  const topicContext = typeof window !== "undefined"
     ? JSON.stringify(currentTopic.components, (key, value) => {
-        // Omit huge binary/unhelpful keys if needed, but for now just raw content is fine
-        if (key === "versions" || key === "images") return undefined;
-        return value;
-      }).substring(0, 50000) // limit to ~50k characters to be safe
+      // Omit huge binary/unhelpful keys if needed, but for now just raw content is fine
+      if (key === "versions" || key === "images") return undefined;
+      return value;
+    }).substring(0, 50000) // limit to ~50k characters to be safe
     : "";
 
   // Mark this topic as visited on every topic change (best-effort, don't block UI)
@@ -141,7 +205,7 @@ export default function TopicLayoutClient({ courseId, slug, fromPath, course, to
       completedRef.current = s;
       return s;
     });
-    recordTopicVisit(courseId, currentTopic.topic_index, next).catch(() => {});
+    recordTopicVisit(courseId, currentTopic.topic_index, next).catch(() => { });
   }, [isCompleted, courseId, currentTopic.topic_index]);
 
   // In-page topic navigation: fetch new topic, update state + URL (no page remount)
@@ -193,12 +257,17 @@ export default function TopicLayoutClient({ courseId, slug, fromPath, course, to
 
   // Track Reading Progress Bar and Last Visited Topic
   useEffect(() => {
+    let rafId: number | null = null;
+
     const handleScroll = () => {
-      // Update reading progress bar
-      const winScroll = document.documentElement.scrollTop;
-      const height = document.documentElement.scrollHeight - document.documentElement.clientHeight;
-      const scrolled = height > 0 ? (winScroll / height) * 100 : 0;
-      setScrollProgress(scrolled);
+      if (rafId !== null) return; // already scheduled — skip
+      rafId = requestAnimationFrame(() => {
+        rafId = null;
+        const winScroll = document.documentElement.scrollTop;
+        const height = document.documentElement.scrollHeight - document.documentElement.clientHeight;
+        const scrolled = height > 0 ? (winScroll / height) * 100 : 0;
+        setScrollProgress(scrolled);
+      });
     };
     window.addEventListener("scroll", handleScroll, { passive: true });
     // Trigger once on mount to set initial progress bar width
@@ -209,6 +278,7 @@ export default function TopicLayoutClient({ courseId, slug, fromPath, course, to
 
     return () => {
       window.removeEventListener("scroll", handleScroll);
+      if (rafId !== null) cancelAnimationFrame(rafId);
     };
   }, [courseId, currentTopic.topic_index]);
 
@@ -292,103 +362,110 @@ export default function TopicLayoutClient({ courseId, slug, fromPath, course, to
           />
         )}
 
-      {/* Main content — natural page scroll */}
-      <main className="flex-1 min-w-0">
+        {/* Main content — natural page scroll */}
+        <main className="flex-1 min-w-0">
 
           {/* Components */}
-        <div className="max-w-6xl mx-auto px-6 py-8 space-y-6 topic-content-wrapper">
-          {currentComponents.map((comp, i) => {
-            const renderer = getRenderer(comp.type);
-            const subType =
-              typeof comp.content?.type === "string" ? comp.content.type : undefined;
-            const componentLabel = `<${comp.type}-${i}>`;
-            return (
-              <div key={i} className="relative">
-                {renderer ? renderer(comp.content) : <UnknownRenderer type={comp.type} />}
-                <ComponentBadge componentName={componentLabel} subType={subType} />
-              </div>
-            );
-          })}
-        </div>
-
-        <FontInjector />
-
-        {/* Mark complete + Prev / Next */}
-        <div className="max-w-6xl mx-auto px-6 pb-10 space-y-4">
-          {/* Mark complete checkbox */}
-          <div className="flex justify-center">
-            <button
-              onClick={handleToggleComplete}
-              className={[
-                "inline-flex items-center gap-2 px-5 py-2 rounded-full border text-sm font-medium transition-colors cursor-pointer",
-                isCompleted
-                  ? "bg-emerald-50 dark:bg-emerald-900/30 border-emerald-300 dark:border-emerald-700 text-emerald-700 dark:text-emerald-400"
-                  : "bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:border-emerald-400 hover:text-emerald-700 dark:hover:border-emerald-600 dark:hover:text-emerald-400",
-              ].join(" ")}
-            >
-              {isCompleted ? (
-                <svg className="w-4 h-4 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-              ) : (
-                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <circle cx="12" cy="12" r="9" />
-                </svg>
-              )}
-              {isCompleted ? "Completed" : "Mark as complete"}
-            </button>
+          <div className="max-w-6xl mx-auto px-6 py-8 space-y-6 topic-content-wrapper">
+            {currentComponents.map((comp, i) => {
+              const renderer = getRenderer(comp.type);
+              const subType =
+                typeof comp.content?.type === "string" ? comp.content.type : undefined;
+              const componentLabel = `<${comp.type}-${i}>`;
+              const isHeavy = HEAVY_COMPONENT_TYPES.has(comp.type);
+              return (
+                <div key={i} className="relative">
+                  {isHeavy ? (
+                    <LazyComponent>
+                      {renderer ? renderer(comp.content) : <UnknownRenderer type={comp.type} />}
+                    </LazyComponent>
+                  ) : (
+                    renderer ? renderer(comp.content) : <UnknownRenderer type={comp.type} />
+                  )}
+                  <ComponentBadge componentName={componentLabel} subType={subType} />
+                </div>
+              );
+            })}
           </div>
 
-          {/* Prev / Next */}
-          <div className="flex items-center justify-between gap-4">
-            {prev ? (
-              <button
-                onClick={() => {
-                  if (!isCompleted) {
-                    setIsCompleted(true);
-                    setCompleted((s) => { 
-                      const n = new Set(s); n.add(currentTopic.topic_index); 
-                      completedRef.current = n;
-                      return n; 
-                    });
-                    recordTopicVisit(courseId, currentTopic.topic_index, true).catch(() => {});
-                  }
-                  handleTopicNav(buildTopicHref(prev.topic_index, prev.slug), prev.topic_index);
-                }}
-                className="flex items-center gap-2 px-4 py-2.5 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-sm text-gray-700 dark:text-gray-300 hover:border-indigo-400 dark:hover:border-indigo-600 hover:text-indigo-700 dark:hover:text-indigo-400 transition-colors max-w-xs cursor-pointer"
-              >
-                <svg className="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-                </svg>
-                <span className="truncate">{prev.title}</span>
-              </button>
-            ) : <div />}
-            {next ? (
-              <button
-                onClick={() => {
-                  if (!isCompleted) {
-                    setIsCompleted(true);
-                    setCompleted((ps) => { 
-                      const s = new Set(ps); s.add(currentTopic.topic_index); 
-                      completedRef.current = s;
-                      return s; 
-                    });
-                    recordTopicVisit(courseId, currentTopic.topic_index, true).catch(() => {});
-                  }
-                  handleTopicNav(buildTopicHref(next.topic_index, next.slug), next.topic_index);
-                }}
-                className="flex items-center gap-2 px-4 py-2.5 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-sm text-gray-700 dark:text-gray-300 hover:border-indigo-400 dark:hover:border-indigo-600 hover:text-indigo-700 dark:hover:text-indigo-400 transition-colors max-w-xs cursor-pointer"
-              >
-                <span className="truncate">{next.title}</span>
-                <svg className="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-                </svg>
-              </button>
-            ) : <div />}
-          </div>
-        </div>
+          <FontInjector />
 
-      </main>
+          {/* Mark complete + Prev / Next */}
+          <div className="max-w-6xl mx-auto px-6 pb-10 space-y-4">
+            {/* Mark complete checkbox */}
+            <div className="flex justify-center">
+              <button
+                onClick={handleToggleComplete}
+                className={[
+                  "inline-flex items-center gap-2 px-5 py-2 rounded-full border text-sm font-medium transition-colors cursor-pointer",
+                  isCompleted
+                    ? "bg-emerald-50 dark:bg-emerald-900/30 border-emerald-300 dark:border-emerald-700 text-emerald-700 dark:text-emerald-400"
+                    : "bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:border-emerald-400 hover:text-emerald-700 dark:hover:border-emerald-600 dark:hover:text-emerald-400",
+                ].join(" ")}
+              >
+                {isCompleted ? (
+                  <svg className="w-4 h-4 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                ) : (
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <circle cx="12" cy="12" r="9" />
+                  </svg>
+                )}
+                {isCompleted ? "Completed" : "Mark as complete"}
+              </button>
+            </div>
+
+            {/* Prev / Next */}
+            <div className="flex items-center justify-between gap-4">
+              {prev ? (
+                <button
+                  onClick={() => {
+                    if (!isCompleted) {
+                      setIsCompleted(true);
+                      setCompleted((s) => {
+                        const n = new Set(s); n.add(currentTopic.topic_index);
+                        completedRef.current = n;
+                        return n;
+                      });
+                      recordTopicVisit(courseId, currentTopic.topic_index, true).catch(() => { });
+                    }
+                    handleTopicNav(buildTopicHref(prev.topic_index, prev.slug), prev.topic_index);
+                  }}
+                  className="flex items-center gap-2 px-4 py-2.5 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-sm text-gray-700 dark:text-gray-300 hover:border-indigo-400 dark:hover:border-indigo-600 hover:text-indigo-700 dark:hover:text-indigo-400 transition-colors max-w-xs cursor-pointer"
+                >
+                  <svg className="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+                  </svg>
+                  <span className="truncate">{prev.title}</span>
+                </button>
+              ) : <div />}
+              {next ? (
+                <button
+                  onClick={() => {
+                    if (!isCompleted) {
+                      setIsCompleted(true);
+                      setCompleted((ps) => {
+                        const s = new Set(ps); s.add(currentTopic.topic_index);
+                        completedRef.current = s;
+                        return s;
+                      });
+                      recordTopicVisit(courseId, currentTopic.topic_index, true).catch(() => { });
+                    }
+                    handleTopicNav(buildTopicHref(next.topic_index, next.slug), next.topic_index);
+                  }}
+                  className="flex items-center gap-2 px-4 py-2.5 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-sm text-gray-700 dark:text-gray-300 hover:border-indigo-400 dark:hover:border-indigo-600 hover:text-indigo-700 dark:hover:text-indigo-400 transition-colors max-w-xs cursor-pointer"
+                >
+                  <span className="truncate">{next.title}</span>
+                  <svg className="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                  </svg>
+                </button>
+              ) : <div />}
+            </div>
+          </div>
+
+        </main>
       </div>
 
       {/* Floating Course Chatbot */}
