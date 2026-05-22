@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import AppNavbar from '@/components/edu-viewer/AppNavbar';
 import { useAuth } from '@/components/edu-viewer/AuthProvider';
 import LazyLoadPlaceholder, { LazyLoadPlaceholderData } from '@/components/topic-details/LazyLoadPlaceholder';
@@ -97,6 +97,34 @@ function SectionHeader({ name, note, action }: { name: string; note?: string; ac
   );
 }
 
+// ─── LazySection ────────────────────────────────────────────────────────────
+// Mounts its children only after the placeholder scrolls within 300px of the
+// viewport. Prevents simultaneous instantiation of Monaco / iframe components.
+function LazySection({ children }: { children: ReactNode }) {
+  const [visible, setVisible] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (visible) return;
+    const el = ref.current;
+    if (!el) return;
+    const io = new IntersectionObserver(
+      ([entry]) => { if (entry.isIntersecting) { setVisible(true); io.disconnect(); } },
+      { rootMargin: "300px" },
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, [visible]);
+
+  if (visible) return <>{children}</>;
+  return (
+    <div
+      ref={ref}
+      className="h-48 rounded-xl border border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-900 animate-pulse"
+    />
+  );
+}
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const componentMapping: { [key: string]: React.ComponentType<any> } = {
     "CanvasAnimation": (props: { data: LazyLoadPlaceholderData }) => <LazyLoadPlaceholder {...props} />,
@@ -157,8 +185,17 @@ export default function ComponentTestPage() {
   const [fetchStatus, setFetchStatus] = useState<FetchStatus>("idle");
   const { authToken, user, loading } = useAuth();
 
+  const didHaveUser = useRef(false);
+
   useEffect(() => {
-    if (!loading && !user) {
+    if (user) {
+      didHaveUser.current = true;
+      return;
+    }
+    // Only hard-redirect to /auth if we never authenticated in this session.
+    // If we already had a user (didHaveUser.current), it's a transient state
+    // during soft navigation — do not override with window.location.replace.
+    if (!loading && !didHaveUser.current) {
       window.location.replace("/auth");
     }
   }, [loading, user]);
@@ -195,6 +232,10 @@ export default function ComponentTestPage() {
 
   if (loading || !user) return null;
 
+  // The test page mounts many iframes (Sandpack, Monaco, WebpackBin, etc.).
+  // Next.js soft navigation cannot reliably tear these down — use hard navigation.
+  const hardNav = (href: string) => { window.location.href = href; };
+
   const handleOpenTopic = (topicUrl: string | null) => {
     if (!topicUrl) return;
     const newWindow = window.open(topicUrl, "_blank", "noopener,noreferrer");
@@ -205,11 +246,14 @@ export default function ComponentTestPage() {
     <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
       <AppNavbar
         crumbs={[
-          { label: "Dashboard", href: "/dashboard" },
+          { label: "Dashboard", onClick: () => hardNav("/dashboard") },
           { label: "Component's Test Page" },
         ]}
+        logoHref="/dashboard"
+        onLogoClick={(e) => { e.preventDefault(); hardNav("/dashboard"); }}
         backHref="/dashboard"
         backLabel="Dashboard"
+        onBackClick={(e) => { e.preventDefault(); hardNav("/dashboard"); }}
       />
 
       <div className="overflow-x-hidden">
@@ -368,7 +412,9 @@ export default function ComponentTestPage() {
                   }
                 />
                 <div className="rounded-xl border border-gray-200 dark:border-gray-800 overflow-hidden bg-white dark:bg-gray-900">
-                  <Component data={content} />
+                  <LazySection>
+                    <Component data={content} />
+                  </LazySection>
                 </div>
               </section>
             );

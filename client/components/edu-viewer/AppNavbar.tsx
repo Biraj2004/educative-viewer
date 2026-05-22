@@ -12,6 +12,7 @@ import { useAuth } from "@/components/edu-viewer/AuthProvider";
 interface Crumb {
   label: string;
   href?: string;
+  onClick?: () => void;
 }
 
 interface AppNavbarProps {
@@ -110,7 +111,14 @@ export default function AppNavbar({
           {crumbs?.map((crumb, i) => (
             <span key={i} className="flex items-center min-w-0">
               <span className="mx-2.5 text-gray-300 dark:text-gray-700 select-none text-sm shrink-0">/</span>
-              {crumb.href ? (
+              {crumb.onClick ? (
+                <button
+                  onClick={crumb.onClick}
+                  className="text-sm font-medium text-gray-500 dark:text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors truncate max-w-45 cursor-pointer"
+                >
+                  {crumb.label}
+                </button>
+              ) : crumb.href ? (
                 <Link
                   href={crumb.href}
                   className="text-sm font-medium text-gray-500 dark:text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors truncate max-w-45"
