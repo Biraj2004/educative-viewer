@@ -20,7 +20,7 @@ From the repo root:
 node local-start.js
 ```
 
-> **Windows:** Port 80 requires an elevated shell — run PowerShell as **Administrator**, or use `--proxy-port 8080`.
+> **Windows/Linux:** Port 443 might require an elevated shell — run PowerShell as **Administrator** / use `sudo`, or use `--proxy-port 8443`.
 
 ### What happens on first run
 
@@ -39,7 +39,14 @@ The script is fully automated. It will:
 5. **Build the Next.js bundle** — takes ~1–2 min the first time.
 6. Start Flask, Next.js, and the embedded proxy.
 
-Once done, open **https://localhost** (or your machine's LAN IP, e.g., `https://192.168.x.x`) and log in with invite code **`local`**.
+You will see output similar to:
+```
+[ready] Local environment is starting.
+[ready] Proxy:  https://localhost
+[ready] Proxy:  https://192.168.1.195
+```
+
+Once done, open **https://localhost** (or your machine's LAN IP, e.g., `https://192.168.1.195`) and log in with invite code **`local`**.
 
 > **Note:** The local server automatically generates self-signed SSL certificates to enable proper cross-device testing and unlock browser features like Sandpack/Web Crypto. Your browser will show a **"Connection is Not Private"** warning. This is expected. Click "Advanced" or "Show Details" and proceed to the site.
 
@@ -50,7 +57,7 @@ On **subsequent runs** all prompts are skipped — it starts straight away.
 ```powershell
 node local-start.js --force-build      # force a full rebuild
 node local-start.js --skip-build       # skip build, serve existing .next
-node local-start.js --proxy-port 8080  # use a non-privileged port
+node local-start.js --proxy-port 8443  # use a non-privileged port
 node local-start.js --edit-env         # change saved settings (DB path, ports, etc.)
 ```
 

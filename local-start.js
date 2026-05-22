@@ -38,7 +38,7 @@ if (args.help || args.h) {
   process.exit(0);
 }
 
-const proxyPort = parsePort(args['proxy-port'] || process.env.EV_PROXY_PORT, 80, 'proxy-port');
+const proxyPort = parsePort(args['proxy-port'] || process.env.EV_PROXY_PORT, 443, 'proxy-port');
 const backendPort = parsePort(args['backend-port'] || process.env.EV_BACKEND_PORT, 5000, 'backend-port');
 const clientPort = parsePort(args['client-port'] || process.env.EV_CLIENT_PORT, 3000, 'client-port');
 const skipBuild = !!args['skip-build'] || process.env.EV_SKIP_BUILD === '1';
@@ -114,10 +114,14 @@ async function main() {
     keyPath,
   });
 
+  // For HTTPS, the default port is 443. If we are running HTTPS on a different port,
+  // we MUST explicitly include it in the URL, otherwise browsers will try to connect to 443.
+  const portSuffix = (proxyPort === 443) ? '' : `:${proxyPort}`;
+
   console.log('');
   console.log('[ready] Local environment is starting.');
-  console.log(`[ready] Proxy:  https://localhost:${proxyPort}`);
-  console.log(`[ready] Proxy:  https://${lanIp}:${proxyPort}`);
+  console.log(`[ready] Proxy:  https://localhost${portSuffix}`);
+  console.log(`[ready] Proxy:  https://${lanIp}${portSuffix}`);
   console.log(`[ready] Client: http://localhost:${clientPort}`);
   console.log(`[ready] Flask:  http://localhost:${backendPort}`);
   console.log(`[ready] Static root: ${staticRoot}`);
@@ -132,7 +136,7 @@ function printUsage() {
   console.log('Usage: node local-start.js [options]');
   console.log('');
   console.log('Options:');
-  console.log('  --proxy-port <port>    Proxy port (default: 80)');
+  console.log('  --proxy-port <port>    Proxy port (default: 443)');
   console.log('  --backend-port <port>  Flask port (default: 5000)');
   console.log('  --client-port <port>   Next.js port (default: 3000)');
   console.log('  --dev-only             Start Next.js in development mode with auto-reload');
@@ -614,10 +618,12 @@ function ensureClientEnv({ proxyPort, publicKeyOneline }) {
   const lanIp = getLanIp();
   console.log(`[info] Auto-detected local network IP: ${lanIp}`);
   
+  const portSuffix = (proxyPort === 443) ? '' : `:${proxyPort}`;
+  
   const updates = {
     PROXY_SECRET: 'local-proxy',
-    NEXT_PUBLIC_BACKEND_API_BASE: `https://${lanIp}:${proxyPort}/`,
-    NEXT_PUBLIC_STATIC_FILES_BASE: `https://${lanIp}:${proxyPort}/`,
+    NEXT_PUBLIC_BACKEND_API_BASE: `https://${lanIp}${portSuffix}/`,
+    NEXT_PUBLIC_STATIC_FILES_BASE: `https://${lanIp}${portSuffix}/`,
     NEXT_PUBLIC_STATIC_BASIC_AUTH: '',
     VERCEL_ENV: 'development',
     NEXT_PUBLIC_RSA_PUBLIC_KEY: publicKeyOneline,
@@ -745,6 +751,22 @@ function startProxyServer({ proxyPort, backendPort, clientPort, staticRoot, cert
   };
 
   const server = https.createServer(options, (req, res) => {
+    // Inject CORS headers for all proxy and static responses to allow cross-origin
+    // iframe embedding (like Sandpack) to directly fetch media and bypass Next.js API bugs.
+    const origin = req.headers.origin || '*';
+    res.setHeader('Access-Control-Allow-Origin', origin);
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+    res.setHeader('Access-Control-Allow-Private-Network', 'true');
+    res.setHeader('Access-Control-Expose-Headers', 'Content-Length, Content-Range');
+
+    if (req.method === 'OPTIONS') {
+      const reqHeaders = req.headers['access-control-request-headers'] || 'Range';
+      res.setHeader('Access-Control-Allow-Headers', reqHeaders);
+      res.statusCode = 204;
+      res.end();
+      return;
+    }
+
     const url = new URL(req.url, `https://localhost`);
     const pathname = url.pathname || '/';
 
@@ -850,6 +872,7 @@ function serveStatic(req, res, staticRoot, pathname) {
   try {
     safePath = decodeURIComponent(pathname);
   } catch {
+    console.log(`[static] ${req.method} ${pathname} -> 400 Bad Request`);
     res.statusCode = 400;
     res.end('Bad Request');
     return;
@@ -858,6 +881,7 @@ function serveStatic(req, res, staticRoot, pathname) {
   const filePath = path.resolve(staticRoot, `.${safePath}`);
   const rootResolved = path.resolve(staticRoot);
   if (!filePath.startsWith(rootResolved)) {
+    console.log(`[static] ${req.method} ${pathname} -> 403 Forbidden`);
     res.statusCode = 403;
     res.end('Forbidden');
     return;
@@ -865,6 +889,7 @@ function serveStatic(req, res, staticRoot, pathname) {
 
   fs.stat(filePath, (err, stats) => {
     if (err || !stats.isFile()) {
+      console.log(`[static] ${req.method} ${pathname} -> 404 Not Found`);
       res.statusCode = 404;
       res.end('Not Found');
       return;
@@ -875,10 +900,10 @@ function serveStatic(req, res, staticRoot, pathname) {
     // Detect SVG by content sniffing — files may be stored without a .svg
     // extension or with a generic application/octet-stream MIME type.
     if (mimeFromExt === 'application/octet-stream') {
-      sniffAndServe(filePath, res);
+      sniffAndServe(filePath, req, res, stats);
     } else {
       res.setHeader('Content-Type', mimeFromExt);
-      pipeFile(filePath, res);
+      pipeFile(filePath, req, res, stats);
     }
   });
 }
@@ -888,7 +913,7 @@ function serveStatic(req, res, staticRoot, pathname) {
  * If the file starts with `<svg` or `<?xml`, it is served as image/svg+xml.
  * Otherwise the generic application/octet-stream type is used.
  */
-function sniffAndServe(filePath, res) {
+function sniffAndServe(filePath, req, res, stats) {
   const SNIFF_BYTES = 512;
   const fd = fs.open(filePath, 'r', (openErr, fdNum) => {
     if (openErr) {
@@ -915,17 +940,24 @@ function sniffAndServe(filePath, res) {
           : 'application/octet-stream';
 
       res.setHeader('Content-Type', contentType);
-      pipeFile(filePath, res);
+      pipeFile(filePath, req, res, stats);
     });
   });
   void fd; // suppress unused-variable warning — fd is passed via callback
 }
 
-function pipeFile(filePath, res) {
+function pipeFile(filePath, req, res, stats) {
+  const total = stats.size;
+
+  res.statusCode = 200;
+  res.setHeader("Content-Length", total);
+
+  console.log(`[static] ${req.method} ${req.url} -> 200 (Full File)`);
+
   const stream = fs.createReadStream(filePath);
   stream.on('error', () => {
-    res.statusCode = 500;
-    res.end('Server Error');
+    if (!res.headersSent) res.statusCode = 500;
+    res.end();
   });
   stream.pipe(res);
 }
@@ -949,6 +981,10 @@ function getMimeType(filePath) {
     case '.woff2': return 'font/woff2';
     case '.ttf': return 'font/ttf';
     case '.otf': return 'font/otf';
+    case '.webm': return 'video/webm';
+    case '.mp4': return 'video/mp4';
+    case '.mp3': return 'audio/mpeg';
+    case '.wav': return 'audio/wav';
     default: return 'application/octet-stream';
   }
 }

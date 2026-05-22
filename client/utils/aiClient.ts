@@ -1,10 +1,5 @@
 import { getAuthToken, ApiError } from "./authClient";
-
-const BACKEND = (process.env.NEXT_PUBLIC_BACKEND_API_BASE ?? "").replace(
-  /\/$/,
-  ""
-);
-const API = `${BACKEND}/api/ai`;
+import { getBackendApiBase } from "./runtime-config";
 
 export const AVAILABLE_MODELS = [
   // ── User Requested Top Models ──
@@ -42,7 +37,7 @@ export async function generateAIContent(payload: {
   };
   if (token) headers["Authorization"] = `Bearer ${token}`;
 
-  const res = await fetch(`${API}/generate`, {
+  const res = await fetch(`${getBackendApiBase()}/api/ai/generate`, {
     method: "POST",
     headers,
     body: JSON.stringify(payload),

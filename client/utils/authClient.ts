@@ -10,11 +10,16 @@
  *   backend on the very next API call → the global 401 handler fires → sign-in page.
  */
 
-const BACKEND = (process.env.NEXT_PUBLIC_BACKEND_API_BASE ?? "").replace(
-  /\/$/,
-  "",
-);
-const API = `${BACKEND}/api/auth`;
+import { getBackendApiBase } from "./runtime-config";
+
+/** Lazily resolved at call-time so runtime config (window.__EV_RUNTIME_CONFIG__) is used. */
+function getAPI() {
+  return `${getBackendApiBase()}/api/auth`;
+}
+function getAdminAPI() {
+  return `${getBackendApiBase()}/api/admin`;
+}
+
 const LS_KEY = "ev_token";
 const LS_DEACTIVATED_KEY = "ev_deactivated";
 const IS_BROWSER = typeof window !== "undefined";
@@ -329,7 +334,7 @@ export async function login(
   password: string,
 ): Promise<AuthResponse> {
   const encryptedPassword = await _encryptPassword(password);
-  const result = await apiPost<AuthResponse>(`${API}/login`, {
+  const result = await apiPost<AuthResponse>(`${getAPI()}/login`, {
     email,
     password: encryptedPassword,
   });
@@ -344,7 +349,7 @@ export async function signup(
   name?: string,
 ): Promise<AuthResponse> {
   const encryptedPassword = await _encryptPassword(password);
-  const result = await apiPost<AuthResponse>(`${API}/signup`, {
+  const result = await apiPost<AuthResponse>(`${getAPI()}/signup`, {
     email,
     password: encryptedPassword,
     inviteCode,
@@ -356,7 +361,7 @@ export async function signup(
 
 export async function logout(): Promise<void> {
   try {
-    await apiPost<unknown>(`${API}/logout`, {});
+    await apiPost<unknown>(`${getAPI()}/logout`, {});
   } catch {
     /* best-effort */
   }
@@ -364,27 +369,27 @@ export async function logout(): Promise<void> {
 }
 
 export async function getUser(): Promise<AuthUser> {
-  return apiGet<AuthUser>(`${API}/me`);
+  return apiGet<AuthUser>(`${getAPI()}/me`);
 }
 
 export async function verify2FA(code: string): Promise<AuthResponse> {
-  const result = await apiPost<AuthResponse>(`${API}/2fa/verify`, { code });
+  const result = await apiPost<AuthResponse>(`${getAPI()}/2fa/verify`, { code });
   if (result.token && !result.requiresTwoFactor) storeAuthToken(result.token);
   return result;
 }
 
 export async function get2FASetup(): Promise<TwoFASetup> {
-  return apiGet<TwoFASetup>(`${API}/2fa/setup`);
+  return apiGet<TwoFASetup>(`${getAPI()}/2fa/setup`);
 }
 
 export async function enable2FA(code: string): Promise<AuthResponse> {
-  const result = await apiPost<AuthResponse>(`${API}/2fa/enable`, { code });
+  const result = await apiPost<AuthResponse>(`${getAPI()}/2fa/enable`, { code });
   if (result.token) storeAuthToken(result.token);
   return result;
 }
 
 export async function rollbackSignup(): Promise<void> {
-  await apiPost<unknown>(`${API}/signup/rollback`, {});
+  await apiPost<unknown>(`${getAPI()}/signup/rollback`, {});
   clearAuthToken();
 }
 
@@ -394,7 +399,7 @@ export async function rollbackSignup(): Promise<void> {
 export async function forgotPasswordRequest(
   email: string,
 ): Promise<AuthResponse> {
-  const result = await apiPost<AuthResponse>(`${API}/forgot-password/request`, {
+  const result = await apiPost<AuthResponse>(`${getAPI()}/forgot-password/request`, {
     email,
   });
   if (result.token) storeAuthToken(result.token);
@@ -405,7 +410,7 @@ export async function forgotPasswordRequest(
 export async function forgotPasswordVerify(
   code: string,
 ): Promise<AuthResponse> {
-  const result = await apiPost<AuthResponse>(`${API}/forgot-password/verify`, {
+  const result = await apiPost<AuthResponse>(`${getAPI()}/forgot-password/verify`, {
     code,
   });
   if (result.token) storeAuthToken(result.token);
@@ -417,7 +422,7 @@ export async function forgotPasswordReset(
   password: string,
 ): Promise<{ message: string }> {
   const encryptedPassword = await _encryptPassword(password);
-  return apiPost<{ message: string }>(`${API}/forgot-password/reset`, {
+  return apiPost<{ message: string }>(`${getAPI()}/forgot-password/reset`, {
     password: encryptedPassword,
   });
 }
@@ -431,7 +436,7 @@ export async function changePassword(
     _encryptPassword(currentPassword),
     _encryptPassword(newPassword),
   ]);
-  return apiPost<{ message: string }>(`${API}/change-password`, {
+  return apiPost<{ message: string }>(`${getAPI()}/change-password`, {
     current_password: encryptedCurrent,
     new_password: encryptedNew,
   });
@@ -440,7 +445,7 @@ export async function changePassword(
 export async function setTheme(theme: "light" | "dark"): Promise<void> {
   // Public pages also use the theme toggle; only persist to DB when authenticated.
   if (!getAuthToken()) return;
-  await apiFetch(`${API}/theme`, {
+  await apiFetch(`${getAPI()}/theme`, {
     method: "PUT",
     body: JSON.stringify({ theme }),
   });
@@ -461,7 +466,7 @@ export async function recordTopicVisit(
   topicIndex: number,
   completed = false,
 ): Promise<void> {
-  await apiPost<unknown>(`${API}/progress/topic`, {
+  await apiPost<unknown>(`${getAPI()}/progress/topic`, {
     course_id: courseId,
     topic_index: topicIndex,
     completed,
@@ -469,7 +474,7 @@ export async function recordTopicVisit(
 }
 
 export async function resetCourseProgress(courseId: number): Promise<void> {
-  await apiFetch(`${API}/progress/course`, {
+  await apiFetch(`${getAPI()}/progress/course`, {
     method: "DELETE",
     body: JSON.stringify({ course_id: courseId }),
   });
@@ -506,8 +511,6 @@ async function apiFetch(path: string, init: RequestInit): Promise<void> {
 }
 
 // ─── Admin CRUD helpers ───────────────────────────────────────────────────────
-
-const ADMIN_API = `${BACKEND}/api/admin`;
 
 export interface AdminUser {
   id: number;
@@ -562,7 +565,7 @@ async function adminApiCall<T>(
 }
 
 export async function adminGetUsers(): Promise<AdminUser[]> {
-  return adminApiCall<AdminUser[]>(`${ADMIN_API}/users`, "GET");
+  return adminApiCall<AdminUser[]>(`${getAdminAPI()}/users`, "GET");
 }
 
 export async function adminCreateUser(
@@ -570,7 +573,7 @@ export async function adminCreateUser(
   name: string | null,
   role_id: number,
 ): Promise<AdminCreateResult> {
-  return adminApiCall<AdminCreateResult>(`${ADMIN_API}/users/create`, "POST", {
+  return adminApiCall<AdminCreateResult>(`${getAdminAPI()}/users/create`, "POST", {
     email,
     name,
     role_id,
@@ -584,24 +587,24 @@ export async function adminEditUser(
   role_id: number,
 ): Promise<{ success: boolean }> {
   return adminApiCall<{ success: boolean }>(
-    `${ADMIN_API}/users/${userId}/edit`,
+    `${getAdminAPI()}/users/${userId}/edit`,
     "PATCH",
     { email, name, role_id },
   );
 }
 
 export async function adminDeleteUser(userId: number): Promise<{ success: boolean }> {
-  return adminApiCall<{ success: boolean }>(`${ADMIN_API}/users/${userId}`, "DELETE");
+  return adminApiCall<{ success: boolean }>(`${getAdminAPI()}/users/${userId}`, "DELETE");
 }
 
 export async function adminResetUserPassword(userId: number): Promise<AdminResetResult> {
-  return adminApiCall<AdminResetResult>(`${ADMIN_API}/users/${userId}/reset-password`, "POST");
+  return adminApiCall<AdminResetResult>(`${getAdminAPI()}/users/${userId}/reset-password`, "POST");
 }
 
 export async function adminGetSettings(): Promise<any> {
-  return adminApiCall<any>(`${ADMIN_API}/settings`, "GET");
+  return adminApiCall<any>(`${getAdminAPI()}/settings`, "GET");
 }
 
 export async function adminSaveSettings(settings: any): Promise<{ success: boolean }> {
-  return adminApiCall<{ success: boolean }>(`${ADMIN_API}/settings`, "POST", settings);
+  return adminApiCall<{ success: boolean }>(`${getAdminAPI()}/settings`, "POST", settings);
 }
