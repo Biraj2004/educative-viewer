@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 
 interface Topic {
     api_url: string;
@@ -53,6 +53,8 @@ export default function TopicSidebar({
         return validFromPath ? `${base}?from=${encodeURIComponent(validFromPath)}` : base;
     };
 
+    const [isCollapsed, setIsCollapsed] = useState(false);
+
     useEffect(() => {
         if (activeRef.current) {
             activeRef.current.scrollIntoView({ block: "center", behavior: "smooth" });
@@ -60,15 +62,28 @@ export default function TopicSidebar({
     }, [currentTopicIndex]);
 
     return (
-        <aside className={asideClassName ?? "w-72 shrink-0 hidden lg:flex flex-col sticky top-14 h-[calc(100vh-3.5rem)]"}>
-        <div className="h-full flex flex-col overflow-hidden">
+        <aside className={asideClassName ?? `shrink-0 hidden lg:flex flex-col sticky top-14 h-[calc(100vh-3.5rem)] transition-[width] duration-300 ease-in-out relative ${isCollapsed ? 'w-0' : 'w-72'}`}>
+            
+            {/* Toggle Button on the border line */}
+            <button 
+                onClick={() => setIsCollapsed(!isCollapsed)}
+                className="absolute top-1/2 -right-3.5 w-7 h-7 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-full flex items-center justify-center shadow-sm z-50 text-gray-500 hover:text-indigo-600 cursor-pointer transform -translate-y-1/2 hidden lg:flex"
+            >
+                {isCollapsed ? (
+                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" /></svg>
+                ) : (
+                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 19l-7-7 7-7" /></svg>
+                )}
+            </button>
+
+            <div className={`h-full flex flex-col overflow-hidden border-r border-gray-200 dark:border-gray-700 w-72 transition-opacity duration-300 ${isCollapsed ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
                 {/* Sidebar header */}
                 <div className="px-4 py-3 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 shrink-0">
                     <p className="text-[11px] font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider">Contents</p>
                 </div>
 
                 {/* Scrollable TOC */}
-                <div className="flex-1 overflow-y-auto bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-700">
+                <div className="flex-1 overflow-y-auto bg-white dark:bg-gray-900">
                     <nav aria-label="Course table of contents">
                         {tocEntries.map((entry, i) => {
                             if ('topics' in entry) {

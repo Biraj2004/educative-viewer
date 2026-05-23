@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useCallback, useRef } from "react";
+import { createPortal } from "react-dom";
 import TopicSidebar from "@/components/edu-viewer/TopicSidebar";
 import AppNavbar from "@/components/edu-viewer/AppNavbar";
 import UserMenu from "@/components/edu-viewer/UserMenu";
@@ -130,6 +131,11 @@ interface Props {
 
 export default function TopicLayoutClient({ courseId, slug, fromPath, course, topic, initialCompleted = [] }: Props) {
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [tocDrawerOpen, setTocDrawerOpen] = useState(false);
+  const [headings, setHeadings] = useState<{ idx: number; text: string; level: number }[]>([]);
+  const [activeHeadingIdx, setActiveHeadingIdx] = useState<number>(0);
+  const contentRef = useRef<HTMLDivElement>(null);
+
   const [currentTopic, setCurrentTopic] = useState<TopicDetail>(topic);
   const [topicChanging, setTopicChanging] = useState(false);
   const [completed, setCompleted] = useState<Set<number>>(() => new Set(initialCompleted));
@@ -141,6 +147,24 @@ export default function TopicLayoutClient({ courseId, slug, fromPath, course, to
   const fromPathsPage = Boolean(validFromPath?.startsWith("/dashboard/paths"));
   const fromProjectsPage = Boolean(validFromPath?.startsWith("/dashboard/projects"));
   const currentComponents = Array.isArray(currentTopic.components) ? currentTopic.components : [];
+  
+  // Calculate estimated reading time
+  const estimatedTime = React.useMemo(() => {
+    let wordCount = 0;
+    let interactiveCount = 0;
+    currentComponents.forEach(c => {
+      if (c.type === "SlateHTML" || c.type === "Markdown" || c.type === "MarkdownEditor") {
+        const text = typeof c.content?.html === "string" ? c.content.html.replace(/<[^>]+>/g, '') : JSON.stringify(c.content || {});
+        wordCount += text.split(/\s+/).length;
+      }
+      if (HEAVY_COMPONENT_TYPES.has(c.type)) interactiveCount++;
+    });
+    const wordsPerMinute = 200;
+    const readingTime = Math.ceil(wordCount / wordsPerMinute);
+    const interactiveTime = interactiveCount * 2; // ~2 mins per heavy component
+    return Math.max(1, readingTime + interactiveTime);
+  }, [currentComponents]);
+
   const sectionCrumb = fromPathsPage
     ? { label: "Paths", href: validFromPath ?? "/dashboard/paths" }
     : fromProjectsPage
@@ -155,6 +179,46 @@ export default function TopicLayoutClient({ courseId, slug, fromPath, course, to
   useEffect(() => { completedRef.current = completed; }, [completed]);
 
   // Signal the global NavProgressBar for in-page topic fetches
+  // Extract h1/h2/h3 headings from content — store index for reliable click-time lookup
+  useEffect(() => {
+    const extractHeadings = () => {
+      const container = contentRef.current;
+      if (!container) return;
+      const els = Array.from(
+        container.querySelectorAll("h1, h2, h3")
+      ).filter((el) => !el.closest("[data-component-badge]"));
+      if (els.length === 0) return;
+      setHeadings(els.map((el, idx) => ({
+        idx,
+        text: el.textContent?.trim() || "",
+        level: parseInt(el.tagName[1]),
+      })));
+    };
+    const t1 = setTimeout(extractHeadings, 600);
+    const t2 = setTimeout(extractHeadings, 2500);
+    return () => { clearTimeout(t1); clearTimeout(t2); };
+  }, [currentTopic.topic_index]);
+
+  // Track active heading on scroll using fresh DOM query
+  useEffect(() => {
+    const handleScroll = () => {
+      const container = contentRef.current;
+      if (!container || !headings.length) return;
+      const els = Array.from(
+        container.querySelectorAll("h1, h2, h3")
+      ).filter((el) => !el.closest("[data-component-badge]"));
+      const scrollY = window.scrollY + 130;
+      let active = 0;
+      els.forEach((el, i) => {
+        const top = (el as HTMLElement).getBoundingClientRect().top + window.scrollY;
+        if (scrollY >= top) active = i;
+      });
+      setActiveHeadingIdx(active);
+    };
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, [headings]);
+
   const topicChangingRef = useRef(false);
   useEffect(() => {
     if (topicChanging) {
@@ -365,14 +429,25 @@ export default function TopicLayoutClient({ courseId, slug, fromPath, course, to
         {/* Main content — natural page scroll */}
         <main className="flex-1 min-w-0">
 
+          {/* Estimated Reading Time */}
+          <div className="max-w-6xl mx-auto px-6 pt-8 pb-2">
+            <div className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white dark:bg-gray-800 text-gray-500 dark:text-gray-400 rounded-full text-[11px] uppercase tracking-wider font-semibold border border-gray-200 dark:border-gray-700 shadow-sm">
+              <svg className="w-3.5 h-3.5 text-gray-400 dark:text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <span>{estimatedTime} min read</span>
+            </div>
+          </div>
+
           {/* Components */}
-          <div className="max-w-6xl mx-auto px-6 py-8 space-y-6 topic-content-wrapper">
+          <div ref={contentRef} className="max-w-6xl mx-auto px-6 pb-8 pt-4 space-y-6 topic-content-wrapper">
             {currentComponents.map((comp, i) => {
               const renderer = getRenderer(comp.type);
               const subType =
                 typeof comp.content?.type === "string" ? comp.content.type : undefined;
               const componentLabel = `<${comp.type}-${i}>`;
               const isHeavy = HEAVY_COMPONENT_TYPES.has(comp.type);
+
               return (
                 <div key={i} className="relative">
                   {isHeavy ? (
@@ -382,7 +457,9 @@ export default function TopicLayoutClient({ courseId, slug, fromPath, course, to
                   ) : (
                     renderer ? renderer(comp.content) : <UnknownRenderer type={comp.type} />
                   )}
-                  <ComponentBadge componentName={componentLabel} subType={subType} />
+                  <div data-component-badge>
+                    <ComponentBadge componentName={componentLabel} subType={subType} />
+                  </div>
                 </div>
               );
             })}
@@ -467,6 +544,70 @@ export default function TopicLayoutClient({ courseId, slug, fromPath, course, to
 
         </main>
       </div>
+
+      {/* Floating TOC Toggle Button */}
+      <button
+        onClick={() => setTocDrawerOpen(o => !o)}
+        className="hidden lg:flex fixed right-0 top-1/2 -translate-y-1/2 z-40 flex-col items-center gap-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 border-r-0 rounded-l-xl px-2 py-3 shadow-md text-gray-500 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors cursor-pointer"
+        title="On this page"
+      >
+        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h7" />
+        </svg>
+        <span className="text-[9px] font-semibold uppercase tracking-wide [writing-mode:vertical-rl] rotate-180">TOC</span>
+      </button>
+
+      {/* Slide-out TOC Drawer */}
+      {tocDrawerOpen && (
+        <div className="fixed inset-0 z-50">
+          <div className="absolute inset-0 bg-black/40" onClick={() => setTocDrawerOpen(false)} />
+          <div className="absolute right-0 top-0 bottom-0 w-80 bg-white dark:bg-gray-900 border-l border-gray-200 dark:border-gray-800 shadow-2xl flex flex-col">
+            <div className="flex items-center justify-between px-6 py-5 border-b border-gray-200 dark:border-gray-800 shrink-0">
+              <h2 className="text-sm font-bold text-gray-900 dark:text-gray-100 uppercase tracking-wider">On this page</h2>
+              <button onClick={() => setTocDrawerOpen(false)} className="p-1 text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 cursor-pointer">
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-6">
+              {headings.length === 0 ? (
+                <p className="text-sm text-gray-500">No headings detected yet.</p>
+              ) : (
+                <ul className="space-y-3 text-[13px]">
+                  {headings.map((h) => (
+                    <li key={h.idx} style={{ paddingLeft: `${(h.level - 1) * 0.75}rem` }}>
+                      <button
+                        onClick={() => {
+                          setTocDrawerOpen(false);
+                          // Re-query heading at click time to get fresh position
+                          requestAnimationFrame(() => {
+                            const container = contentRef.current;
+                            if (!container) return;
+                            const els = Array.from(
+                              container.querySelectorAll("h1, h2, h3")
+                            ).filter((el) => !el.closest("[data-component-badge]"));
+                            const el = els[h.idx] as HTMLElement | undefined;
+                            if (el) {
+                              const top = el.getBoundingClientRect().top + window.scrollY - 80;
+                              window.scrollTo({ top, behavior: "smooth" });
+                            }
+                          });
+                        }}
+                        className={`text-left w-full py-0.5 transition-colors hover:text-indigo-600 dark:hover:text-indigo-400 cursor-pointer ${
+                          activeHeadingIdx === h.idx
+                            ? "text-indigo-600 dark:text-indigo-400 font-semibold"
+                            : "text-gray-600 dark:text-gray-400"
+                        }`}
+                      >
+                        {h.text}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Floating Course Chatbot */}
       <CourseChatbot topicTitle={currentTopic.topic_name} topicContext={topicContext} />

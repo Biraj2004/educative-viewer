@@ -360,8 +360,16 @@ function ResizableLayout({
 
 function SandpackView({ data }: { data: SandpackData }) {
   const [resetKey, setResetKey] = useState(0);
+  const [isFullscreen, setIsFullscreen] = useState(false);
   const isDark = useDarkMode();
   const template = resolveSandpackTemplate(data.template);
+
+  useEffect(() => {
+    if (!isFullscreen) return;
+    const handler = (e: KeyboardEvent) => { if (e.key === "Escape") setIsFullscreen(false); };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [isFullscreen]);
 
   // Build raw file map
   const rawFiles = useMemo<FileMap>(() => {
@@ -400,7 +408,9 @@ function SandpackView({ data }: { data: SandpackData }) {
   const showEditor = !data.hideEditor;
   const showPreview = !data.hideOutput;
   const showConsole = !data.hideConsole && template !== "static";
-  const panelHeight = Math.max(data.codeHeight ?? 0, data.outputHeight ?? 0, 350);
+  const panelHeight = isFullscreen
+    ? Math.max(window.innerHeight - 42 - (showConsole ? 150 + 1 : 0) - 42, 400) // 42px toolbar + 42px our header
+    : Math.max(data.codeHeight ?? 0, data.outputHeight ?? 0, 350);
   const consoleHeight = 150;
 
   // Show skeleton while media is being fetched and encoded
@@ -416,7 +426,10 @@ function SandpackView({ data }: { data: SandpackData }) {
   }
 
   return (
-    <>
+    <div className={isFullscreen
+      ? "fixed inset-0 z-[200] flex flex-col bg-white dark:bg-gray-900"
+      : "rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden bg-white dark:bg-gray-900"
+    }>
       <SandpackStyles />
       <SandpackProvider
         key={resetKey}
@@ -429,18 +442,20 @@ function SandpackView({ data }: { data: SandpackData }) {
           externalResources: [],
         }}
       >
-        <ResizableLayout
-          showEditor={showEditor}
-          showPreview={showPreview}
-          showConsole={showConsole}
-          panelHeight={panelHeight}
-          consoleHeight={consoleHeight}
-          isDark={isDark}
-        />
+        <div className={isFullscreen ? "flex-1 overflow-hidden" : ""}>
+          <ResizableLayout
+            showEditor={showEditor}
+            showPreview={showPreview}
+            showConsole={showConsole}
+            panelHeight={panelHeight}
+            consoleHeight={consoleHeight}
+            isDark={isDark}
+          />
+        </div>
       </SandpackProvider>
 
       {/* ── Toolbar ── */}
-      <div className="border-t border-gray-200 dark:border-gray-700 px-4 py-2 flex items-center gap-2 bg-gray-50 dark:bg-gray-800">
+      <div className="border-t border-gray-200 dark:border-gray-700 px-4 py-2 flex items-center gap-2 bg-gray-50 dark:bg-gray-800 shrink-0">
         <button
           onClick={() => setResetKey((k) => k + 1)}
           title="Reset all files to original"
@@ -449,13 +464,30 @@ function SandpackView({ data }: { data: SandpackData }) {
           <ResetIcon />
           Reset
         </button>
+        {/* Fullscreen toggle */}
+        <button
+          onClick={() => setIsFullscreen(f => !f)}
+          title={isFullscreen ? "Exit fullscreen" : "Expand fullscreen"}
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors cursor-pointer ml-1"
+        >
+          {isFullscreen ? (
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M8 3v4a1 1 0 01-1 1H3m18 0h-4a1 1 0 01-1-1V3m0 18v-4a1 1 0 011-1h4M3 16h4a1 1 0 011 1v4" />
+            </svg>
+          ) : (
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M4 8V4h4M16 4h4v4M4 16v4h4M20 16v4h-4" />
+            </svg>
+          )}
+          {isFullscreen ? "Exit" : "Expand"}
+        </button>
         {data.caption && (
           <span className="ml-auto text-xs text-gray-400 dark:text-gray-500 italic">
             {data.caption}
           </span>
         )}
       </div>
-    </>
+    </div>
   );
 }
 
@@ -481,10 +513,11 @@ export default function Sandpack({ data }: { data: SandpackData }) {
   }
 
   return (
+    // NOTE: SandpackView manages its own isFullscreen state internally.
+    // When fullscreen, it applies fixed inset-0 to its OWN wrapper via the inner div,
+    // which correctly escapes parent overflow containers without remounting.
     <div className="max-w-6xl mx-auto px-4 py-4">
-      <div className="rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden bg-white dark:bg-gray-900">
-        <SandpackView data={data} />
-      </div>
+      <SandpackView data={data} />
     </div>
   );
 }
