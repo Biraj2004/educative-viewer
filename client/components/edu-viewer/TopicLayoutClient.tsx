@@ -135,6 +135,7 @@ interface Props {
   initialCompleted?: number[];
   initialBookmarked?: number[];
   initialHighlights?: Record<string, ViewerHighlight[]>;
+  initialHighlightColor?: HighlightColor;
   highlightsEnabled?: boolean;
   bookmarksEnabled?: boolean;
   notesEnabled?: boolean;
@@ -222,6 +223,7 @@ export default function TopicLayoutClient({
   initialCompleted = [],
   initialBookmarked = [],
   initialHighlights = {},
+  initialHighlightColor = "yellow",
   highlightsEnabled = true,
   bookmarksEnabled = true,
   notesEnabled = true,
@@ -242,7 +244,8 @@ export default function TopicLayoutClient({
     () => initialHighlights
   );
   const [selectedText, setSelectedText] = useState("");
-  const [selectedColor, setSelectedColor] = useState<HighlightColor>("yellow");
+  const [selectedColor, setSelectedColor] = useState<HighlightColor>(() => normalizeHighlightColor(initialHighlightColor));
+  const [selectionColorPaletteOpen, setSelectionColorPaletteOpen] = useState(false);
   const [newHighlightNote, setNewHighlightNote] = useState("");
   const [noteDraftById, setNoteDraftById] = useState<Record<string, string>>({});
   const [savingNoteById, setSavingNoteById] = useState<Record<string, boolean>>({});
@@ -636,6 +639,7 @@ export default function TopicLayoutClient({
       setSelectedText("");
       selectedOffsetsRef.current = null;
       setSelectionAction((prev) => ({ ...prev, visible: false }));
+      setSelectionColorPaletteOpen(false);
       return "";
     }
 
@@ -644,6 +648,7 @@ export default function TopicLayoutClient({
       setSelectedText("");
       selectedOffsetsRef.current = null;
       setSelectionAction((prev) => ({ ...prev, visible: false }));
+      setSelectionColorPaletteOpen(false);
       return "";
     }
 
@@ -667,6 +672,7 @@ export default function TopicLayoutClient({
       setSelectedText("");
       selectedOffsetsRef.current = null;
       setSelectionAction((prev) => ({ ...prev, visible: false }));
+      setSelectionColorPaletteOpen(false);
       return "";
     }
 
@@ -675,6 +681,7 @@ export default function TopicLayoutClient({
       setSelectedText("");
       selectedOffsetsRef.current = null;
       setSelectionAction((prev) => ({ ...prev, visible: false }));
+      setSelectionColorPaletteOpen(false);
       return "";
     }
     if (
@@ -692,6 +699,7 @@ export default function TopicLayoutClient({
       selectedOffsetsRef.current = null;
     }
     setSelectedText(text);
+    setSelectionColorPaletteOpen(false);
     const rect = range.getBoundingClientRect();
     const nextX = Math.min(window.innerWidth - 20, Math.max(20, rect.left + (rect.width / 2)));
     const wantsBelow = rect.bottom + 56 < window.innerHeight;
@@ -705,14 +713,14 @@ export default function TopicLayoutClient({
     return text;
   }, [getComponentScopeFromNode, getRangeOffsetsWithinContainer, highlightsEnabled]);
 
-  const handleAddHighlight = useCallback(() => {
+  const handleAddHighlight = useCallback((overrideColor?: HighlightColor) => {
     if (!highlightsEnabled) return;
     const text = (selectedTextRef.current || captureSelectionFromTopicContent()).trim();
     if (!text) return;
     const topicKey = String(currentTopic.topic_index);
     const selectedOffsets = selectedOffsetsRef.current;
     const note = notesEnabled ? newHighlightNote.trim().slice(0, 800) : "";
-    const color = normalizeHighlightColor(selectedColor);
+    const color = normalizeHighlightColor(overrideColor ?? selectedColor);
     const existing = currentTopicHighlights;
     const overlaps: ViewerHighlight[] = [];
     let mergedStart = selectedOffsets?.start ?? null;
@@ -760,6 +768,7 @@ export default function TopicLayoutClient({
     setSelectedText("");
     setNewHighlightNote("");
     selectedOffsetsRef.current = null;
+    setSelectionColorPaletteOpen(false);
     const sel = window.getSelection();
     sel?.removeAllRanges();
     setSelectionAction((prev) => ({ ...prev, visible: false }));
@@ -777,6 +786,7 @@ export default function TopicLayoutClient({
 
     Promise.all(removeOps).then(() => updateViewerCourseSettings({
       course_id: courseId,
+      last_highlight_color: color,
       add_highlight: {
         topic_index: currentTopic.topic_index,
         text,
@@ -802,6 +812,7 @@ export default function TopicLayoutClient({
     notesEnabled,
     newHighlightNote,
     selectedColor,
+    setSelectionColorPaletteOpen,
   ]);
 
   const handleRemoveHighlight = useCallback((highlightId: string) => {
@@ -843,9 +854,17 @@ export default function TopicLayoutClient({
     });
   }, [courseId, currentTopic.topic_index, noteDraftById, notesEnabled]);
 
+  const persistLastHighlightColor = useCallback((color: HighlightColor) => {
+    updateViewerCourseSettings({
+      course_id: courseId,
+      last_highlight_color: normalizeHighlightColor(color),
+    }).catch(() => { });
+  }, [courseId]);
+
   const handleSaveHighlightColor = useCallback((highlightId: string, color: HighlightColor) => {
     const topicKey = String(currentTopic.topic_index);
     const normalizedColor = normalizeHighlightColor(color);
+    setSelectedColor(normalizedColor);
     setHighlightsByTopic((prev) => {
       const rows = prev[topicKey] ?? [];
       return {
@@ -857,6 +876,7 @@ export default function TopicLayoutClient({
     });
     updateViewerCourseSettings({
       course_id: courseId,
+      last_highlight_color: normalizedColor,
       update_highlight_color: {
         topic_index: currentTopic.topic_index,
         highlight_id: highlightId,
@@ -868,6 +888,14 @@ export default function TopicLayoutClient({
       setHighlightsByTopic(highlights);
     }).catch(() => { });
   }, [courseId, currentTopic.topic_index]);
+
+  const handleSelectionColorPick = useCallback((color: HighlightColor) => {
+    const normalizedColor = normalizeHighlightColor(color);
+    setSelectedColor(normalizedColor);
+    setSelectionColorPaletteOpen(false);
+    persistLastHighlightColor(normalizedColor);
+    handleAddHighlight(normalizedColor);
+  }, [handleAddHighlight, persistLastHighlightColor]);
 
   const handleClearTopicHighlights = useCallback(() => {
     const topicKey = String(currentTopic.topic_index);
@@ -1012,12 +1040,15 @@ export default function TopicLayoutClient({
       if (!target) return;
       const targetEl = target instanceof Element ? target : target.parentElement;
       if (targetEl?.closest("[data-highlight-action='1']")) return;
+      if (targetEl?.closest("[data-highlight-palette='1']")) return;
       const container = contentRef.current;
       if (container && container.contains(target)) return;
       setSelectionAction((prev) => ({ ...prev, visible: false }));
+      setSelectionColorPaletteOpen(false);
     };
     const onScroll = () => {
       setSelectionAction((prev) => ({ ...prev, visible: false }));
+      setSelectionColorPaletteOpen(false);
     };
     document.addEventListener("mousedown", onOutsidePointerDown);
     window.addEventListener("scroll", onScroll, { passive: true });
@@ -1154,6 +1185,7 @@ export default function TopicLayoutClient({
     setNewHighlightNote("");
     selectedOffsetsRef.current = null;
     setSelectionAction((prev) => ({ ...prev, visible: false }));
+    setSelectionColorPaletteOpen(false);
   }, [currentTopic.topic_index]);
 
   // Track reading progress bar and persist last visited topic in auth DB
@@ -1537,7 +1569,10 @@ export default function TopicLayoutClient({
                       <button
                         key={`new-${color}`}
                         type="button"
-                        onClick={() => setSelectedColor(color)}
+                        onClick={() => {
+                          setSelectedColor(color);
+                          persistLastHighlightColor(color);
+                        }}
                         className={[
                           "w-5 h-5 rounded-full border-2 transition-colors cursor-pointer",
                           HIGHLIGHT_SWATCH_CLASS[color],
@@ -1657,27 +1692,75 @@ export default function TopicLayoutClient({
       )}
 
       {highlightsEnabled && selectionAction.visible && selectedText && (
-        <button
-          data-highlight-action="1"
-          onPointerDown={(e) => { e.stopPropagation(); }}
-          onClick={handleAddHighlight}
-          className="fixed z-50 inline-flex items-center justify-center w-8 h-8 rounded-full border border-indigo-300 dark:border-indigo-700 bg-white dark:bg-gray-900 text-indigo-600 dark:text-indigo-400 shadow-lg hover:scale-105 transition-transform cursor-pointer"
-          style={{
-            left: `${selectionAction.x}px`,
-            top: `${selectionAction.y}px`,
-            transform:
-              selectionAction.placement === "below"
-                ? "translate(-50%, 0%)"
-                : "translate(-50%, -100%)",
-          }}
-          aria-label="Add highlight"
-          title="Add highlight"
-        >
-          <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round">
-            <path d="M15 4H6a2 2 0 0 0-2 2v14l5-2 5 2V6a2 2 0 0 0-2-2Z" />
-            <path d="M18 9v6M21 12h-6" />
-          </svg>
-        </button>
+        <>
+          {selectionColorPaletteOpen && (
+            <div
+              data-highlight-palette="1"
+              className="fixed z-50 rounded-full border border-indigo-200 dark:border-indigo-800 bg-white/95 dark:bg-gray-900/95 backdrop-blur px-2 py-1 shadow-lg flex items-center gap-1.5"
+              style={{
+                left: `${selectionAction.x}px`,
+                top: `${selectionAction.y}px`,
+                transform:
+                  selectionAction.placement === "below"
+                    ? "translate(-50%, calc(-100% - 0.55rem))"
+                    : "translate(-50%, 0.55rem)",
+              }}
+            >
+              {HIGHLIGHT_COLORS.map((color) => (
+                <button
+                  key={`picker-${color}`}
+                  type="button"
+                  onPointerDown={(e) => { e.stopPropagation(); }}
+                  onClick={() => handleSelectionColorPick(color)}
+                  className={[
+                    "w-7 h-7 rounded-full border-2 transition-colors cursor-pointer",
+                    HIGHLIGHT_SWATCH_CLASS[color],
+                    normalizeHighlightColor(selectedColor) === color
+                      ? "border-indigo-600 dark:border-indigo-300"
+                      : "border-white/70 dark:border-gray-900/60",
+                  ].join(" ")}
+                  title={`Highlight in ${color}`}
+                  aria-label={`Highlight in ${color}`}
+                />
+              ))}
+            </div>
+          )}
+          <button
+            data-highlight-action="1"
+            onPointerDown={(e) => { e.stopPropagation(); }}
+            onClick={() => {
+              if (!selectionColorPaletteOpen) {
+                setSelectionColorPaletteOpen(true);
+                persistLastHighlightColor(selectedColor);
+                return;
+              }
+              handleAddHighlight();
+            }}
+            className="fixed z-50 inline-flex items-center justify-center w-9 h-9 rounded-full border border-indigo-300 dark:border-indigo-700 bg-white dark:bg-gray-900 text-indigo-600 dark:text-indigo-400 shadow-lg hover:scale-105 transition-transform cursor-pointer"
+            style={{
+              left: `${selectionAction.x}px`,
+              top: `${selectionAction.y}px`,
+              transform:
+                selectionAction.placement === "below"
+                  ? "translate(-50%, 0%)"
+                  : "translate(-50%, -100%)",
+            }}
+            aria-label="Add highlight"
+            title={selectionColorPaletteOpen ? "Add highlight with selected color" : "Choose highlight color"}
+          >
+            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round">
+              <path d="M15 4H6a2 2 0 0 0-2 2v14l5-2 5 2V6a2 2 0 0 0-2-2Z" />
+              <path d="M18 9v6M21 12h-6" />
+            </svg>
+            <span
+              className={[
+                "absolute -right-0.5 -bottom-0.5 w-3 h-3 rounded-full border border-white dark:border-gray-900",
+                HIGHLIGHT_SWATCH_CLASS[normalizeHighlightColor(selectedColor)],
+              ].join(" ")}
+              aria-hidden="true"
+            />
+          </button>
+        </>
       )}
 
       {/* Floating Course Chatbot */}

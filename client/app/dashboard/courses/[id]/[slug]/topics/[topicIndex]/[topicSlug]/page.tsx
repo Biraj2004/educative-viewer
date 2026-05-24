@@ -38,6 +38,8 @@ interface TopicDetail {
   topic_url: string;
 }
 
+type HighlightColor = "yellow" | "blue" | "green" | "pink" | "orange";
+
 interface Topic {
   api_url: string;
   course_id: number;
@@ -85,6 +87,7 @@ export default function TopicDetailPage() {
   const [initialCompleted, setInitialCompleted] = useState<number[]>([]);
   const [initialBookmarked, setInitialBookmarked] = useState<number[]>([]);
   const [initialHighlights, setInitialHighlights] = useState<Record<string, ViewerHighlight[]>>({});
+  const [initialHighlightColor, setInitialHighlightColor] = useState<HighlightColor>("yellow");
   const [highlightsEnabled, setHighlightsEnabled] = useState(true);
   const [bookmarksEnabled, setBookmarksEnabled] = useState(true);
   const [notesEnabled, setNotesEnabled] = useState(true);
@@ -150,6 +153,12 @@ export default function TopicDetailPage() {
             setNotesEnabled(viewerPayload.features.notes_enabled !== false);
             const viewerSettings = viewerPayload.settings;
             const viewerCourse = viewerSettings?.courses?.[String(courseId)];
+            const rawColor = String(viewerCourse?.last_highlight_color || "").trim().toLowerCase();
+            setInitialHighlightColor(
+              rawColor === "yellow" || rawColor === "blue" || rawColor === "green" || rawColor === "pink" || rawColor === "orange"
+                ? (rawColor as HighlightColor)
+                : "yellow"
+            );
             setInitialBookmarked(Array.isArray(viewerCourse?.bookmarks) ? viewerCourse.bookmarks : []);
             setInitialHighlights(
               viewerCourse?.highlights && typeof viewerCourse.highlights === "object"
@@ -244,6 +253,7 @@ export default function TopicDetailPage() {
       initialCompleted={initialCompleted}
       initialBookmarked={initialBookmarked}
       initialHighlights={initialHighlights}
+      initialHighlightColor={initialHighlightColor}
       highlightsEnabled={highlightsEnabled}
       bookmarksEnabled={bookmarksEnabled}
       notesEnabled={notesEnabled}

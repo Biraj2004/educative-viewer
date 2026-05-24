@@ -656,6 +656,8 @@ def create_auth_blueprint(auth_service: AuthService, db_manager: DBManager) -> B
 
             if "last_topic_index" in body:
                 course_state["last_topic_index"] = _to_int(body.get("last_topic_index"), "last_topic_index")
+            if "last_highlight_color" in body:
+                course_state["last_highlight_color"] = _normalize_highlight_color(body.get("last_highlight_color"))
 
             if "bookmark_topic_index" in body:
                 if not bookmarks_enabled:

@@ -234,6 +234,7 @@ export interface ViewerHighlight {
 
 export interface CourseViewerSettings {
   last_topic_index?: number;
+  last_highlight_color?: "yellow" | "blue" | "green" | "pink" | "orange";
   bookmarks?: number[];
   highlights?: Record<string, ViewerHighlight[]>;
 }
@@ -558,6 +559,7 @@ export async function getViewerSettings(): Promise<ViewerSettingsPayload> {
 export interface UpdateViewerCourseSettingsPayload {
   course_id: number;
   last_topic_index?: number;
+  last_highlight_color?: "yellow" | "blue" | "green" | "pink" | "orange";
   bookmark_topic_index?: number;
   bookmarked?: boolean;
   add_highlight?: {
