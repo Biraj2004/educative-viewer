@@ -225,6 +225,7 @@ export interface ViewerHighlight {
   text: string;
   context?: string;
   note?: string;
+  color?: "yellow" | "blue" | "green" | "pink" | "orange";
   created_at?: string;
   start_offset?: number | null;
   end_offset?: number | null;
@@ -564,6 +565,7 @@ export interface UpdateViewerCourseSettingsPayload {
     text: string;
     context?: string;
     note?: string;
+    color?: "yellow" | "blue" | "green" | "pink" | "orange";
     start_offset?: number;
     end_offset?: number;
     component_index?: number;
@@ -576,6 +578,11 @@ export interface UpdateViewerCourseSettingsPayload {
     topic_index: number;
     highlight_id: string;
     note: string;
+  };
+  update_highlight_color?: {
+    topic_index: number;
+    highlight_id: string;
+    color: "yellow" | "blue" | "green" | "pink" | "orange";
   };
   clear_highlights_topic_index?: number;
 }

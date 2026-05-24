@@ -102,6 +102,7 @@ export default function GlobalSettingsPage() {
   };
 
   const handleJsonFormat = (fieldName: string) => {
+    if (!settings) return;
     try {
       const formatted = JSON.stringify(JSON.parse(settings[fieldName] || ""), null, 2);
       setSettings({ ...settings, [fieldName]: formatted });
@@ -116,6 +117,7 @@ export default function GlobalSettingsPage() {
   };
 
   const handleSave = async () => {
+    if (!settings) return;
     setLoading(true);
     try {
       // Validate JSON before saving

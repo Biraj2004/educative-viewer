@@ -140,6 +140,40 @@ interface Props {
   notesEnabled?: boolean;
 }
 
+type HighlightColor = "yellow" | "blue" | "green" | "pink" | "orange";
+
+const HIGHLIGHT_COLORS: ReadonlyArray<HighlightColor> = [
+  "yellow",
+  "blue",
+  "green",
+  "pink",
+  "orange",
+];
+
+const HIGHLIGHT_MARK_CLASS: Record<HighlightColor, string> = {
+  yellow: "bg-yellow-200/80 dark:bg-yellow-500/35",
+  blue: "bg-blue-200/75 dark:bg-blue-500/35",
+  green: "bg-emerald-200/75 dark:bg-emerald-500/35",
+  pink: "bg-pink-200/75 dark:bg-pink-500/35",
+  orange: "bg-orange-200/80 dark:bg-orange-500/35",
+};
+
+const HIGHLIGHT_SWATCH_CLASS: Record<HighlightColor, string> = {
+  yellow: "bg-yellow-400",
+  blue: "bg-blue-500",
+  green: "bg-emerald-500",
+  pink: "bg-pink-500",
+  orange: "bg-orange-500",
+};
+
+function normalizeHighlightColor(color: unknown): HighlightColor {
+  const normalized = String(color || "").trim().toLowerCase();
+  if (normalized === "yellow" || normalized === "blue" || normalized === "green" || normalized === "pink" || normalized === "orange") {
+    return normalized;
+  }
+  return "yellow";
+}
+
 const TopicComponentsList = React.memo(function TopicComponentsList({
   currentComponents,
   topicIndex,
@@ -208,6 +242,7 @@ export default function TopicLayoutClient({
     () => initialHighlights
   );
   const [selectedText, setSelectedText] = useState("");
+  const [selectedColor, setSelectedColor] = useState<HighlightColor>("yellow");
   const [newHighlightNote, setNewHighlightNote] = useState("");
   const [noteDraftById, setNoteDraftById] = useState<Record<string, string>>({});
   const [savingNoteById, setSavingNoteById] = useState<Record<string, boolean>>({});
@@ -386,8 +421,6 @@ export default function TopicLayoutClient({
     }).catch(() => { });
   }, [bookmarked, bookmarksEnabled, courseId, currentTopic.topic_index]);
 
-  const highlightClassName = "bg-yellow-200/80 dark:bg-yellow-500/35 text-inherit rounded px-0.5";
-
   const unwrapUserHighlights = useCallback((container: HTMLElement) => {
     const highlights = Array.from(
       container.querySelectorAll(`mark[${USER_HIGHLIGHT_ATTR}="1"]`)
@@ -444,7 +477,13 @@ export default function TopicLayoutClient({
     return nodes;
   }, [isSelectableTextNode]);
 
-  const wrapTextSegment = useCallback((textNode: Text, startOffset: number, endOffset: number, highlightId: string) => {
+  const wrapTextSegment = useCallback((
+    textNode: Text,
+    startOffset: number,
+    endOffset: number,
+    highlightId: string,
+    color: HighlightColor,
+  ) => {
     const text = textNode.nodeValue ?? "";
     const safeStart = Math.max(0, Math.min(startOffset, text.length));
     const safeEnd = Math.max(safeStart, Math.min(endOffset, text.length));
@@ -460,14 +499,21 @@ export default function TopicLayoutClient({
     const mark = document.createElement("mark");
     mark.setAttribute(USER_HIGHLIGHT_ATTR, "1");
     mark.setAttribute("data-highlight-id", highlightId);
-    mark.className = highlightClassName;
+    mark.setAttribute("data-highlight-color", color);
+    mark.className = `${HIGHLIGHT_MARK_CLASS[color]} text-inherit rounded px-0.5`;
     mark.textContent = middle;
     frag.appendChild(mark);
     if (after) frag.appendChild(document.createTextNode(after));
     parent.replaceChild(frag, textNode);
   }, [USER_HIGHLIGHT_ATTR]);
 
-  const addMarkByOffsets = useCallback((container: HTMLElement, start: number, end: number, highlightId: string) => {
+  const addMarkByOffsets = useCallback((
+    container: HTMLElement,
+    start: number,
+    end: number,
+    highlightId: string,
+    color: HighlightColor,
+  ) => {
     if (start < 0 || end <= start) return false;
     const nodes = getSelectableTextNodes(container);
     if (nodes.length === 0) return false;
@@ -482,7 +528,7 @@ export default function TopicLayoutClient({
       const overlapEnd = Math.min(end, nodeEnd);
       if (overlapEnd > overlapStart) {
         if (isMarkableTextNode(node)) {
-          wrapTextSegment(node, overlapStart - nodeStart, overlapEnd - nodeStart, highlightId);
+          wrapTextSegment(node, overlapStart - nodeStart, overlapEnd - nodeStart, highlightId, color);
           applied = true;
         }
       }
@@ -547,7 +593,12 @@ export default function TopicLayoutClient({
     return { start, end };
   }, [getSelectableTextNodes, isSelectableTextNode]);
 
-  const applyHighlightByText = useCallback((container: HTMLElement, text: string, highlightId: string) => {
+  const applyHighlightByText = useCallback((
+    container: HTMLElement,
+    text: string,
+    highlightId: string,
+    color: HighlightColor,
+  ) => {
     const target = text.trim();
     if (!target) return false;
 
@@ -570,7 +621,7 @@ export default function TopicLayoutClient({
         const end = matchIdx + target.length;
         const safeStart = Math.max(0, Math.min(matchIdx, original.length));
         const safeEnd = Math.max(safeStart, Math.min(end, original.length));
-        wrapTextSegment(node, safeStart, safeEnd, highlightId);
+        wrapTextSegment(node, safeStart, safeEnd, highlightId, color);
         return true;
       }
       current = walker.nextNode();
@@ -661,6 +712,7 @@ export default function TopicLayoutClient({
     const topicKey = String(currentTopic.topic_index);
     const selectedOffsets = selectedOffsetsRef.current;
     const note = notesEnabled ? newHighlightNote.trim().slice(0, 800) : "";
+    const color = normalizeHighlightColor(selectedColor);
     const existing = currentTopicHighlights;
     const overlaps: ViewerHighlight[] = [];
     let mergedStart = selectedOffsets?.start ?? null;
@@ -694,6 +746,7 @@ export default function TopicLayoutClient({
       id: optimisticId,
       text,
       note,
+      color,
       start_offset: mergedStart,
       end_offset: mergedEnd,
       component_index: mergedComponentIndex,
@@ -727,6 +780,7 @@ export default function TopicLayoutClient({
       add_highlight: {
         topic_index: currentTopic.topic_index,
         text,
+        color,
         ...(note ? { note } : {}),
         ...(mergedStart !== null && mergedEnd !== null && mergedComponentIndex !== null ? {
           start_offset: mergedStart,
@@ -747,6 +801,7 @@ export default function TopicLayoutClient({
     highlightsEnabled,
     notesEnabled,
     newHighlightNote,
+    selectedColor,
   ]);
 
   const handleRemoveHighlight = useCallback((highlightId: string) => {
@@ -788,6 +843,32 @@ export default function TopicLayoutClient({
     });
   }, [courseId, currentTopic.topic_index, noteDraftById, notesEnabled]);
 
+  const handleSaveHighlightColor = useCallback((highlightId: string, color: HighlightColor) => {
+    const topicKey = String(currentTopic.topic_index);
+    const normalizedColor = normalizeHighlightColor(color);
+    setHighlightsByTopic((prev) => {
+      const rows = prev[topicKey] ?? [];
+      return {
+        ...prev,
+        [topicKey]: rows.map((item) => (
+          item.id === highlightId ? { ...item, color: normalizedColor } : item
+        )),
+      };
+    });
+    updateViewerCourseSettings({
+      course_id: courseId,
+      update_highlight_color: {
+        topic_index: currentTopic.topic_index,
+        highlight_id: highlightId,
+        color: normalizedColor,
+      },
+    }).then((courseState) => {
+      const highlights = courseState?.highlights;
+      if (!highlights || typeof highlights !== "object") return;
+      setHighlightsByTopic(highlights);
+    }).catch(() => { });
+  }, [courseId, currentTopic.topic_index]);
+
   const handleClearTopicHighlights = useCallback(() => {
     const topicKey = String(currentTopic.topic_index);
     setHighlightsByTopic((prev) => {
@@ -812,6 +893,7 @@ export default function TopicLayoutClient({
   const handleJumpToHighlight = useCallback((item: ViewerHighlight) => {
     const container = contentRef.current;
     const highlightId = String(item.id || "").trim();
+    const color = normalizeHighlightColor(item.color);
     if (!container || !highlightId) return;
 
     const findMark = () => {
@@ -842,9 +924,9 @@ export default function TopicLayoutClient({
         && typeof end === "number"
         && Number.isFinite(end)
       ) {
-        addMarkByOffsets(targetContainer, start, end, highlightId);
+        addMarkByOffsets(targetContainer, start, end, highlightId, color);
       } else {
-        applyHighlightByText(targetContainer, item.text, highlightId);
+        applyHighlightByText(targetContainer, item.text, highlightId, color);
       }
       mark = findMark();
     }
@@ -973,6 +1055,7 @@ export default function TopicLayoutClient({
     );
     const applyOne = (item: ViewerHighlight, idx: number) => {
       const id = (item.id && item.id.trim()) ? item.id : `generated-${idx}`;
+      const color = normalizeHighlightColor(item.color);
       const componentIndex = item.component_index;
       const scopedContainer = (
         typeof componentIndex === "number" && Number.isFinite(componentIndex)
@@ -988,10 +1071,10 @@ export default function TopicLayoutClient({
         && typeof end === "number"
         && Number.isFinite(end)
       ) {
-        const appliedByOffset = addMarkByOffsets(highlightContainer, start, end, id);
+        const appliedByOffset = addMarkByOffsets(highlightContainer, start, end, id, color);
         if (appliedByOffset) return;
       }
-      applyHighlightByText(highlightContainer, item.text, id);
+      applyHighlightByText(highlightContainer, item.text, id, color);
     };
     const removeStaleMarks = () => {
       const marks = Array.from(
@@ -1446,6 +1529,27 @@ export default function TopicLayoutClient({
                       className="w-full rounded-md border border-indigo-200 dark:border-indigo-800 bg-white dark:bg-gray-800 px-2 py-1.5 text-xs text-gray-700 dark:text-gray-200 outline-none focus:ring-2 focus:ring-indigo-500/40"
                     />
                   )}
+                  <div className="mt-2 flex items-center gap-1.5">
+                    <span className="text-[10px] uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                      Color
+                    </span>
+                    {HIGHLIGHT_COLORS.map((color) => (
+                      <button
+                        key={`new-${color}`}
+                        type="button"
+                        onClick={() => setSelectedColor(color)}
+                        className={[
+                          "w-5 h-5 rounded-full border-2 transition-colors cursor-pointer",
+                          HIGHLIGHT_SWATCH_CLASS[color],
+                          normalizeHighlightColor(selectedColor) === color
+                            ? "border-indigo-600 dark:border-indigo-300"
+                            : "border-white/70 dark:border-gray-900/60",
+                        ].join(" ")}
+                        title={`Use ${color} highlight`}
+                        aria-label={`Use ${color} highlight`}
+                      />
+                    ))}
+                  </div>
                 </section>
               )}
 
@@ -1476,8 +1580,32 @@ export default function TopicLayoutClient({
                   {currentTopicHighlights.map((item) => {
                     const noteValue = noteDraftById[item.id] ?? "";
                     const saving = Boolean(savingNoteById[item.id]);
+                    const itemColor = normalizeHighlightColor(item.color);
                     return (
                       <li key={item.id} className="rounded-lg border border-amber-200 dark:border-amber-900 bg-amber-50/50 dark:bg-amber-950/20 p-3">
+                        <div className="mb-2 flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-1.5">
+                            {HIGHLIGHT_COLORS.map((color) => (
+                              <button
+                                key={`${item.id}-${color}`}
+                                type="button"
+                                onClick={() => handleSaveHighlightColor(item.id, color)}
+                                className={[
+                                  "w-4 h-4 rounded-full border transition-colors cursor-pointer",
+                                  HIGHLIGHT_SWATCH_CLASS[color],
+                                  itemColor === color
+                                    ? "border-indigo-600 dark:border-indigo-300"
+                                    : "border-white/70 dark:border-gray-900/60",
+                                ].join(" ")}
+                                title={`Set ${color}`}
+                                aria-label={`Set ${color}`}
+                              />
+                            ))}
+                          </div>
+                          <span className="text-[10px] uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                            {itemColor}
+                          </span>
+                        </div>
                         <button
                           type="button"
                           onClick={() => handleJumpToHighlight(item)}

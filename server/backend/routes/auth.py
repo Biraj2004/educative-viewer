@@ -27,6 +27,14 @@ MAX_HIGHLIGHTS_PER_COURSE = 300
 MAX_HIGHLIGHT_TEXT_LEN = 180
 MAX_HIGHLIGHT_CONTEXT_LEN = 120
 MAX_HIGHLIGHT_NOTE_LEN = 800
+ALLOWED_HIGHLIGHT_COLORS: set[str] = {"yellow", "blue", "green", "pink", "orange"}
+
+
+def _normalize_highlight_color(value: Any) -> str:
+    color = str(value or "").strip().lower()
+    if color in ALLOWED_HIGHLIGHT_COLORS:
+        return color
+    return "yellow"
 
 
 def _to_int(value: Any, field: str) -> int:
@@ -107,6 +115,7 @@ def _clean_highlights_map(value: Any) -> dict[str, list[dict[str, Any]]]:
                     "text": text[:MAX_HIGHLIGHT_TEXT_LEN],
                     "context": str(item.get("context", "") or "")[:MAX_HIGHLIGHT_CONTEXT_LEN],
                     "note": str(item.get("note", "") or "")[:MAX_HIGHLIGHT_NOTE_LEN],
+                    "color": _normalize_highlight_color(item.get("color")),
                     "created_at": str(item.get("created_at", "") or ""),
                     "start_offset": start_offset,
                     "end_offset": end_offset,
@@ -672,6 +681,7 @@ def create_auth_blueprint(auth_service: AuthService, db_manager: DBManager) -> B
                     abort(400, description="add_highlight.text is required")
                 context = str(add_highlight.get("context", "") or "").strip()
                 note = str(add_highlight.get("note", "") or "").strip() if notes_enabled else ""
+                color = _normalize_highlight_color(add_highlight.get("color"))
                 start_offset = add_highlight.get("start_offset")
                 end_offset = add_highlight.get("end_offset")
                 component_index = add_highlight.get("component_index")
@@ -719,6 +729,7 @@ def create_auth_blueprint(auth_service: AuthService, db_manager: DBManager) -> B
                         "text": text[:MAX_HIGHLIGHT_TEXT_LEN],
                         "context": context[:MAX_HIGHLIGHT_CONTEXT_LEN],
                         "note": note[:MAX_HIGHLIGHT_NOTE_LEN],
+                        "color": color,
                         "created_at": now_iso,
                         "start_offset": start_offset_int,
                         "end_offset": end_offset_int,
@@ -785,6 +796,30 @@ def create_auth_blueprint(auth_service: AuthService, db_manager: DBManager) -> B
                         break
                 if not updated:
                     abort(404, description="Highlight not found for note update")
+                highlights[topic_key] = topic_highlights
+                course_state["highlights"] = highlights
+
+            update_highlight_color = body.get("update_highlight_color")
+            if update_highlight_color is not None:
+                if not highlights_enabled:
+                    abort(403, description="Highlights are disabled by administrator")
+                if not isinstance(update_highlight_color, dict):
+                    abort(400, description="update_highlight_color must be an object")
+                topic_index = _to_int(update_highlight_color.get("topic_index"), "update_highlight_color.topic_index")
+                highlight_id = str(update_highlight_color.get("highlight_id", "")).strip()
+                if not highlight_id:
+                    abort(400, description="update_highlight_color.highlight_id is required")
+                color = _normalize_highlight_color(update_highlight_color.get("color"))
+                topic_key = str(topic_index)
+                topic_highlights = highlights.get(topic_key, [])
+                updated = False
+                for item in topic_highlights:
+                    if str(item.get("id", "")).strip() == highlight_id:
+                        item["color"] = color
+                        updated = True
+                        break
+                if not updated:
+                    abort(404, description="Highlight not found for color update")
                 highlights[topic_key] = topic_highlights
                 course_state["highlights"] = highlights
 
