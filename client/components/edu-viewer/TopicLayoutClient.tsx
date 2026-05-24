@@ -175,6 +175,10 @@ function normalizeHighlightColor(color: unknown): HighlightColor {
   return "yellow";
 }
 
+function normalizeHighlightTextKey(text: unknown): string {
+  return String(text || "").trim().replace(/\s+/g, " ").toLowerCase();
+}
+
 const TopicComponentsList = React.memo(function TopicComponentsList({
   currentComponents,
   topicIndex,
@@ -251,6 +255,7 @@ export default function TopicLayoutClient({
   const [savingNoteById, setSavingNoteById] = useState<Record<string, boolean>>({});
   const selectedTextRef = useRef("");
   const selectedOffsetsRef = useRef<{ start: number; end: number; componentIndex: number } | null>(null);
+  const inFlightHighlightKeyRef = useRef<string | null>(null);
   const [selectionAction, setSelectionAction] = useState<{
     visible: boolean;
     x: number;
@@ -728,6 +733,30 @@ export default function TopicLayoutClient({
     let mergedComponentIndex = selectedOffsets?.componentIndex ?? null;
 
     if (selectedOffsets) {
+      const containsExisting = existing.some((item) => {
+        const itemStart = typeof item.start_offset === "number" ? item.start_offset : null;
+        const itemEnd = typeof item.end_offset === "number" ? item.end_offset : null;
+        const itemComponentIndex = typeof item.component_index === "number" ? item.component_index : null;
+        if (
+          itemStart === null
+          || itemEnd === null
+          || itemComponentIndex === null
+          || itemComponentIndex !== selectedOffsets.componentIndex
+        ) {
+          return false;
+        }
+        return itemStart <= selectedOffsets.start && itemEnd >= selectedOffsets.end;
+      });
+      if (containsExisting) {
+        setSelectedText("");
+        setNewHighlightNote("");
+        selectedOffsetsRef.current = null;
+        setSelectionColorPaletteOpen(false);
+        const sel = window.getSelection();
+        sel?.removeAllRanges();
+        setSelectionAction((prev) => ({ ...prev, visible: false }));
+        return;
+      }
       existing.forEach((item) => {
         const itemStart = typeof item.start_offset === "number" ? item.start_offset : null;
         const itemEnd = typeof item.end_offset === "number" ? item.end_offset : null;
@@ -748,6 +777,47 @@ export default function TopicLayoutClient({
         mergedComponentIndex = itemComponentIndex;
       });
     }
+
+    const normalizedText = normalizeHighlightTextKey(text);
+    const hasDuplicateAlready = existing.some((item) => {
+      const itemStart = typeof item.start_offset === "number" ? item.start_offset : null;
+      const itemEnd = typeof item.end_offset === "number" ? item.end_offset : null;
+      const itemComponentIndex = typeof item.component_index === "number" ? item.component_index : null;
+      if (
+        mergedStart !== null
+        && mergedEnd !== null
+        && mergedComponentIndex !== null
+        && itemStart !== null
+        && itemEnd !== null
+        && itemComponentIndex !== null
+      ) {
+        return itemStart === mergedStart && itemEnd === mergedEnd && itemComponentIndex === mergedComponentIndex;
+      }
+      return normalizeHighlightTextKey(item.text) === normalizedText;
+    });
+    if (hasDuplicateAlready) {
+      setSelectedText("");
+      setNewHighlightNote("");
+      selectedOffsetsRef.current = null;
+      setSelectionColorPaletteOpen(false);
+      const sel = window.getSelection();
+      sel?.removeAllRanges();
+      setSelectionAction((prev) => ({ ...prev, visible: false }));
+      return;
+    }
+
+    const inFlightKey = [
+      String(currentTopic.topic_index),
+      String(mergedComponentIndex ?? "x"),
+      String(mergedStart ?? "x"),
+      String(mergedEnd ?? "x"),
+      normalizedText,
+      color,
+    ].join("|");
+    if (inFlightHighlightKeyRef.current === inFlightKey) {
+      return;
+    }
+    inFlightHighlightKeyRef.current = inFlightKey;
 
     const optimisticId = `local-${Date.now()}`;
     const optimistic: ViewerHighlight = {
@@ -773,18 +843,7 @@ export default function TopicLayoutClient({
     sel?.removeAllRanges();
     setSelectionAction((prev) => ({ ...prev, visible: false }));
 
-    const removeOps = overlaps
-      .map((item) => item.id)
-      .filter(Boolean)
-      .map((highlightId) => updateViewerCourseSettings({
-        course_id: courseId,
-        remove_highlight: {
-          topic_index: currentTopic.topic_index,
-          highlight_id: highlightId,
-        },
-      }).catch(() => null));
-
-    Promise.all(removeOps).then(() => updateViewerCourseSettings({
+    updateViewerCourseSettings({
       course_id: courseId,
       last_highlight_color: color,
       add_highlight: {
@@ -798,11 +857,13 @@ export default function TopicLayoutClient({
           component_index: mergedComponentIndex,
         } : {}),
       },
-    })).then((courseState) => {
+    }).then((courseState) => {
       const highlights = courseState?.highlights;
       if (!highlights || typeof highlights !== "object") return;
       setHighlightsByTopic(highlights);
-    }).catch(() => { });
+    }).catch(() => { }).finally(() => {
+      inFlightHighlightKeyRef.current = null;
+    });
   }, [
     captureSelectionFromTopicContent,
     courseId,

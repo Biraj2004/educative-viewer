@@ -44,6 +44,21 @@ def _to_int(value: Any, field: str) -> int:
         abort(400, description=f"{field} must be a number")
 
 
+def _normalize_highlight_text_key(value: Any) -> str:
+    raw = str(value or "")
+    return " ".join(raw.split()).strip().lower()
+
+
+def _coerce_non_negative_int(value: Any) -> int | None:
+    if value is None:
+        return None
+    try:
+        out = int(value)
+    except (TypeError, ValueError):
+        return None
+    return out if out >= 0 else None
+
+
 def _parse_viewer_settings(raw: Any) -> dict[str, Any]:
     if not raw:
         return {"courses": {}}
@@ -86,6 +101,7 @@ def _clean_highlights_map(value: Any) -> dict[str, list[dict[str, Any]]]:
         if not isinstance(items, list):
             continue
         rows: list[dict[str, Any]] = []
+        seen_keys: set[tuple[Any, ...]] = set()
         for item in items:
             if not isinstance(item, dict):
                 continue
@@ -109,6 +125,16 @@ def _clean_highlights_map(value: Any) -> dict[str, list[dict[str, Any]]]:
             ):
                 start_offset = None
                 end_offset = None
+            component_index = _coerce_non_negative_int(item.get("component_index"))
+            normalized_text_key = _normalize_highlight_text_key(text)
+            dedupe_key: tuple[Any, ...]
+            if start_offset is not None and end_offset is not None and component_index is not None:
+                dedupe_key = ("offset", component_index, start_offset, end_offset)
+            else:
+                dedupe_key = ("text", component_index, normalized_text_key)
+            if dedupe_key in seen_keys:
+                continue
+            seen_keys.add(dedupe_key)
             rows.append(
                 {
                     "id": str(item.get("id", "") or uuid.uuid4().hex),
@@ -119,7 +145,7 @@ def _clean_highlights_map(value: Any) -> dict[str, list[dict[str, Any]]]:
                     "created_at": str(item.get("created_at", "") or ""),
                     "start_offset": start_offset,
                     "end_offset": end_offset,
-                    "component_index": int(item.get("component_index")) if str(item.get("component_index", "")).strip().isdigit() else None,
+                    "component_index": component_index,
                 }
             )
         if rows:
@@ -165,6 +191,7 @@ def _filter_settings_by_features(
         if not highlights_enabled:
             course_state.pop("highlights", None)
             continue
+        course_state["highlights"] = _clean_highlights_map(course_state.get("highlights"))
         if notes_enabled:
             continue
         highlights = course_state.get("highlights")
@@ -706,38 +733,93 @@ def create_auth_blueprint(auth_service: AuthService, db_manager: DBManager) -> B
                     if component_index_int < 0:
                         abort(400, description="add_highlight.component_index must be >= 0")
                 topic_key = str(topic_index)
-                topic_highlights = highlights.get(topic_key, [])
-                if start_offset_int is not None and end_offset_int is not None:
-                    duplicate = any(
-                        int(item.get("start_offset") or -1) == start_offset_int
-                        and int(item.get("end_offset") or -1) == end_offset_int
-                        and int(item.get("component_index") or -1) == int(component_index_int or -1)
-                        for item in topic_highlights
+                topic_highlights = [item for item in highlights.get(topic_key, []) if isinstance(item, dict)]
+                normalized_text_key = _normalize_highlight_text_key(text)
+                should_add = True
+                add_text = text[:MAX_HIGHLIGHT_TEXT_LEN]
+                add_context = context[:MAX_HIGHLIGHT_CONTEXT_LEN]
+                add_note = note[:MAX_HIGHLIGHT_NOTE_LEN]
+                add_start = start_offset_int
+                add_end = end_offset_int
+                add_component = component_index_int
+
+                if (
+                    start_offset_int is not None
+                    and end_offset_int is not None
+                    and component_index_int is not None
+                ):
+                    overlaps: list[dict[str, Any]] = []
+                    merged_start = start_offset_int
+                    merged_end = end_offset_int
+                    for item in topic_highlights:
+                        item_start = _coerce_non_negative_int(item.get("start_offset"))
+                        item_end = _coerce_non_negative_int(item.get("end_offset"))
+                        item_component = _coerce_non_negative_int(item.get("component_index"))
+                        if (
+                            item_start is None
+                            or item_end is None
+                            or item_component is None
+                            or item_end <= item_start
+                            or item_component != component_index_int
+                        ):
+                            continue
+                        if item_start <= start_offset_int and item_end >= end_offset_int:
+                            # New selection is fully contained by an existing highlight; keep existing row intact.
+                            should_add = False
+                            break
+                        if item_start == start_offset_int and item_end == end_offset_int:
+                            should_add = False
+                            break
+                        if item_start < end_offset_int and item_end > start_offset_int:
+                            overlaps.append(item)
+                            merged_start = min(merged_start, item_start)
+                            merged_end = max(merged_end, item_end)
+                            item_text = str(item.get("text", "")).strip()
+                            if len(item_text) > len(add_text):
+                                add_text = item_text[:MAX_HIGHLIGHT_TEXT_LEN]
+                            if not add_context:
+                                add_context = str(item.get("context", "") or "")[:MAX_HIGHLIGHT_CONTEXT_LEN]
+                            if not add_note:
+                                add_note = str(item.get("note", "") or "")[:MAX_HIGHLIGHT_NOTE_LEN]
+                    if should_add:
+                        if overlaps:
+                            overlap_ids = {
+                                str(item.get("id", "")).strip()
+                                for item in overlaps
+                                if str(item.get("id", "")).strip()
+                            }
+                            topic_highlights = [
+                                item
+                                for item in topic_highlights
+                                if str(item.get("id", "")).strip() not in overlap_ids
+                            ]
+                        add_start = merged_start
+                        add_end = merged_end
+                else:
+                    for item in topic_highlights:
+                        item_component = _coerce_non_negative_int(item.get("component_index"))
+                        item_text_key = _normalize_highlight_text_key(item.get("text"))
+                        if item_text_key != normalized_text_key:
+                            continue
+                        if component_index_int is not None and item_component != component_index_int:
+                            continue
+                        should_add = False
+                        break
+
+                if should_add:
+                    topic_highlights.append(
+                        {
+                            "id": uuid.uuid4().hex,
+                            "text": add_text,
+                            "context": add_context,
+                            "note": add_note,
+                            "color": color,
+                            "created_at": now_iso,
+                            "start_offset": add_start,
+                            "end_offset": add_end,
+                            "component_index": add_component,
+                        }
                     )
-                    if duplicate:
-                        course_state["highlights"] = highlights
-                        courses[course_key] = course_state
-                        settings_json = json.dumps(settings, separators=(",", ":"))
-                        execute(
-                            conn,
-                            "UPDATE users SET viewer_settings_json = :settings WHERE id = :user_id",
-                            {"settings": settings_json, "user_id": user["id"]},
-                        )
-                        conn.commit()
-                        return jsonify({"ok": True, "course": course_state}), 200
-                topic_highlights.append(
-                    {
-                        "id": uuid.uuid4().hex,
-                        "text": text[:MAX_HIGHLIGHT_TEXT_LEN],
-                        "context": context[:MAX_HIGHLIGHT_CONTEXT_LEN],
-                        "note": note[:MAX_HIGHLIGHT_NOTE_LEN],
-                        "color": color,
-                        "created_at": now_iso,
-                        "start_offset": start_offset_int,
-                        "end_offset": end_offset_int,
-                        "component_index": component_index_int,
-                    }
-                )
                 highlights[topic_key] = topic_highlights[-MAX_HIGHLIGHTS_PER_TOPIC:]
                 all_highlights: list[tuple[str, dict[str, Any]]] = []
                 for t_key, rows in highlights.items():
