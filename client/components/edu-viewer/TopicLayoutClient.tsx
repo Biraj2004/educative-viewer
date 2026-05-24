@@ -138,6 +138,45 @@ interface Props {
   highlightsEnabled?: boolean;
 }
 
+const TopicComponentsList = React.memo(function TopicComponentsList({
+  currentComponents,
+  topicIndex,
+}: {
+  currentComponents: Component[];
+  topicIndex: number;
+}) {
+  return (
+    <>
+      {currentComponents.map((comp, i) => {
+        const renderer = getRenderer(comp.type);
+        const subType =
+          typeof comp.content?.type === "string" ? comp.content.type : undefined;
+        const componentLabel = `<${comp.type}-${i}>`;
+        const isHeavy = HEAVY_COMPONENT_TYPES.has(comp.type);
+
+        return (
+          <div key={`${topicIndex}-${i}`} className="relative" data-topic-component-index={i}>
+            <ComponentErrorBoundary label={componentLabel}>
+              <div data-highlight-scope="1">
+                {isHeavy ? (
+                  <LazyComponent>
+                    {renderer ? renderer(comp.content) : <UnknownRenderer type={comp.type} />}
+                  </LazyComponent>
+                ) : (
+                  renderer ? renderer(comp.content) : <UnknownRenderer type={comp.type} />
+                )}
+              </div>
+            </ComponentErrorBoundary>
+            <div data-component-badge>
+              <ComponentBadge componentName={componentLabel} subType={subType} />
+            </div>
+          </div>
+        );
+      })}
+    </>
+  );
+});
+
 export default function TopicLayoutClient({
   courseId,
   slug,
@@ -543,13 +582,6 @@ export default function TopicLayoutClient({
     const range = selection.getRangeAt(0);
     const startInfo = getComponentScopeFromNode(range.startContainer);
     const endInfo = getComponentScopeFromNode(range.endContainer);
-    if (!startInfo || !endInfo || startInfo.componentIndex !== endInfo.componentIndex) {
-      setSelectedText("");
-      selectedOffsetsRef.current = null;
-      setSelectionAction((prev) => ({ ...prev, visible: false }));
-      return "";
-    }
-    const scope = startInfo.scope;
     const startNodeForScope = (
       range.startContainer.nodeType === Node.TEXT_NODE
         ? range.startContainer.parentNode
@@ -560,10 +592,10 @@ export default function TopicLayoutClient({
         ? range.endContainer.parentNode
         : range.endContainer
     ) as Node | null;
-    const sameScope = Boolean(startNodeForScope && endNodeForScope)
-      && scope.contains(startNodeForScope)
-      && scope.contains(endNodeForScope);
-    if (!sameScope) {
+    const isInsideTopicContent = Boolean(startNodeForScope && endNodeForScope)
+      && rootContainer.contains(startNodeForScope)
+      && rootContainer.contains(endNodeForScope);
+    if (!isInsideTopicContent) {
       setSelectedText("");
       selectedOffsetsRef.current = null;
       setSelectionAction((prev) => ({ ...prev, visible: false }));
@@ -577,10 +609,20 @@ export default function TopicLayoutClient({
       setSelectionAction((prev) => ({ ...prev, visible: false }));
       return "";
     }
-    const offsets = getRangeOffsetsWithinContainer(scope, range);
-    selectedOffsetsRef.current = offsets
-      ? { ...offsets, componentIndex: startInfo.componentIndex }
-      : null;
+    if (
+      startInfo
+      && endInfo
+      && startInfo.componentIndex === endInfo.componentIndex
+      && startInfo.scope.contains(startNodeForScope as Node)
+      && startInfo.scope.contains(endNodeForScope as Node)
+    ) {
+      const offsets = getRangeOffsetsWithinContainer(startInfo.scope, range);
+      selectedOffsetsRef.current = offsets
+        ? { ...offsets, componentIndex: startInfo.componentIndex }
+        : null;
+    } else {
+      selectedOffsetsRef.current = null;
+    }
     setSelectedText(text);
     const rect = range.getBoundingClientRect();
     const nextX = Math.min(window.innerWidth - 20, Math.max(20, rect.left + (rect.width / 2)));
@@ -1104,32 +1146,10 @@ export default function TopicLayoutClient({
 
           {/* Components */}
           <div ref={contentRef} className="max-w-6xl mx-auto px-6 pb-8 pt-4 space-y-6 topic-content-wrapper">
-            {currentComponents.map((comp, i) => {
-              const renderer = getRenderer(comp.type);
-              const subType =
-                typeof comp.content?.type === "string" ? comp.content.type : undefined;
-              const componentLabel = `<${comp.type}-${i}>`;
-              const isHeavy = HEAVY_COMPONENT_TYPES.has(comp.type);
-
-              return (
-                <div key={`${currentTopic.topic_index}-${i}`} className="relative" data-topic-component-index={i}>
-                  <ComponentErrorBoundary label={componentLabel}>
-                    <div data-highlight-scope="1">
-                      {isHeavy ? (
-                        <LazyComponent>
-                          {renderer ? renderer(comp.content) : <UnknownRenderer type={comp.type} />}
-                        </LazyComponent>
-                      ) : (
-                        renderer ? renderer(comp.content) : <UnknownRenderer type={comp.type} />
-                      )}
-                    </div>
-                  </ComponentErrorBoundary>
-                  <div data-component-badge>
-                    <ComponentBadge componentName={componentLabel} subType={subType} />
-                  </div>
-                </div>
-              );
-            })}
+            <TopicComponentsList
+              currentComponents={currentComponents}
+              topicIndex={currentTopic.topic_index}
+            />
 
             {!highlightsEnabled && (
               <section className="rounded-xl border border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-900/40 p-4">
