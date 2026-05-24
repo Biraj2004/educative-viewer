@@ -6,7 +6,7 @@ import { notFound } from "next/navigation";
 import AppNavbar from "@/components/edu-viewer/AppNavbar";
 import CourseDetailToc from "@/components/edu-viewer/CourseDetailToc";
 import UserMenu from "@/components/edu-viewer/UserMenu";
-import { getAuthToken, clearAuthToken, getProgress, getUser, resetCourseProgress } from "@/utils/authClient";
+import { getAuthToken, clearAuthToken, getProgress, getUser, resetCourseProgress, getViewerSettings } from "@/utils/authClient";
 import type { ProgressData } from "@/utils/authClient";
 import { getBackendApiBase } from "@/utils/runtime-config";
 
@@ -45,6 +45,8 @@ export default function CourseDetailPage() {
 
   const [course, setCourse] = useState<CourseDetail | null>(null);
   const [progress, setProgress] = useState<ProgressData>({ course_order: [], completed: {} });
+  const [lastVisitedTopicIndex, setLastVisitedTopicIndex] = useState<number | null>(null);
+  const [bookmarkedTopicIndices, setBookmarkedTopicIndices] = useState<Set<number>>(new Set());
   const [loading, setLoading] = useState(true);
   const [missing, setMissing] = useState(false);
   const [resetting, setResetting] = useState(false);
@@ -83,12 +85,27 @@ export default function CourseDetailPage() {
           inflightFetches.set(fetchKey, coursePromise);
         }
 
-        Promise.all([coursePromise, getProgress()])
-          .then(([data, prog]) => {
+        Promise.all([coursePromise, getProgress(), getViewerSettings()])
+          .then(([data, prog, viewerPayload]) => {
             if (cancelled) return;
             if (!data) { setMissing(true); setLoading(false); return; }
             setCourse(data);
             setProgress(prog);
+            const viewerSettings = viewerPayload.settings;
+            const rawLastVisited = viewerSettings?.courses?.[String(courseId)]?.last_topic_index;
+            setLastVisitedTopicIndex(
+              typeof rawLastVisited === "number" && Number.isFinite(rawLastVisited)
+                ? rawLastVisited
+                : null
+            );
+            const rawBookmarks = viewerSettings?.courses?.[String(courseId)]?.bookmarks;
+            setBookmarkedTopicIndices(
+              new Set(
+                Array.isArray(rawBookmarks)
+                  ? rawBookmarks.filter((v): v is number => typeof v === "number" && Number.isFinite(v))
+                  : []
+              )
+            );
             setLoading(false);
           })
           .catch((err: unknown) => {
@@ -251,6 +268,8 @@ export default function CourseDetailPage() {
           slug={course.slug}
           fromPath={fromPath}
           completedTopicIndices={completedTopicIndices}
+          bookmarkedTopicIndices={bookmarkedTopicIndices}
+          lastVisitedTopicIndex={lastVisitedTopicIndex}
         />
       </div>
     </main>

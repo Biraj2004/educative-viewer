@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useMemo } from "react";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -137,7 +137,8 @@ function getCellClasses(color?: string): string {
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function InstaCalc({ data }: { data: InstaCalcData }) {
-  const grid = normalizeGrid((data as unknown as Record<string, unknown>)?.data);
+  const rawGrid = (data as unknown as Record<string, unknown>)?.data;
+  const grid = useMemo(() => normalizeGrid(rawGrid), [rawGrid]);
   const safeCols = Math.max(
     1,
     asNumber((data as unknown as Record<string, unknown>)?.cols, 0) ||

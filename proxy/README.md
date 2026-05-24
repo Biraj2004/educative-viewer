@@ -13,52 +13,19 @@ The ready-to-use config templates are in:
 - `proxy/apache-linux.conf`
 - `proxy/apache-windows.conf`
 
-## Backend API endpoint allowlist
+## Backend API allowlist (auto-generated)
 
-The proxy templates only forward these routes to Flask:
+The backend route list is generated from Flask `app.url_map`:
 
-### Courses/content APIs
-- `GET /api/paths`
-- `GET /api/paths/{path_id}/courses`
-- `GET /api/projects`
-- `GET /api/projects/{project_id}/course`
-- `GET /api/courses`
-- `POST /api/course-details`
-- `POST /api/topic-details`
+- `server/generate_proxy_route_manifest.py` writes:
+  - `proxy/backend-route-manifest.json`
+  - `proxy/backend-api-map.generated.conf`
 
-### Contact API
-- `POST /api/contact`
+Nginx includes `backend-api-map.generated.conf` inside its `/api` map, and the embedded Node proxy (`local-start.js`) loads `backend-route-manifest.json`.
 
-### Auth APIs
-- `POST /api/auth/signup`
-- `POST /api/auth/login`
-- `GET /api/auth/me`
-- `POST /api/auth/logout`
-- `POST /api/auth/change-password`
-- `GET /api/auth/2fa/setup`
-- `PUT /api/auth/theme`
-- `POST /api/auth/progress/topic`
-- `DELETE /api/auth/progress/course`
-- `POST /api/auth/signup/rollback`
-- `POST /api/auth/2fa/enable`
-- `POST /api/auth/2fa/verify`
-- `POST /api/auth/forgot-password/request`
-- `POST /api/auth/forgot-password/verify`
-- `POST /api/auth/forgot-password/reset`
+This removes manual route duplication and prevents proxy drift when new Flask routes are added.
 
-### Admin APIs
-- `GET /api/admin/users`
-- `POST /api/admin/users/create`
-- `PATCH /api/admin/users/{user_id}/edit`
-- `DELETE /api/admin/users/{user_id}`
-- `POST /api/admin/users/{user_id}/reset-password`
-- `PATCH /api/admin/set-user-status`
-- `PATCH /api/admin/set-course-status`
-- `GET /api/admin/test-components`
-- `POST /api/admin/test-components`
-- `DELETE /api/admin/test-components/{component_id}`
-
-Any `/api/*` path not in this list is served from static files.
+Any `/api/*` path not in the generated list is served from static files.
 
 ## Static API folder layout
 
@@ -119,11 +86,12 @@ Keep your DB settings according to your selected backend (`oracle` or `sqlite`).
 1. Copy one of these templates into your Nginx config path:
    - Linux: `proxy/nginx-linux.conf`
    - Windows: `proxy/nginx-windows.conf`
-2. Edit:
+2. Keep the generated `proxy/backend-api-map.generated.conf` in the same directory as your Nginx config (or adjust the `include` path).
+3. Edit:
    - `server_name`
    - `root` (your static API root parent, containing `api/`)
    - Upstream ports if changed
-3. Validate and reload:
+4. Validate and reload:
 
 Linux:
 ```bash
@@ -207,4 +175,11 @@ curl -i https://your-domain.com/api/not-a-backend-route
 
 ## When backend APIs change
 
-If you add/remove Flask routes, update all 4 proxy templates so endpoint matching stays correct.
+Regenerate the route manifest:
+
+```bash
+cd server
+python generate_proxy_route_manifest.py
+```
+
+Then reload Nginx/Apache or restart the local launcher.

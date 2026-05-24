@@ -27,6 +27,7 @@ interface TopicSidebarProps {
     fromPath?: string | null;
     /** Set of topic_index values the user has completed */
     completedTopicIndices?: Set<number>;
+    bookmarkedTopicIndices?: Set<number>;
     asideClassName?: string;
     onClose?: () => void;
     /** When provided, clicks on topic links are intercepted for in-page navigation */
@@ -36,10 +37,12 @@ interface TopicSidebarProps {
 export default function TopicSidebar({
     courseId,
     courseSlug,
+    courseTitle,
     toc,
     currentTopicIndex,
     fromPath,
     completedTopicIndices,
+    bookmarkedTopicIndices,
     asideClassName,
     onClose,
     onTopicClick,
@@ -54,6 +57,29 @@ export default function TopicSidebar({
     };
 
     const [isCollapsed, setIsCollapsed] = useState(false);
+    const [q, setQ] = useState("");
+    const normalizedQ = q.trim().toLowerCase();
+
+    const filteredEntries: TocEntry[] = normalizedQ
+        ? tocEntries.flatMap((entry): TocEntry[] => {
+            if ("topics" in entry) {
+                const matchedTopics = (Array.isArray(entry.topics) ? entry.topics : []).filter((topic) =>
+                    topic.title.toLowerCase().includes(normalizedQ)
+                );
+                return matchedTopics.length > 0 ? [{ ...entry, topics: matchedTopics }] : [];
+            }
+            return entry.title.toLowerCase().includes(normalizedQ) ? [entry] : [];
+        })
+        : tocEntries;
+
+    const totalTopics = tocEntries.reduce(
+        (acc, entry) => acc + ("topics" in entry ? (Array.isArray(entry.topics) ? entry.topics.length : 0) : 1),
+        0
+    );
+    const shownTopics = filteredEntries.reduce(
+        (acc, entry) => acc + ("topics" in entry ? (Array.isArray(entry.topics) ? entry.topics.length : 0) : 1),
+        0
+    );
 
     useEffect(() => {
         if (activeRef.current) {
@@ -80,12 +106,44 @@ export default function TopicSidebar({
                 {/* Sidebar header */}
                 <div className="px-4 py-3 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 shrink-0">
                     <p className="text-[11px] font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider">Contents</p>
+                    <div className="mt-2 relative">
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 dark:text-gray-500 pointer-events-none">
+                            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                                <circle cx="11" cy="11" r="8" />
+                                <path d="m21 21-4.35-4.35" />
+                            </svg>
+                        </span>
+                        <input
+                            value={q}
+                            onChange={(e) => setQ(e.target.value)}
+                            placeholder={`Search in ${courseTitle}`}
+                            className="w-full pl-9 pr-8 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-sm text-gray-900 dark:text-gray-100 placeholder:text-gray-400 dark:placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400 dark:focus:border-indigo-600 shadow-sm transition-all"
+                        />
+                        {normalizedQ && (
+                            <button
+                                onClick={() => setQ("")}
+                                className="absolute right-2.5 top-1/2 -translate-y-1/2 p-0.5 rounded-full text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors cursor-pointer"
+                                aria-label="Clear search"
+                            >
+                                <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">
+                                    <path d="M18 6 6 18M6 6l12 12" />
+                                </svg>
+                            </button>
+                        )}
+                    </div>
+                    {normalizedQ && (
+                        <p className="mt-1 text-[11px] text-gray-500 dark:text-gray-400">
+                            {shownTopics} / {totalTopics} topics
+                        </p>
+                    )}
                 </div>
 
                 {/* Scrollable TOC */}
                 <div className="flex-1 overflow-y-auto bg-white dark:bg-gray-900">
                     <nav aria-label="Course table of contents">
-                        {tocEntries.map((entry, i) => {
+                        {filteredEntries.length === 0 ? (
+                            <div className="px-4 py-8 text-sm text-gray-500 dark:text-gray-400">No matching topics.</div>
+                        ) : filteredEntries.map((entry, i) => {
                             if ('topics' in entry) {
                                 const entryTopics = Array.isArray(entry.topics) ? entry.topics : [];
                                 return (
@@ -101,6 +159,7 @@ export default function TopicSidebar({
                                             {entryTopics.map((topic) => {
                                                 const isActive = topic.topic_index === currentTopicIndex;
                                                 const isDone = !isActive && completedTopicIndices?.has(topic.topic_index);
+                                                const isBookmarked = Boolean(bookmarkedTopicIndices?.has(topic.topic_index));
                                                 const topicHref = buildTopicHref(topic.topic_index, topic.slug);
                                                 return (
                                                     <li key={topic.topic_index}>
@@ -139,6 +198,11 @@ export default function TopicSidebar({
                                                                 </span>
                                                             )}
                                                             <span className="leading-snug">{topic.title}</span>
+                                                            {isBookmarked && (
+                                                                <svg className="w-3.5 h-3.5 mt-0.5 ml-auto shrink-0 text-amber-500" fill="currentColor" viewBox="0 0 20 20" aria-label="Bookmarked topic">
+                                                                    <path d="M5 2a2 2 0 0 0-2 2v14l7-3 7 3V4a2 2 0 0 0-2-2H5Z" />
+                                                                </svg>
+                                                            )}
                                                         </Link>
                                                     </li>
                                                 );
@@ -149,6 +213,7 @@ export default function TopicSidebar({
                             } else {
                                 const isActive = entry.topic_index === currentTopicIndex;
                                 const isDone = !isActive && completedTopicIndices?.has(entry.topic_index);
+                                const isBookmarked = Boolean(bookmarkedTopicIndices?.has(entry.topic_index));
                                 const topicHref = buildTopicHref(entry.topic_index, entry.slug);
                                 return (
                                     <ul key={i}>
@@ -188,6 +253,11 @@ export default function TopicSidebar({
                                                     </span>
                                                 )}
                                                 <span className="leading-snug">{entry.title}</span>
+                                                {isBookmarked && (
+                                                    <svg className="w-3.5 h-3.5 mt-0.5 ml-auto shrink-0 text-amber-500" fill="currentColor" viewBox="0 0 20 20" aria-label="Bookmarked topic">
+                                                        <path d="M5 2a2 2 0 0 0-2 2v14l7-3 7 3V4a2 2 0 0 0-2-2H5Z" />
+                                                    </svg>
+                                                )}
                                             </Link>
                                         </li>
                                     </ul>

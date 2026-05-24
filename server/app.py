@@ -24,5 +24,9 @@ if __name__ == "__main__":
     if debug_mode:
         app.run(host="0.0.0.0", port=config.flask_port, debug=True)
     else:
-        log.info("Starting production server via waitress on 0.0.0.0:%d", config.flask_port)
-        serve(app, host="0.0.0.0", port=config.flask_port, threads=4)
+        log.info(
+            "Starting production server via waitress on 0.0.0.0:%d (threads=%d)",
+            config.flask_port,
+            config.waitress_threads,
+        )
+        serve(app, host="0.0.0.0", port=config.flask_port, threads=config.waitress_threads)

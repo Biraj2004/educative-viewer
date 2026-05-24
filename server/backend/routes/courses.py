@@ -1,6 +1,11 @@
 from __future__ import annotations
 
 import json
+import os
+import re
+import threading
+import unicodedata
+from difflib import SequenceMatcher
 from typing import Any
 
 from flask import Blueprint, abort, jsonify, request
@@ -94,6 +99,209 @@ def _project_is_active_for_course(
             return True if not has_projects_active else bool(row["is_active"])
 
     return None
+
+
+_SEARCH_WORD_RE = re.compile(r"[a-z0-9]+")
+_SEARCH_CACHE_LOCK = threading.Lock()
+_SEARCH_DOC_CACHE: dict[str, dict[str, Any]] = {}
+_SEMANTIC_HINTS: dict[str, tuple[str, ...]] = {
+    "dfs": ("depth", "first", "search"),
+    "bfs": ("breadth", "first", "search"),
+    "dp": ("dynamic", "programming"),
+    "oop": ("object", "oriented", "programming"),
+    "bst": ("binary", "search", "tree"),
+    "ll": ("linked", "list"),
+    "hashmap": ("hash", "map"),
+}
+
+
+def _normalize_text(value: Any) -> str:
+    text = str(value or "").lower()
+    text = unicodedata.normalize("NFKD", text)
+    text = "".join(ch for ch in text if not unicodedata.combining(ch))
+    return text
+
+
+def _tokenize(value: Any) -> list[str]:
+    normalized = _normalize_text(value)
+    return _SEARCH_WORD_RE.findall(normalized)
+
+
+def _coarse_component_text(value: Any, *, max_len: int = 12000) -> str:
+    # Content JSON can be very large. Keep a coarse text version for search/snippets.
+    text = _normalize_text(value)
+    text = re.sub(r"[^a-z0-9\s]", " ", text)
+    text = re.sub(r"\s+", " ", text).strip()
+    return text[:max_len]
+
+
+def _doc_signature(path: str) -> tuple[int, int]:
+    try:
+        st = os.stat(path)
+        return st.st_mtime_ns, st.st_size
+    except OSError:
+        return 0, 0
+
+
+def _build_search_docs_for_shard(
+    db_manager: DBManager,
+    shard,
+    *,
+    admin: bool,
+) -> list[dict[str, Any]]:
+    conn = db_manager.open_course_connection(shard)
+    try:
+        has_courses_active = _has_is_active(db_manager, conn, shard, "courses")
+        has_paths_active = _has_is_active(db_manager, conn, shard, "paths")
+        has_course_project_id = db_manager.course_db_has_column(conn, shard, "courses", "project_id")
+        has_projects_active = _has_is_active(db_manager, conn, shard, "projects")
+
+        project_join = "LEFT JOIN projects pr ON pr.id = c.project_id" if has_course_project_id else ""
+        project_filter = ""
+        if (not admin) and has_course_project_id and has_projects_active:
+            project_filter = "AND (c.project_id IS NULL OR pr.is_active = 1)"
+
+        rows = conn.execute(
+            f"""
+            SELECT
+                c.id AS course_id,
+                c.slug AS course_slug,
+                c.title AS course_title,
+                c.type AS course_type,
+                t.topic_index,
+                t.topic_name,
+                t.topic_slug,
+                t.api_url,
+                COALESCE(GROUP_CONCAT(cp.type, ' '), '') AS component_types,
+                COALESCE(GROUP_CONCAT(cp.content_json, ' '), '') AS component_text
+            FROM topics t
+            JOIN courses c ON c.id = t.course_id
+            LEFT JOIN components cp
+              ON cp.course_id = t.course_id AND cp.topic_index = t.topic_index
+            LEFT JOIN paths p ON p.id = c.path_id
+            {project_join}
+            WHERE
+                COALESCE(LOWER(TRIM(c.type)), '') NOT IN ('path', 'project')
+                {'AND c.is_active = 1' if ((not admin) and has_courses_active) else ''}
+                {'AND (c.path_id IS NULL OR p.is_active = 1)' if ((not admin) and has_paths_active) else ''}
+                {project_filter}
+            GROUP BY
+                c.id, c.slug, c.title, c.type,
+                t.topic_index, t.topic_name, t.topic_slug, t.api_url
+            ORDER BY c.id, t.topic_index
+            """
+        ).fetchall()
+
+        docs: list[dict[str, Any]] = []
+        for row in rows:
+            course_id = db_manager.course_global_id(shard, int(row["course_id"]))
+            course_title = str(row["course_title"] or "")
+            topic_name = str(row["topic_name"] or "")
+            component_text = _coarse_component_text(row["component_text"])
+            combined = f"{course_title} {topic_name} {component_text}".strip()
+            tokens = _tokenize(combined)
+            docs.append(
+                {
+                    "course_id": course_id,
+                    "course_slug": row["course_slug"],
+                    "course_title": course_title,
+                    "topic_index": int(row["topic_index"]),
+                    "topic_name": topic_name,
+                    "topic_slug": row["topic_slug"],
+                    "api_url": row["api_url"],
+                    "component_types": str(row["component_types"] or ""),
+                    "combined_text": combined,
+                    "tokens": tokens,
+                    "token_set": set(tokens),
+                }
+            )
+        return docs
+    finally:
+        conn.close()
+
+
+def _get_cached_docs_for_shard(
+    db_manager: DBManager,
+    shard,
+    *,
+    admin: bool,
+) -> list[dict[str, Any]]:
+    cache_key = f"{shard.db_path}|admin:{int(admin)}"
+    signature = _doc_signature(shard.db_path)
+
+    with _SEARCH_CACHE_LOCK:
+        cached = _SEARCH_DOC_CACHE.get(cache_key)
+        if cached and cached.get("signature") == signature:
+            return cached["docs"]
+
+    docs = _build_search_docs_for_shard(db_manager, shard, admin=admin)
+
+    with _SEARCH_CACHE_LOCK:
+        _SEARCH_DOC_CACHE[cache_key] = {
+            "signature": signature,
+            "docs": docs,
+        }
+    return docs
+
+
+def _expanded_query_tokens(query_tokens: list[str]) -> set[str]:
+    expanded = set(query_tokens)
+    for tok in query_tokens:
+        for hint in _SEMANTIC_HINTS.get(tok, ()):
+            expanded.add(hint)
+    return expanded
+
+
+def _snippet_for_match(text: str, query: str, *, max_len: int = 180) -> str:
+    cleaned = re.sub(r"\s+", " ", text).strip()
+    if not cleaned:
+        return ""
+    idx = cleaned.find(query)
+    if idx < 0:
+        return cleaned[:max_len]
+    start = max(0, idx - 70)
+    end = min(len(cleaned), idx + max_len - 70)
+    snippet = cleaned[start:end].strip()
+    if start > 0:
+        snippet = "..." + snippet
+    if end < len(cleaned):
+        snippet = snippet + "..."
+    return snippet
+
+
+def _score_doc(
+    doc: dict[str, Any],
+    *,
+    query_norm: str,
+    query_tokens: list[str],
+    expanded_query_tokens: set[str],
+) -> float:
+    combined = doc["combined_text"]
+    token_set: set[str] = doc["token_set"]
+    topic_name = _normalize_text(doc["topic_name"])
+    course_title = _normalize_text(doc["course_title"])
+
+    keyword_hits = combined.count(query_norm)
+    token_overlap = len(set(query_tokens) & token_set)
+    semantic_overlap = len(expanded_query_tokens & token_set)
+    fuzzy_topic = SequenceMatcher(None, query_norm, topic_name[:180]).ratio()
+    fuzzy_course = SequenceMatcher(None, query_norm, course_title[:180]).ratio()
+
+    title_bonus = 0.0
+    if query_norm in topic_name:
+        title_bonus += 1.2
+    if query_norm in course_title:
+        title_bonus += 0.8
+
+    score = (
+        (keyword_hits * 2.2)
+        + (token_overlap * 1.8)
+        + (semantic_overlap * 1.2)
+        + (fuzzy_topic * 2.0)
+        + (fuzzy_course * 1.0)
+        + title_bonus
+    )
+    return score
 
 
 def create_courses_blueprint(auth_service: AuthService, db_manager: DBManager) -> Blueprint:
@@ -377,6 +585,176 @@ def create_courses_blueprint(auth_service: AuthService, db_manager: DBManager) -
             )
         finally:
             conn.close()
+
+    @bp.route("/search", methods=["GET"])
+    def search_course_content():
+        user, _ = auth_service.resolve_user(require_full=True)
+        if not user:
+            abort(401, description="Authentication required")
+
+        query = str(request.args.get("q", "")).strip()
+        if len(query) < 2:
+            abort(400, description="Query must be at least 2 characters")
+
+        limit_raw = request.args.get("limit", "25")
+        try:
+            limit = int(limit_raw)
+        except ValueError:
+            abort(400, description="limit must be a number")
+        limit = max(1, min(limit, 50))
+
+        admin = _is_admin(user)
+        query_norm = _normalize_text(query)
+        query_tokens = _tokenize(query_norm)
+        if not query_tokens:
+            return jsonify({"query": query, "count": 0, "results": []})
+        expanded_tokens = _expanded_query_tokens(query_tokens)
+        like_param = f"%{query_norm}%"
+
+        scored: list[dict[str, Any]] = []
+        for shard in db_manager.iter_course_shards():
+            conn = db_manager.open_course_connection(shard)
+            try:
+                has_courses_active = _has_is_active(db_manager, conn, shard, "courses")
+                has_paths_active = _has_is_active(db_manager, conn, shard, "paths")
+
+                title_rows = conn.execute(
+                    f"""
+                    SELECT
+                        c.id AS course_id,
+                        c.slug AS course_slug,
+                        c.title AS course_title,
+                        t.topic_index,
+                        t.topic_name,
+                        t.topic_slug,
+                        t.api_url
+                    FROM topics t
+                    JOIN courses c ON c.id = t.course_id
+                    LEFT JOIN paths p ON p.id = c.path_id
+                    WHERE
+                        COALESCE(LOWER(TRIM(c.type)), '') NOT IN ('path', 'project')
+                        {'AND c.is_active = 1' if ((not admin) and has_courses_active) else ''}
+                        {'AND (c.path_id IS NULL OR p.is_active = 1)' if ((not admin) and has_paths_active) else ''}
+                        AND (
+                            LOWER(c.title) LIKE ?
+                            OR LOWER(COALESCE(t.topic_name, '')) LIKE ?
+                            OR LOWER(COALESCE(t.topic_slug, '')) LIKE ?
+                        )
+                    ORDER BY c.id, t.topic_index
+                    LIMIT 80
+                    """,
+                    (like_param, like_param, like_param),
+                ).fetchall()
+
+                component_rows = []
+                if len(query_norm) >= 4:
+                    component_rows = conn.execute(
+                        f"""
+                        SELECT
+                            c.id AS course_id,
+                            c.slug AS course_slug,
+                            c.title AS course_title,
+                            t.topic_index,
+                            t.topic_name,
+                            t.topic_slug,
+                            t.api_url,
+                            cp.type AS component_type,
+                            cp.content_json AS component_content
+                        FROM components cp
+                        JOIN topics t
+                          ON t.course_id = cp.course_id AND t.topic_index = cp.topic_index
+                        JOIN courses c ON c.id = cp.course_id
+                        LEFT JOIN paths p ON p.id = c.path_id
+                        WHERE
+                            COALESCE(LOWER(TRIM(c.type)), '') NOT IN ('path', 'project')
+                            {'AND c.is_active = 1' if ((not admin) and has_courses_active) else ''}
+                            {'AND (c.path_id IS NULL OR p.is_active = 1)' if ((not admin) and has_paths_active) else ''}
+                            AND LOWER(COALESCE(cp.content_json, '')) LIKE ?
+                        LIMIT 120
+                        """,
+                        (like_param,),
+                    ).fetchall()
+            finally:
+                conn.close()
+
+            merged_docs: dict[tuple[int, int], dict[str, Any]] = {}
+            for row in title_rows:
+                course_id = db_manager.course_global_id(shard, int(row["course_id"]))
+                key = (course_id, int(row["topic_index"]))
+                merged_docs[key] = {
+                    "course_id": course_id,
+                    "course_slug": row["course_slug"],
+                    "course_title": str(row["course_title"] or ""),
+                    "topic_index": int(row["topic_index"]),
+                    "topic_name": str(row["topic_name"] or ""),
+                    "topic_slug": row["topic_slug"],
+                    "api_url": row["api_url"],
+                    "component_types": "",
+                    "combined_text": _normalize_text(
+                        f"{row['course_title'] or ''} {row['topic_name'] or ''}"
+                    ),
+                }
+
+            for row in component_rows:
+                course_id = db_manager.course_global_id(shard, int(row["course_id"]))
+                key = (course_id, int(row["topic_index"]))
+                existing = merged_docs.get(key)
+                component_text = _coarse_component_text(row["component_content"] or "")
+                component_type = str(row["component_type"] or "")
+                if existing is None:
+                    merged_docs[key] = {
+                        "course_id": course_id,
+                        "course_slug": row["course_slug"],
+                        "course_title": str(row["course_title"] or ""),
+                        "topic_index": int(row["topic_index"]),
+                        "topic_name": str(row["topic_name"] or ""),
+                        "topic_slug": row["topic_slug"],
+                        "api_url": row["api_url"],
+                        "component_types": component_type,
+                        "combined_text": _normalize_text(
+                            f"{row['course_title'] or ''} {row['topic_name'] or ''} {component_text}"
+                        ),
+                    }
+                else:
+                    if component_type and component_type not in existing["component_types"]:
+                        existing["component_types"] = (
+                            f"{existing['component_types']} {component_type}".strip()
+                        )
+                    existing["combined_text"] = _normalize_text(
+                        f"{existing['combined_text']} {component_text}"
+                    )[:16000]
+
+            for doc in merged_docs.values():
+                doc["tokens"] = _tokenize(doc["combined_text"])
+                doc["token_set"] = set(doc["tokens"])
+                score = _score_doc(
+                    doc,
+                    query_norm=query_norm,
+                    query_tokens=query_tokens,
+                    expanded_query_tokens=expanded_tokens,
+                )
+                if score < 1.0:
+                    continue
+
+                snippet = _snippet_for_match(doc["combined_text"], query_norm)
+                scored.append(
+                    {
+                        "score": round(score, 4),
+                        "course_id": doc["course_id"],
+                        "course_slug": doc["course_slug"],
+                        "course_title": doc["course_title"],
+                        "topic_index": doc["topic_index"],
+                        "topic_slug": doc["topic_slug"],
+                        "topic_name": doc["topic_name"],
+                        "api_url": doc["api_url"],
+                        "component_types": doc["component_types"],
+                        "snippet": snippet,
+                    }
+                )
+
+        scored.sort(key=lambda item: (-float(item["score"]), int(item["course_id"]), int(item["topic_index"])))
+        top = scored[:limit]
+        return jsonify({"query": query, "count": len(top), "results": top})
 
     @bp.route("/courses", methods=["GET"])
     def get_all_courses():

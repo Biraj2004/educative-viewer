@@ -1,15 +1,21 @@
 "use client";
 
 import React, { useState, useEffect, useCallback, useRef } from "react";
-import { createPortal } from "react-dom";
 import TopicSidebar from "@/components/edu-viewer/TopicSidebar";
 import AppNavbar from "@/components/edu-viewer/AppNavbar";
 import UserMenu from "@/components/edu-viewer/UserMenu";
 import { getRenderer, UnknownRenderer } from "@/utils/component-registry";
 import ComponentBadge from "@/components/edu-viewer/ComponentBadge";
 import CourseChatbot from "@/components/edu-viewer/CourseChatbot";
+import ComponentErrorBoundary from "@/components/edu-viewer/ComponentErrorBoundary";
 import { FontInjector } from "@/components/edu-viewer/FontManager";
-import { recordTopicVisit, getAuthToken, clearAuthToken } from "@/utils/authClient";
+import {
+  recordTopicVisit,
+  getAuthToken,
+  clearAuthToken,
+  updateViewerCourseSettings,
+  type ViewerHighlight,
+} from "@/utils/authClient";
 import { getBackendApiBase } from "@/utils/runtime-config";
 
 const BACKEND = getBackendApiBase();
@@ -127,9 +133,23 @@ interface Props {
   topic: TopicDetail;
   /** topic_index values that the user has already completed */
   initialCompleted?: number[];
+  initialBookmarked?: number[];
+  initialHighlights?: Record<string, ViewerHighlight[]>;
+  highlightsEnabled?: boolean;
 }
 
-export default function TopicLayoutClient({ courseId, slug, fromPath, course, topic, initialCompleted = [] }: Props) {
+export default function TopicLayoutClient({
+  courseId,
+  slug,
+  fromPath,
+  course,
+  topic,
+  initialCompleted = [],
+  initialBookmarked = [],
+  initialHighlights = {},
+  highlightsEnabled = true,
+}: Props) {
+  const USER_HIGHLIGHT_ATTR = "data-user-highlight";
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [tocDrawerOpen, setTocDrawerOpen] = useState(false);
   const [headings, setHeadings] = useState<{ idx: number; text: string; level: number }[]>([]);
@@ -139,6 +159,19 @@ export default function TopicLayoutClient({ courseId, slug, fromPath, course, to
   const [currentTopic, setCurrentTopic] = useState<TopicDetail>(topic);
   const [topicChanging, setTopicChanging] = useState(false);
   const [completed, setCompleted] = useState<Set<number>>(() => new Set(initialCompleted));
+  const [bookmarked, setBookmarked] = useState<Set<number>>(() => new Set(initialBookmarked));
+  const [highlightsByTopic, setHighlightsByTopic] = useState<Record<string, ViewerHighlight[]>>(
+    () => initialHighlights
+  );
+  const [selectedText, setSelectedText] = useState("");
+  const selectedTextRef = useRef("");
+  const selectedOffsetsRef = useRef<{ start: number; end: number; componentIndex: number } | null>(null);
+  const [selectionAction, setSelectionAction] = useState<{
+    visible: boolean;
+    x: number;
+    y: number;
+    placement: "above" | "below";
+  }>({ visible: false, x: 0, y: 0, placement: "below" });
   const [isCompleted, setIsCompleted] = useState(() => new Set(initialCompleted).has(topic.topic_index));
   const [scrollProgress, setScrollProgress] = useState(0);
   const navigatingRef = useRef(false);
@@ -146,7 +179,15 @@ export default function TopicLayoutClient({ courseId, slug, fromPath, course, to
   const validFromPath = fromPath && fromPath.startsWith("/") && !fromPath.startsWith("//") ? fromPath : null;
   const fromPathsPage = Boolean(validFromPath?.startsWith("/dashboard/paths"));
   const fromProjectsPage = Boolean(validFromPath?.startsWith("/dashboard/projects"));
-  const currentComponents = Array.isArray(currentTopic.components) ? currentTopic.components : [];
+  const currentComponents = React.useMemo(
+    () => (Array.isArray(currentTopic.components) ? currentTopic.components : []),
+    [currentTopic.components]
+  );
+  const isBookmarked = bookmarked.has(currentTopic.topic_index);
+  const currentTopicHighlights = React.useMemo(
+    () => highlightsByTopic[String(currentTopic.topic_index)] ?? [],
+    [currentTopic.topic_index, highlightsByTopic]
+  );
   
   // Calculate estimated reading time
   const estimatedTime = React.useMemo(() => {
@@ -177,6 +218,7 @@ export default function TopicLayoutClient({ courseId, slug, fromPath, course, to
 
   // Keep completedRef current (also updated synchronously below when mutating state)
   useEffect(() => { completedRef.current = completed; }, [completed]);
+  useEffect(() => { selectedTextRef.current = selectedText; }, [selectedText]);
 
   // Signal the global NavProgressBar for in-page topic fetches
   // Extract h1/h2/h3 headings from content — store index for reliable click-time lookup
@@ -272,6 +314,416 @@ export default function TopicLayoutClient({ courseId, slug, fromPath, course, to
     recordTopicVisit(courseId, currentTopic.topic_index, next).catch(() => { });
   }, [isCompleted, courseId, currentTopic.topic_index]);
 
+  const handleToggleBookmark = useCallback(() => {
+    const topicIndex = currentTopic.topic_index;
+    const nextBookmarked = !bookmarked.has(topicIndex);
+    setBookmarked((prev) => {
+      const next = new Set(prev);
+      if (nextBookmarked) next.add(topicIndex);
+      else next.delete(topicIndex);
+      return next;
+    });
+    updateViewerCourseSettings({
+      course_id: courseId,
+      bookmark_topic_index: topicIndex,
+      bookmarked: nextBookmarked,
+    }).catch(() => { });
+  }, [bookmarked, courseId, currentTopic.topic_index]);
+
+  const highlightClassName = "bg-yellow-200/80 dark:bg-yellow-500/35 text-inherit rounded px-0.5";
+
+  const unwrapUserHighlights = useCallback((container: HTMLElement) => {
+    const highlights = Array.from(
+      container.querySelectorAll(`mark[${USER_HIGHLIGHT_ATTR}="1"]`)
+    ) as HTMLElement[];
+    highlights.forEach((mark) => {
+      const parent = mark.parentNode;
+      if (!parent) return;
+      while (mark.firstChild) {
+        parent.insertBefore(mark.firstChild, mark);
+      }
+      parent.removeChild(mark);
+      parent.normalize();
+    });
+  }, [USER_HIGHLIGHT_ATTR]);
+
+  const isSelectableTextNode = useCallback((node: Node): node is Text => {
+    if (node.nodeType !== Node.TEXT_NODE) return false;
+    const textNode = node as Text;
+    const parentEl = textNode.parentElement;
+    if (!parentEl) return false;
+    if (parentEl.closest("[data-component-badge], script, style")) {
+      return false;
+    }
+    return true;
+  }, []);
+
+  const isMarkableTextNode = useCallback((node: Node): node is Text => {
+    if (!isSelectableTextNode(node)) return false;
+    const textNode = node as Text;
+    const value = textNode.nodeValue ?? "";
+    if (!value.trim()) return false;
+    const parentEl = textNode.parentElement;
+    if (!parentEl) return false;
+    if (parentEl.closest(`[${USER_HIGHLIGHT_ATTR}="1"]`)) {
+      return false;
+    }
+    return true;
+  }, [USER_HIGHLIGHT_ATTR, isSelectableTextNode]);
+
+  const getSelectableTextNodes = useCallback((container: HTMLElement): Text[] => {
+    const nodes: Text[] = [];
+    const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT, {
+      acceptNode(node) {
+        return isSelectableTextNode(node)
+          ? NodeFilter.FILTER_ACCEPT
+          : NodeFilter.FILTER_REJECT;
+      },
+    });
+    let current = walker.nextNode();
+    while (current) {
+      nodes.push(current as Text);
+      current = walker.nextNode();
+    }
+    return nodes;
+  }, [isSelectableTextNode]);
+
+  const wrapTextSegment = useCallback((textNode: Text, startOffset: number, endOffset: number, highlightId: string) => {
+    const text = textNode.nodeValue ?? "";
+    const safeStart = Math.max(0, Math.min(startOffset, text.length));
+    const safeEnd = Math.max(safeStart, Math.min(endOffset, text.length));
+    if (safeEnd <= safeStart) return;
+    const before = text.slice(0, safeStart);
+    const middle = text.slice(safeStart, safeEnd);
+    const after = text.slice(safeEnd);
+    const parent = textNode.parentNode;
+    if (!parent || !middle) return;
+
+    const frag = document.createDocumentFragment();
+    if (before) frag.appendChild(document.createTextNode(before));
+    const mark = document.createElement("mark");
+    mark.setAttribute(USER_HIGHLIGHT_ATTR, "1");
+    mark.setAttribute("data-highlight-id", highlightId);
+    mark.className = highlightClassName;
+    mark.textContent = middle;
+    frag.appendChild(mark);
+    if (after) frag.appendChild(document.createTextNode(after));
+    parent.replaceChild(frag, textNode);
+  }, [USER_HIGHLIGHT_ATTR]);
+
+  const addMarkByOffsets = useCallback((container: HTMLElement, start: number, end: number, highlightId: string) => {
+    if (start < 0 || end <= start) return false;
+    const nodes = getSelectableTextNodes(container);
+    if (nodes.length === 0) return false;
+
+    let traversed = 0;
+    let applied = false;
+    for (const node of nodes) {
+      const len = node.nodeValue?.length ?? 0;
+      const nodeStart = traversed;
+      const nodeEnd = traversed + len;
+      const overlapStart = Math.max(start, nodeStart);
+      const overlapEnd = Math.min(end, nodeEnd);
+      if (overlapEnd > overlapStart) {
+        if (isMarkableTextNode(node)) {
+          wrapTextSegment(node, overlapStart - nodeStart, overlapEnd - nodeStart, highlightId);
+          applied = true;
+        }
+      }
+      traversed = nodeEnd;
+      if (traversed >= end) break;
+    }
+    return applied;
+  }, [getSelectableTextNodes, isMarkableTextNode, wrapTextSegment]);
+
+  const getComponentScopeByIndex = useCallback((componentIndex: number): HTMLElement | null => {
+    const container = contentRef.current;
+    if (!container) return null;
+    const host = container.querySelector(`[data-topic-component-index='${componentIndex}']`) as HTMLElement | null;
+    if (!host) return null;
+    return (host.querySelector("[data-highlight-scope='1']") as HTMLElement | null) ?? host;
+  }, []);
+
+  const getComponentScopeFromNode = useCallback((node: Node): { componentIndex: number; scope: HTMLElement } | null => {
+    const el = node instanceof Element ? node : node.parentElement;
+    if (!el) return null;
+    const host = el.closest("[data-topic-component-index]") as HTMLElement | null;
+    if (!host) return null;
+    const raw = host.getAttribute("data-topic-component-index");
+    if (raw == null) return null;
+    const componentIndex = Number(raw);
+    if (!Number.isFinite(componentIndex)) return null;
+    const scope = (host.querySelector("[data-highlight-scope='1']") as HTMLElement | null) ?? host;
+    return { componentIndex, scope };
+  }, []);
+
+  const getRangeOffsetsWithinContainer = useCallback((container: HTMLElement, range: Range) => {
+    if (range.collapsed) return null;
+    if (range.startContainer.nodeType !== Node.TEXT_NODE || range.endContainer.nodeType !== Node.TEXT_NODE) {
+      return null;
+    }
+    if (!isSelectableTextNode(range.startContainer) || !isSelectableTextNode(range.endContainer)) {
+      return null;
+    }
+
+    const startTextNode = range.startContainer as Text;
+    const endTextNode = range.endContainer as Text;
+    const startOffsetInNode = range.startOffset;
+    const endOffsetInNode = range.endOffset;
+
+    const nodes = getSelectableTextNodes(container);
+    let traversed = 0;
+    let start: number | null = null;
+    let end: number | null = null;
+    for (const textNode of nodes) {
+      const len = textNode.nodeValue?.length ?? 0;
+      if (textNode === startTextNode) {
+        start = traversed + Math.max(0, Math.min(startOffsetInNode, len));
+      }
+      if (textNode === endTextNode) {
+        end = traversed + Math.max(0, Math.min(endOffsetInNode, len));
+      }
+      traversed += len;
+      if (start !== null && end !== null) break;
+    }
+
+    if (start === null || end === null || end <= start) return null;
+    return { start, end };
+  }, [getSelectableTextNodes, isSelectableTextNode]);
+
+  const applyHighlightByText = useCallback((container: HTMLElement, text: string, highlightId: string) => {
+    const target = text.trim();
+    if (!target) return false;
+
+    const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT, {
+      acceptNode(node) {
+        return isMarkableTextNode(node)
+          ? NodeFilter.FILTER_ACCEPT
+          : NodeFilter.FILTER_REJECT;
+      },
+    });
+
+    let current: Node | null = walker.nextNode();
+    while (current) {
+      const node = current as Text;
+      const original = node.nodeValue ?? "";
+      const idx = original.indexOf(target);
+      const insensitiveIdx = idx >= 0 ? idx : original.toLowerCase().indexOf(target.toLowerCase());
+      const matchIdx = idx >= 0 ? idx : insensitiveIdx;
+      if (matchIdx >= 0 && node.parentNode) {
+        const end = matchIdx + target.length;
+        const safeStart = Math.max(0, Math.min(matchIdx, original.length));
+        const safeEnd = Math.max(safeStart, Math.min(end, original.length));
+        wrapTextSegment(node, safeStart, safeEnd, highlightId);
+        return true;
+      }
+      current = walker.nextNode();
+    }
+    return false;
+  }, [isMarkableTextNode, wrapTextSegment]);
+
+  const captureSelectionFromTopicContent = useCallback((): string => {
+    if (!highlightsEnabled) return "";
+    const rootContainer = contentRef.current;
+    if (!rootContainer) {
+      setSelectedText("");
+      selectedOffsetsRef.current = null;
+      setSelectionAction((prev) => ({ ...prev, visible: false }));
+      return "";
+    }
+
+    const selection = window.getSelection();
+    if (!selection || selection.rangeCount === 0 || selection.isCollapsed) {
+      setSelectedText("");
+      selectedOffsetsRef.current = null;
+      setSelectionAction((prev) => ({ ...prev, visible: false }));
+      return "";
+    }
+
+    const range = selection.getRangeAt(0);
+    const startInfo = getComponentScopeFromNode(range.startContainer);
+    const endInfo = getComponentScopeFromNode(range.endContainer);
+    if (!startInfo || !endInfo || startInfo.componentIndex !== endInfo.componentIndex) {
+      setSelectedText("");
+      selectedOffsetsRef.current = null;
+      setSelectionAction((prev) => ({ ...prev, visible: false }));
+      return "";
+    }
+    const scope = startInfo.scope;
+    const startNodeForScope = (
+      range.startContainer.nodeType === Node.TEXT_NODE
+        ? range.startContainer.parentNode
+        : range.startContainer
+    ) as Node | null;
+    const endNodeForScope = (
+      range.endContainer.nodeType === Node.TEXT_NODE
+        ? range.endContainer.parentNode
+        : range.endContainer
+    ) as Node | null;
+    const sameScope = Boolean(startNodeForScope && endNodeForScope)
+      && scope.contains(startNodeForScope)
+      && scope.contains(endNodeForScope);
+    if (!sameScope) {
+      setSelectedText("");
+      selectedOffsetsRef.current = null;
+      setSelectionAction((prev) => ({ ...prev, visible: false }));
+      return "";
+    }
+
+    const text = selection.toString().trim().slice(0, 280);
+    if (!text) {
+      setSelectedText("");
+      selectedOffsetsRef.current = null;
+      setSelectionAction((prev) => ({ ...prev, visible: false }));
+      return "";
+    }
+    const offsets = getRangeOffsetsWithinContainer(scope, range);
+    selectedOffsetsRef.current = offsets
+      ? { ...offsets, componentIndex: startInfo.componentIndex }
+      : null;
+    setSelectedText(text);
+    const rect = range.getBoundingClientRect();
+    const nextX = Math.min(window.innerWidth - 20, Math.max(20, rect.left + (rect.width / 2)));
+    const wantsBelow = rect.bottom + 56 < window.innerHeight;
+    const nextY = wantsBelow ? rect.bottom + 12 : Math.max(72, rect.top - 12);
+    setSelectionAction({
+      visible: true,
+      x: nextX,
+      y: nextY,
+      placement: wantsBelow ? "below" : "above",
+    });
+    return text;
+  }, [getComponentScopeFromNode, getRangeOffsetsWithinContainer, highlightsEnabled]);
+
+  const handleAddHighlight = useCallback(() => {
+    if (!highlightsEnabled) return;
+    const text = (selectedTextRef.current || captureSelectionFromTopicContent()).trim();
+    if (!text) return;
+    const topicKey = String(currentTopic.topic_index);
+    const selectedOffsets = selectedOffsetsRef.current;
+    const existing = currentTopicHighlights;
+    const overlaps: ViewerHighlight[] = [];
+    let mergedStart = selectedOffsets?.start ?? null;
+    let mergedEnd = selectedOffsets?.end ?? null;
+    let mergedComponentIndex = selectedOffsets?.componentIndex ?? null;
+
+    if (selectedOffsets) {
+      existing.forEach((item) => {
+        const itemStart = typeof item.start_offset === "number" ? item.start_offset : null;
+        const itemEnd = typeof item.end_offset === "number" ? item.end_offset : null;
+        const itemComponentIndex = typeof item.component_index === "number" ? item.component_index : null;
+        if (
+          itemStart === null
+          || itemEnd === null
+          || itemComponentIndex === null
+          || itemComponentIndex !== selectedOffsets.componentIndex
+        ) {
+          return;
+        }
+        const hasOverlap = itemStart < selectedOffsets.end && itemEnd > selectedOffsets.start;
+        if (!hasOverlap) return;
+        overlaps.push(item);
+        mergedStart = mergedStart === null ? itemStart : Math.min(mergedStart, itemStart);
+        mergedEnd = mergedEnd === null ? itemEnd : Math.max(mergedEnd, itemEnd);
+        mergedComponentIndex = itemComponentIndex;
+      });
+    }
+
+    const optimisticId = `local-${Date.now()}`;
+    const optimistic: ViewerHighlight = {
+      id: optimisticId,
+      text,
+      start_offset: mergedStart,
+      end_offset: mergedEnd,
+      component_index: mergedComponentIndex,
+    };
+    const overlapIds = new Set(overlaps.map((item) => item.id));
+    const nextTopicHighlights = existing
+      .filter((item) => !overlapIds.has(item.id))
+      .concat(optimistic);
+
+    setHighlightsByTopic((prev) => ({ ...prev, [topicKey]: nextTopicHighlights }));
+    setSelectedText("");
+    selectedOffsetsRef.current = null;
+    const sel = window.getSelection();
+    sel?.removeAllRanges();
+    setSelectionAction((prev) => ({ ...prev, visible: false }));
+
+    const removeOps = overlaps
+      .map((item) => item.id)
+      .filter(Boolean)
+      .map((highlightId) => updateViewerCourseSettings({
+        course_id: courseId,
+        remove_highlight: {
+          topic_index: currentTopic.topic_index,
+          highlight_id: highlightId,
+        },
+      }).catch(() => null));
+
+    Promise.all(removeOps).then(() => updateViewerCourseSettings({
+      course_id: courseId,
+      add_highlight: {
+        topic_index: currentTopic.topic_index,
+        text,
+        ...(mergedStart !== null && mergedEnd !== null && mergedComponentIndex !== null ? {
+          start_offset: mergedStart,
+          end_offset: mergedEnd,
+          component_index: mergedComponentIndex,
+        } : {}),
+      },
+    })).then((courseState) => {
+      const highlights = courseState?.highlights;
+      if (!highlights || typeof highlights !== "object") return;
+      setHighlightsByTopic(highlights);
+    }).catch(() => { });
+  }, [
+    captureSelectionFromTopicContent,
+    courseId,
+    currentTopicHighlights,
+    currentTopic.topic_index,
+    highlightsEnabled,
+  ]);
+
+  const handleRemoveHighlight = useCallback((highlightId: string) => {
+    const topicKey = String(currentTopic.topic_index);
+    setHighlightsByTopic((prev) => {
+      const nextTopicHighlights = (prev[topicKey] ?? []).filter((item) => item.id !== highlightId);
+      return { ...prev, [topicKey]: nextTopicHighlights };
+    });
+    updateViewerCourseSettings({
+      course_id: courseId,
+      remove_highlight: {
+        topic_index: currentTopic.topic_index,
+        highlight_id: highlightId,
+      },
+    }).then((courseState) => {
+      const highlights = courseState?.highlights;
+      if (!highlights || typeof highlights !== "object") return;
+      setHighlightsByTopic(highlights);
+    }).catch(() => { });
+  }, [courseId, currentTopic.topic_index]);
+
+  const handleClearTopicHighlights = useCallback(() => {
+    const topicKey = String(currentTopic.topic_index);
+    setHighlightsByTopic((prev) => {
+      const next = { ...prev };
+      delete next[topicKey];
+      return next;
+    });
+    const container = contentRef.current;
+    if (container) {
+      unwrapUserHighlights(container);
+    }
+    updateViewerCourseSettings({
+      course_id: courseId,
+      clear_highlights_topic_index: currentTopic.topic_index,
+    }).then((courseState) => {
+      const highlights = courseState?.highlights;
+      if (!highlights || typeof highlights !== "object") return;
+      setHighlightsByTopic(highlights);
+    }).catch(() => { });
+  }, [courseId, currentTopic.topic_index, unwrapUserHighlights]);
+
   // In-page topic navigation: fetch new topic, update state + URL (no page remount)
   const handleTopicNav = useCallback(async (href: string, destIdx: number) => {
     if (navigatingRef.current) return;
@@ -319,7 +771,175 @@ export default function TopicLayoutClient({ courseId, slug, fromPath, course, to
     return () => window.removeEventListener("popstate", onPop);
   }, [currentTopic.topic_index, handleTopicNav]);
 
-  // Track Reading Progress Bar and Last Visited Topic
+  useEffect(() => {
+    const container = contentRef.current;
+    if (!container) return;
+
+    const onCaptureSelection = () => {
+      window.requestAnimationFrame(() => {
+        captureSelectionFromTopicContent();
+      });
+    };
+
+    container.addEventListener("mouseup", onCaptureSelection);
+    container.addEventListener("keyup", onCaptureSelection);
+    container.addEventListener("touchend", onCaptureSelection);
+    return () => {
+      container.removeEventListener("mouseup", onCaptureSelection);
+      container.removeEventListener("keyup", onCaptureSelection);
+      container.removeEventListener("touchend", onCaptureSelection);
+    };
+  }, [captureSelectionFromTopicContent, currentTopic.topic_index]);
+
+  useEffect(() => {
+    const onOutsidePointerDown = (event: MouseEvent) => {
+      const target = event.target as Node | null;
+      if (!target) return;
+      const targetEl = target instanceof Element ? target : target.parentElement;
+      if (targetEl?.closest("[data-highlight-action='1']")) return;
+      const container = contentRef.current;
+      if (container && container.contains(target)) return;
+      setSelectionAction((prev) => ({ ...prev, visible: false }));
+    };
+    const onScroll = () => {
+      setSelectionAction((prev) => ({ ...prev, visible: false }));
+    };
+    document.addEventListener("mousedown", onOutsidePointerDown);
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => {
+      document.removeEventListener("mousedown", onOutsidePointerDown);
+      window.removeEventListener("scroll", onScroll);
+    };
+  }, []);
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (!highlightsEnabled) return;
+      const isAddHighlightShortcut =
+        (event.ctrlKey || event.metaKey) &&
+        event.shiftKey &&
+        event.key.toLowerCase() === "h";
+      if (!isAddHighlightShortcut) return;
+      if (!selectedTextRef.current.trim()) return;
+      event.preventDefault();
+      handleAddHighlight();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [handleAddHighlight, highlightsEnabled]);
+
+  useEffect(() => {
+    const container = contentRef.current;
+    if (!container) return;
+
+    const highlights = currentTopicHighlights;
+    const highlightIds = new Set(
+      highlights
+        .map((item) => String(item.id || "").trim())
+        .filter(Boolean)
+    );
+    const applyOne = (item: ViewerHighlight, idx: number) => {
+      const id = (item.id && item.id.trim()) ? item.id : `generated-${idx}`;
+      const componentIndex = item.component_index;
+      const scopedContainer = (
+        typeof componentIndex === "number" && Number.isFinite(componentIndex)
+          ? getComponentScopeByIndex(componentIndex)
+          : null
+      );
+      const highlightContainer = scopedContainer ?? container;
+      const start = item.start_offset;
+      const end = item.end_offset;
+      if (
+        typeof start === "number"
+        && Number.isFinite(start)
+        && typeof end === "number"
+        && Number.isFinite(end)
+      ) {
+        const appliedByOffset = addMarkByOffsets(highlightContainer, start, end, id);
+        if (appliedByOffset) return;
+      }
+      applyHighlightByText(highlightContainer, item.text, id);
+    };
+    const removeStaleMarks = () => {
+      const marks = Array.from(
+        container.querySelectorAll(`mark[${USER_HIGHLIGHT_ATTR}="1"]`)
+      ) as HTMLElement[];
+      marks.forEach((mark) => {
+        const id = String(mark.getAttribute("data-highlight-id") || "").trim();
+        if (!id || highlightIds.has(id)) return;
+        const parent = mark.parentNode;
+        if (!parent) return;
+        while (mark.firstChild) {
+          parent.insertBefore(mark.firstChild, mark);
+        }
+        parent.removeChild(mark);
+        parent.normalize();
+      });
+    };
+    const applyMissingOnly = () => {
+      mutingMutations = true;
+      removeStaleMarks();
+      highlights.forEach((item, idx) => {
+        const id = (item.id && item.id.trim()) ? item.id : `generated-${idx}`;
+        if (container.querySelector(`mark[${USER_HIGHLIGHT_ATTR}="1"][data-highlight-id="${id}"]`)) {
+          return;
+        }
+        applyOne(item, idx);
+      });
+      mutingMutations = false;
+    };
+    const applyFull = () => {
+      mutingMutations = true;
+      unwrapUserHighlights(container);
+      highlights.forEach((item, idx) => {
+        applyOne(item, idx);
+      });
+      mutingMutations = false;
+    };
+
+    let rafId: number | null = null;
+    let mutingMutations = false;
+    const scheduleApplyMissing = () => {
+      if (rafId !== null) return;
+      rafId = window.requestAnimationFrame(() => {
+        rafId = null;
+        applyMissingOnly();
+      });
+    };
+
+    const observer = new MutationObserver(() => {
+      if (mutingMutations) return;
+      scheduleApplyMissing();
+    });
+    observer.observe(container, { childList: true, subtree: true, characterData: true });
+
+    const t1 = window.setTimeout(applyFull, 80);
+    const t2 = window.setTimeout(applyMissingOnly, 600);
+    const t3 = window.setTimeout(applyMissingOnly, 1800);
+    applyFull();
+    return () => {
+      observer.disconnect();
+      if (rafId !== null) window.cancelAnimationFrame(rafId);
+      window.clearTimeout(t1);
+      window.clearTimeout(t2);
+      window.clearTimeout(t3);
+    };
+  }, [
+    addMarkByOffsets,
+    applyHighlightByText,
+    currentTopic.topic_index,
+    currentTopicHighlights,
+    getComponentScopeByIndex,
+    unwrapUserHighlights,
+  ]);
+
+  useEffect(() => {
+    setSelectedText("");
+    selectedOffsetsRef.current = null;
+    setSelectionAction((prev) => ({ ...prev, visible: false }));
+  }, [currentTopic.topic_index]);
+
+  // Track reading progress bar and persist last visited topic in auth DB
   useEffect(() => {
     let rafId: number | null = null;
 
@@ -337,14 +957,26 @@ export default function TopicLayoutClient({ courseId, slug, fromPath, course, to
     // Trigger once on mount to set initial progress bar width
     handleScroll();
 
-    // Also track that this was the last topic visited in this course
-    localStorage.setItem(`edu_last_topic_${courseId}`, currentTopic.topic_index.toString());
+    updateViewerCourseSettings({
+      course_id: courseId,
+      last_topic_index: currentTopic.topic_index,
+    }).catch(() => { });
 
     return () => {
       window.removeEventListener("scroll", handleScroll);
       if (rafId !== null) cancelAnimationFrame(rafId);
     };
   }, [courseId, currentTopic.topic_index]);
+
+  // Keep TOC drawer dismissible via keyboard.
+  useEffect(() => {
+    if (!tocDrawerOpen) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setTocDrawerOpen(false);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [tocDrawerOpen]);
 
   return (
     <div className="min-h-screen flex flex-col bg-gray-50 dark:bg-gray-950">
@@ -400,6 +1032,7 @@ export default function TopicLayoutClient({ courseId, slug, fromPath, course, to
               toc={course.toc}
               currentTopicIndex={currentTopic.topic_index}
               completedTopicIndices={completed}
+              bookmarkedTopicIndices={bookmarked}
               fromPath={validFromPath}
               asideClassName="w-72 shrink-0 flex flex-col h-full"
               onClose={() => setDrawerOpen(false)}
@@ -421,6 +1054,7 @@ export default function TopicLayoutClient({ courseId, slug, fromPath, course, to
             toc={course.toc}
             currentTopicIndex={currentTopic.topic_index}
             completedTopicIndices={completed}
+            bookmarkedTopicIndices={bookmarked}
             fromPath={validFromPath}
             onTopicClick={(href, destIdx) => handleTopicNav(href, destIdx)}
           />
@@ -431,11 +1065,40 @@ export default function TopicLayoutClient({ courseId, slug, fromPath, course, to
 
           {/* Estimated Reading Time */}
           <div className="max-w-6xl mx-auto px-6 pt-8 pb-2">
-            <div className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white dark:bg-gray-800 text-gray-500 dark:text-gray-400 rounded-full text-[11px] uppercase tracking-wider font-semibold border border-gray-200 dark:border-gray-700 shadow-sm">
-              <svg className="w-3.5 h-3.5 text-gray-400 dark:text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-              <span>{estimatedTime} min read</span>
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white dark:bg-gray-800 text-gray-500 dark:text-gray-400 rounded-full text-[11px] uppercase tracking-wider font-semibold border border-gray-200 dark:border-gray-700 shadow-sm">
+                <svg className="w-3.5 h-3.5 text-gray-400 dark:text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <span>{estimatedTime} min read</span>
+              </div>
+              <button
+                onClick={handleToggleBookmark}
+                className={[
+                  "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] uppercase tracking-wider font-semibold border shadow-sm transition-colors cursor-pointer",
+                  isBookmarked
+                    ? "bg-amber-50 dark:bg-amber-900/30 border-amber-300 dark:border-amber-700 text-amber-700 dark:text-amber-300"
+                    : "bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400 hover:text-amber-600 dark:hover:text-amber-300 hover:border-amber-300 dark:hover:border-amber-700",
+                ].join(" ")}
+              >
+                <svg className="w-3.5 h-3.5" fill={isBookmarked ? "currentColor" : "none"} viewBox="0 0 20 20" stroke="currentColor" strokeWidth={1.6}>
+                  <path d="M5 2a2 2 0 0 0-2 2v14l7-3 7 3V4a2 2 0 0 0-2-2H5Z" />
+                </svg>
+                <span>{isBookmarked ? "Bookmarked" : "Bookmark"}</span>
+              </button>
+              {highlightsEnabled && currentTopicHighlights.length > 0 && (
+                <button
+                  onClick={handleClearTopicHighlights}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] uppercase tracking-wider font-semibold border shadow-sm transition-colors cursor-pointer bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400 hover:text-red-600 dark:hover:text-red-400 hover:border-red-300 dark:hover:border-red-700"
+                >
+                  <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M3 6h18" />
+                    <path d="M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2" />
+                    <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+                  </svg>
+                  <span>Clear Highlights</span>
+                </button>
+              )}
             </div>
           </div>
 
@@ -449,20 +1112,63 @@ export default function TopicLayoutClient({ courseId, slug, fromPath, course, to
               const isHeavy = HEAVY_COMPONENT_TYPES.has(comp.type);
 
               return (
-                <div key={i} className="relative">
-                  {isHeavy ? (
-                    <LazyComponent>
-                      {renderer ? renderer(comp.content) : <UnknownRenderer type={comp.type} />}
-                    </LazyComponent>
-                  ) : (
-                    renderer ? renderer(comp.content) : <UnknownRenderer type={comp.type} />
-                  )}
+                <div key={`${currentTopic.topic_index}-${i}`} className="relative" data-topic-component-index={i}>
+                  <ComponentErrorBoundary label={componentLabel}>
+                    <div data-highlight-scope="1">
+                      {isHeavy ? (
+                        <LazyComponent>
+                          {renderer ? renderer(comp.content) : <UnknownRenderer type={comp.type} />}
+                        </LazyComponent>
+                      ) : (
+                        renderer ? renderer(comp.content) : <UnknownRenderer type={comp.type} />
+                      )}
+                    </div>
+                  </ComponentErrorBoundary>
                   <div data-component-badge>
                     <ComponentBadge componentName={componentLabel} subType={subType} />
                   </div>
                 </div>
               );
             })}
+
+            {!highlightsEnabled && (
+              <section className="rounded-xl border border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-900/40 p-4">
+                <p className="text-sm text-gray-600 dark:text-gray-400">
+                  Highlights are disabled by administrator.
+                </p>
+              </section>
+            )}
+
+            {highlightsEnabled && currentTopicHighlights.length > 0 && (
+              <section className="rounded-xl border border-amber-200 dark:border-amber-800 bg-amber-50/70 dark:bg-amber-900/20 p-4">
+                <div className="mb-2 flex items-center justify-between gap-3">
+                  <h3 className="text-sm font-semibold text-amber-800 dark:text-amber-300">
+                    Saved Highlights ({currentTopicHighlights.length})
+                  </h3>
+                  <button
+                    onClick={handleClearTopicHighlights}
+                    className="text-xs px-2 py-1 rounded border border-amber-300 dark:border-amber-700 text-amber-700 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-900/40 transition-colors cursor-pointer"
+                  >
+                    Clear Topic Highlights
+                  </button>
+                </div>
+                <ul className="space-y-2">
+                  {currentTopicHighlights.map((item) => (
+                    <li key={item.id} className="flex items-start gap-3 bg-white/70 dark:bg-gray-900/60 border border-amber-100 dark:border-amber-900 rounded-lg p-2.5">
+                      <p className="text-sm text-gray-700 dark:text-gray-200 flex-1 leading-relaxed">
+                        {item.text}
+                      </p>
+                      <button
+                        onClick={() => handleRemoveHighlight(item.id)}
+                        className="shrink-0 text-xs px-2 py-1 rounded border border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400 hover:text-red-600 dark:hover:text-red-400 hover:border-red-300 dark:hover:border-red-700 transition-colors cursor-pointer"
+                      >
+                        Remove
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            )}
           </div>
 
           <FontInjector />
@@ -559,7 +1265,7 @@ export default function TopicLayoutClient({ courseId, slug, fromPath, course, to
 
       {/* Slide-out TOC Drawer */}
       {tocDrawerOpen && (
-        <div className="fixed inset-0 z-50">
+        <div className="fixed inset-x-0 bottom-0 top-14 z-40">
           <div className="absolute inset-0 bg-black/40" onClick={() => setTocDrawerOpen(false)} />
           <div className="absolute right-0 top-0 bottom-0 w-80 bg-white dark:bg-gray-900 border-l border-gray-200 dark:border-gray-800 shadow-2xl flex flex-col">
             <div className="flex items-center justify-between px-6 py-5 border-b border-gray-200 dark:border-gray-800 shrink-0">
@@ -607,6 +1313,31 @@ export default function TopicLayoutClient({ courseId, slug, fromPath, course, to
             </div>
           </div>
         </div>
+      )}
+
+      {highlightsEnabled && selectionAction.visible && selectedText && (
+        <button
+          data-highlight-action="1"
+          onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); }}
+          onTouchStart={(e) => { e.preventDefault(); e.stopPropagation(); }}
+          onClick={handleAddHighlight}
+          className="fixed z-50 inline-flex items-center justify-center w-8 h-8 rounded-full border border-indigo-300 dark:border-indigo-700 bg-white dark:bg-gray-900 text-indigo-600 dark:text-indigo-400 shadow-lg hover:scale-105 transition-transform cursor-pointer"
+          style={{
+            left: `${selectionAction.x}px`,
+            top: `${selectionAction.y}px`,
+            transform:
+              selectionAction.placement === "below"
+                ? "translate(-50%, 0%)"
+                : "translate(-50%, -100%)",
+          }}
+          aria-label="Add highlight"
+          title="Add highlight"
+        >
+          <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round">
+            <path d="M15 4H6a2 2 0 0 0-2 2v14l5-2 5 2V6a2 2 0 0 0-2-2Z" />
+            <path d="M18 9v6M21 12h-6" />
+          </svg>
+        </button>
       )}
 
       {/* Floating Course Chatbot */}

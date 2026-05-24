@@ -21,15 +21,25 @@ export function readSavedTheme(): "dark" | "light" | null {
 
 export default function DarkModeToggle() {
   const { user } = useAuth();
-  const [isDark, setIsDark] = useState(false);
+  const [isDark, setIsDark] = useState(() => {
+    if (typeof document !== "undefined") {
+      return document.documentElement.classList.contains("dark");
+    }
+    return false;
+  });
+
+  const syncFromDom = () => {
+    const domDark = document.documentElement.classList.contains("dark");
+    setIsDark(domDark);
+  };
 
   // Hydrate from localStorage/cookie on first render
   useEffect(() => {
     const saved = readSavedTheme();
     const useDark = saved === "dark";
-    setIsDark(useDark);
     document.documentElement.classList.toggle("dark", useDark);
     if (!saved) saveTheme("light");
+    requestAnimationFrame(syncFromDom);
   }, []);
 
   // The DB hydration logic has been moved to AuthProvider so it happens globally
@@ -37,9 +47,22 @@ export default function DarkModeToggle() {
   // We keep the local hook here so the toggle button stays in sync if AuthProvider changes it.
   useEffect(() => {
     if (user?.theme) {
-      setIsDark(user.theme === "dark");
+      const useDark = user.theme === "dark";
+      document.documentElement.classList.toggle("dark", useDark);
+      saveTheme(useDark ? "dark" : "light");
+      requestAnimationFrame(syncFromDom);
     }
   }, [user?.theme]);
+
+  // Keep toggle UI in sync even if some other part of app toggles the root class.
+  useEffect(() => {
+    const root = document.documentElement;
+    const observer = new MutationObserver(() => {
+      syncFromDom();
+    });
+    observer.observe(root, { attributes: true, attributeFilter: ["class"] });
+    return () => observer.disconnect();
+  }, []);
 
   const toggle = () => {
     document.documentElement.classList.add("disable-theme-transitions");

@@ -66,6 +66,7 @@ class SQLiteAuthDatabase:
                     two_factor_enabled INTEGER NOT NULL DEFAULT 0,
                     login_ip_log TEXT,
                     theme TEXT NOT NULL DEFAULT 'light',
+                    viewer_settings_json TEXT NOT NULL DEFAULT '{}',
                     created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
                 )
                 """
@@ -146,6 +147,17 @@ class SQLiteAuthDatabase:
                     conn.commit()
                 except sqlite3.OperationalError:
                     pass  # Column already exists
+        finally:
+            conn.close()
+
+    def ensure_viewer_settings_column(self) -> None:
+        """Lazily add viewer_settings_json column to users table if it doesn't exist."""
+        conn = self.get_connection()
+        try:
+            conn.execute("ALTER TABLE users ADD COLUMN viewer_settings_json TEXT NOT NULL DEFAULT '{}'")
+            conn.commit()
+        except sqlite3.OperationalError:
+            pass  # Column already exists
         finally:
             conn.close()
 

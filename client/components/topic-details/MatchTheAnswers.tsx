@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useRef, useEffect, useCallback } from "react";
+import React, { useState, useRef, useEffect, useCallback, useMemo } from "react";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -104,7 +104,7 @@ interface LineCoord {
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function MatchTheAnswers({ data: rawData }: { data: MatchTheAnswersData }) {
-  const data = normalizeMatchData(rawData);
+  const data = useMemo(() => normalizeMatchData(rawData), [rawData]);
 
   const [connections, setConnections] = useState<Record<string, string>>({});
   const [selectedLeft, setSelectedLeft] = useState<string | null>(null);

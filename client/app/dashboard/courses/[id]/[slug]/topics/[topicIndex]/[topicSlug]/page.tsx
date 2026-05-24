@@ -6,7 +6,7 @@ import { notFound } from "next/navigation";
 import TopicLayoutClient from "@/components/edu-viewer/TopicLayoutClient";
 import AppNavbar from "@/components/edu-viewer/AppNavbar";
 import UserMenu from "@/components/edu-viewer/UserMenu";
-import { getAuthToken, clearAuthToken, getProgress, getUser } from "@/utils/authClient";
+import { getAuthToken, clearAuthToken, getProgress, getUser, getViewerSettings, type ViewerHighlight } from "@/utils/authClient";
 import { getBackendApiBase } from "@/utils/runtime-config";
 
 const BACKEND = getBackendApiBase();
@@ -83,6 +83,9 @@ export default function TopicDetailPage() {
   const [topic, setTopic] = useState<TopicDetail | null>(null);
   const [course, setCourse] = useState<CourseDetail | null>(null);
   const [initialCompleted, setInitialCompleted] = useState<number[]>([]);
+  const [initialBookmarked, setInitialBookmarked] = useState<number[]>([]);
+  const [initialHighlights, setInitialHighlights] = useState<Record<string, ViewerHighlight[]>>({});
+  const [highlightsEnabled, setHighlightsEnabled] = useState(true);
   const [loading, setLoading] = useState(true);
   const [missing, setMissing] = useState(false);
 
@@ -133,13 +136,22 @@ export default function TopicDetailPage() {
           inflightFetches.set(courseFetchKey, coursePromise);
         }
 
-        Promise.all([topicPromise, coursePromise, getProgress()])
-          .then(([topicData, courseData, prog]) => {
+        Promise.all([topicPromise, coursePromise, getProgress(), getViewerSettings()])
+          .then(([topicData, courseData, prog, viewerPayload]) => {
             if (cancelled) return;
             if (!topicData) { setMissing(true); setLoading(false); return; }
             setTopic(topicData);
             setCourse(courseData);
             setInitialCompleted(prog.completed[String(courseId)] ?? []);
+            setHighlightsEnabled(viewerPayload.features.highlights_enabled !== false);
+            const viewerSettings = viewerPayload.settings;
+            const viewerCourse = viewerSettings?.courses?.[String(courseId)];
+            setInitialBookmarked(Array.isArray(viewerCourse?.bookmarks) ? viewerCourse.bookmarks : []);
+            setInitialHighlights(
+              viewerCourse?.highlights && typeof viewerCourse.highlights === "object"
+                ? viewerCourse.highlights
+                : {}
+            );
             setLoading(false);
           })
           .catch((err: unknown) => {
@@ -226,6 +238,9 @@ export default function TopicDetailPage() {
       course={course}
       topic={topic}
       initialCompleted={initialCompleted}
+      initialBookmarked={initialBookmarked}
+      initialHighlights={initialHighlights}
+      highlightsEnabled={highlightsEnabled}
     />
   );
 }

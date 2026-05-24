@@ -30,6 +30,7 @@ const SERVER_ENV_PATH = path.join(SERVER_DIR, '.env');
 const SERVER_ENV_EXAMPLE_PATH = path.join(SERVER_DIR, '.env.example');
 const CLIENT_ENV_PATH = path.join(CLIENT_DIR, '.env.local');
 const CLIENT_ENV_EXAMPLE_PATH = path.join(CLIENT_DIR, '.env.local.example');
+const ROUTE_MANIFEST_PATH = path.join(ROOT, 'proxy', 'backend-route-manifest.json');
 
 const args = parseArgs(process.argv.slice(2));
 
@@ -91,6 +92,8 @@ async function main() {
   });
 
   ensureStaticRoot(staticRoot);
+  generateBackendRouteManifest(venvPython);
+  BACKEND_API_PATTERNS = loadBackendApiPatterns();
 
   printEnvSummary({
     proxyPort,
@@ -128,6 +131,60 @@ async function main() {
 
   children.push(backendProcess, clientProcess);
   attachShutdownHandlers();
+}
+
+function generateBackendRouteManifest(venvPython) {
+  const scriptPath = path.join(SERVER_DIR, 'generate_proxy_route_manifest.py');
+  if (!fs.existsSync(scriptPath)) {
+    console.warn('[warn] Route-manifest generator script not found. Using fallback API patterns.');
+    return;
+  }
+
+  const result = spawnSync(venvPython, [scriptPath], {
+    cwd: SERVER_DIR,
+    stdio: 'inherit',
+  });
+
+  if (result.status !== 0) {
+    console.warn('[warn] Failed to generate backend route manifest. Using fallback API patterns.');
+  }
+}
+
+function loadBackendApiPatterns() {
+  try {
+    if (!fs.existsSync(ROUTE_MANIFEST_PATH)) {
+      console.warn('[warn] Route manifest missing. Using fallback API patterns.');
+      return DEFAULT_BACKEND_API_PATTERNS;
+    }
+
+    const raw = fs.readFileSync(ROUTE_MANIFEST_PATH, 'utf8');
+    const parsed = JSON.parse(raw);
+    const regexes = Array.isArray(parsed?.backend_api_regexes)
+      ? parsed.backend_api_regexes
+      : [];
+
+    const compiled = regexes
+      .filter((pattern) => typeof pattern === 'string' && pattern.trim())
+      .map((pattern) => {
+        try {
+          return new RegExp(pattern, 'i');
+        } catch {
+          return null;
+        }
+      })
+      .filter(Boolean);
+
+    if (!compiled.length) {
+      console.warn('[warn] Route manifest is empty/invalid. Using fallback API patterns.');
+      return DEFAULT_BACKEND_API_PATTERNS;
+    }
+
+    console.log(`[manifest] Loaded ${compiled.length} backend API route patterns.`);
+    return compiled;
+  } catch (error) {
+    console.warn('[warn] Could not load route manifest. Using fallback API patterns.');
+    return DEFAULT_BACKEND_API_PATTERNS;
+  }
 }
 
 function printUsage() {
@@ -808,12 +865,13 @@ function startProxyServer({ proxyPort, backendPort, clientPort, staticRoot, cert
   return server;
 }
 
-const BACKEND_API_PATTERNS = [
+const DEFAULT_BACKEND_API_PATTERNS = [
   /^\/api\/paths\/?$/i,
   /^\/api\/paths\/\d+\/courses\/?$/i,
   /^\/api\/projects\/?$/i,
   /^\/api\/projects\/\d+\/course\/?$/i,
   /^\/api\/courses\/?$/i,
+  /^\/api\/search\/?$/i,
   /^\/api\/course-details\/?$/i,
   /^\/api\/topic-details\/?$/i,
   /^\/api\/contact\/?$/i,
@@ -844,6 +902,7 @@ const BACKEND_API_PATTERNS = [
   /^\/api\/admin\/settings\/?$/i,
   /^\/api\/ai\/generate\/?$/i,
 ];
+let BACKEND_API_PATTERNS = DEFAULT_BACKEND_API_PATTERNS;
 
 function isBackendApi(pathname) {
   return BACKEND_API_PATTERNS.some((pattern) => pattern.test(pathname));

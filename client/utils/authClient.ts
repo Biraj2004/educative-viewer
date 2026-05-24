@@ -220,6 +220,35 @@ export interface ProgressData {
   completed: Record<string, number[]>;
 }
 
+export interface ViewerHighlight {
+  id: string;
+  text: string;
+  context?: string;
+  created_at?: string;
+  start_offset?: number | null;
+  end_offset?: number | null;
+  component_index?: number | null;
+}
+
+export interface CourseViewerSettings {
+  last_topic_index?: number;
+  bookmarks?: number[];
+  highlights?: Record<string, ViewerHighlight[]>;
+}
+
+export interface ViewerSettingsData {
+  courses: Record<string, CourseViewerSettings>;
+}
+
+export interface ViewerFeatures {
+  highlights_enabled: boolean;
+}
+
+export interface ViewerSettingsPayload {
+  settings: ViewerSettingsData;
+  features: ViewerFeatures;
+}
+
 export interface AuthUser {
   id: number;
   email: string;
@@ -478,6 +507,80 @@ export async function resetCourseProgress(courseId: number): Promise<void> {
     method: "DELETE",
     body: JSON.stringify({ course_id: courseId }),
   });
+}
+
+export async function getViewerSettings(): Promise<ViewerSettingsPayload> {
+  try {
+    const data = await apiGet<{
+      settings?: ViewerSettingsData;
+      features?: Partial<ViewerFeatures>;
+    }>(`${getAPI()}/viewer-settings`);
+    const settings = data?.settings;
+    const features = data?.features;
+    if (!settings || typeof settings !== "object" || typeof settings.courses !== "object") {
+      return {
+        settings: { courses: {} },
+        features: { highlights_enabled: true },
+      };
+    }
+    return {
+      settings,
+      features: {
+        highlights_enabled: features?.highlights_enabled !== false,
+      },
+    };
+  } catch {
+    return {
+      settings: { courses: {} },
+      features: { highlights_enabled: true },
+    };
+  }
+}
+
+export interface UpdateViewerCourseSettingsPayload {
+  course_id: number;
+  last_topic_index?: number;
+  bookmark_topic_index?: number;
+  bookmarked?: boolean;
+  add_highlight?: {
+    topic_index: number;
+    text: string;
+    context?: string;
+    start_offset?: number;
+    end_offset?: number;
+    component_index?: number;
+  };
+  remove_highlight?: {
+    topic_index: number;
+    highlight_id: string;
+  };
+  clear_highlights_topic_index?: number;
+}
+
+export async function updateViewerCourseSettings(
+  payload: UpdateViewerCourseSettingsPayload,
+): Promise<CourseViewerSettings | null> {
+  const token = getAuthToken();
+  if (!token) return null;
+  const res = await fetch(`${getAPI()}/viewer-settings/course`, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(payload),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    if (res.status === 401) {
+      await _handleUnauthorized();
+    }
+    if (res.status === 403) {
+      await _handleForbidden(data?.error ?? data?.message);
+    }
+    throw new ApiError(data?.error ?? `Request failed (${res.status})`, res.status);
+  }
+  return (data?.course as CourseViewerSettings) ?? null;
 }
 
 // ─── Internal helper ──────────────────────────────────────────────────────────

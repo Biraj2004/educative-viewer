@@ -140,6 +140,27 @@ export default function GlobalSettingsPage() {
           </div>
 
           <hr className="border-gray-200 dark:border-gray-800 my-6" />
+
+          <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100">Reader Features</h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Highlights</label>
+              <select
+                name="highlights_enabled"
+                value={settings.highlights_enabled ?? "1"}
+                onChange={handleChange}
+                className="mt-1 block w-full rounded-md border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 py-2 px-3 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-indigo-500 sm:text-sm dark:text-white"
+              >
+                <option value="1">Enabled</option>
+                <option value="0">Disabled</option>
+              </select>
+              <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                When disabled, users can view existing highlights but cannot add new ones.
+              </p>
+            </div>
+          </div>
+
+          <hr className="border-gray-200 dark:border-gray-800 my-6" />
           
           <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100">Database</h2>
           <div className="grid grid-cols-1 gap-4">

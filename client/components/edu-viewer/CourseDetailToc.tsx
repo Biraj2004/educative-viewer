@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 
 interface Topic {
@@ -25,6 +25,8 @@ interface Props {
   fromPath?: string | null;
   /** Set of topic_index values the user has completed */
   completedTopicIndices?: Set<number>;
+  bookmarkedTopicIndices?: Set<number>;
+  lastVisitedTopicIndex?: number | null;
 }
 
 function SearchIcon() {
@@ -72,26 +74,28 @@ function buildTopicHref(
   return `${base}?from=${encodeURIComponent(fromPath)}`;
 }
 
-export default function CourseDetailToc({ toc, courseId, slug, fromPath, completedTopicIndices }: Props) {
+export default function CourseDetailToc({
+  toc,
+  courseId,
+  slug,
+  fromPath,
+  completedTopicIndices,
+  bookmarkedTopicIndices,
+  lastVisitedTopicIndex = null,
+}: Props) {
   const [q, setQ] = useState("");
-  const [lastVisitedIndex, setLastVisitedIndex] = useState<number | null>(null);
+  const lastVisitedIndex = lastVisitedTopicIndex;
 
   useEffect(() => {
-    // Read the last visited topic index on mount
-    const saved = localStorage.getItem(`edu_last_topic_${courseId}`);
-    if (saved) {
-      const idx = parseInt(saved, 10);
-      setLastVisitedIndex(idx);
-      
-      // Auto-scroll to that item after a tiny delay for mounting
-      setTimeout(() => {
-        const el = document.getElementById(`toc-item-${idx}`);
-        if (el) {
-          el.scrollIntoView({ behavior: "smooth", block: "center" });
-        }
-      }, 300);
-    }
-  }, [courseId]);
+    if (lastVisitedIndex == null) return;
+    const timer = window.setTimeout(() => {
+      const el = document.getElementById(`toc-item-${lastVisitedIndex}`);
+      if (el) {
+        el.scrollIntoView({ behavior: "smooth", block: "center" });
+      }
+    }, 300);
+    return () => window.clearTimeout(timer);
+  }, [lastVisitedIndex]);
 
   const normalised = q.toLowerCase().trim();
 
@@ -192,6 +196,7 @@ export default function CourseDetailToc({ toc, courseId, slug, fromPath, complet
                   <ul>
                     {entry.topics.map((topic, j) => {
                       const isDone = completedTopicIndices?.has(topic.topic_index);
+                      const isBookmarked = bookmarkedTopicIndices?.has(topic.topic_index);
                       const isLastVisited = lastVisitedIndex === topic.topic_index;
                       return (
                         <li
@@ -237,6 +242,16 @@ export default function CourseDetailToc({ toc, courseId, slug, fromPath, complet
                                 topic.title
                               )}
                             </span>
+                            {isBookmarked && (
+                              <svg
+                                className="w-3.5 h-3.5 shrink-0 text-amber-500"
+                                fill="currentColor"
+                                viewBox="0 0 20 20"
+                                aria-label="Bookmarked"
+                              >
+                                <path d="M5 2a2 2 0 0 0-2 2v14l7-3 7 3V4a2 2 0 0 0-2-2H5Z" />
+                              </svg>
+                            )}
                           </Link>
                         </li>
                       );
@@ -246,6 +261,7 @@ export default function CourseDetailToc({ toc, courseId, slug, fromPath, complet
               );
             } else {
               const isDone = completedTopicIndices?.has(entry.topic_index);
+              const isBookmarked = bookmarkedTopicIndices?.has(entry.topic_index);
               const isLastVisited = lastVisitedIndex === entry.topic_index;
               return (
                 <div
@@ -287,6 +303,16 @@ export default function CourseDetailToc({ toc, courseId, slug, fromPath, complet
                         entry.title
                       )}
                     </span>
+                    {isBookmarked && (
+                      <svg
+                        className="w-3.5 h-3.5 shrink-0 text-amber-500"
+                        fill="currentColor"
+                        viewBox="0 0 20 20"
+                        aria-label="Bookmarked"
+                      >
+                        <path d="M5 2a2 2 0 0 0-2 2v14l7-3 7 3V4a2 2 0 0 0-2-2H5Z" />
+                      </svg>
+                    )}
                   </Link>
                 </div>
               );

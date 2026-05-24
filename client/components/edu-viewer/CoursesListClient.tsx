@@ -5,6 +5,7 @@ import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import CourseSearchInput from "./CourseSearchInput";
 import ActiveToggle from "./ActiveToggle";
+import { searchCourseContent, type GlobalSearchResult } from "@/utils/searchClient";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -100,9 +101,17 @@ export default function CoursesListClient({
   isAdmin = false,
   authToken = "",
 }: Props) {
+  const enableGlobalSearch =
+    typeof process.env.NEXT_PUBLIC_ENABLE_GLOBAL_SEARCH === "string"
+      ? process.env.NEXT_PUBLIC_ENABLE_GLOBAL_SEARCH === "1"
+      : false;
+
   const searchParams = useSearchParams();
   const [q, setQ] = useState(() => searchParams.get("q") ?? "");
   const [page, setPage] = useState(1);
+  const [globalResults, setGlobalResults] = useState<GlobalSearchResult[]>([]);
+  const [globalLoading, setGlobalLoading] = useState(false);
+  const [globalError, setGlobalError] = useState<string | null>(null);
   const ITEMS_PER_PAGE = 30;
 
   const normalised = q.toLowerCase().trim();
@@ -117,6 +126,42 @@ export default function CoursesListClient({
     // eslint-disable-next-line
     setPage(1);
   }, [normalised]);
+
+  useEffect(() => {
+    if (!enableGlobalSearch || normalised.length < 3) {
+      setGlobalResults([]);
+      setGlobalError(null);
+      setGlobalLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    const handle = setTimeout(async () => {
+      setGlobalLoading(true);
+      setGlobalError(null);
+      try {
+        const data = await searchCourseContent(normalised, 20);
+        if (!cancelled) {
+          setGlobalResults(data.results);
+        }
+      } catch (err: unknown) {
+        if (!cancelled) {
+          const message = err instanceof Error ? err.message : "Failed to search topic content";
+          setGlobalError(message);
+          setGlobalResults([]);
+        }
+      } finally {
+        if (!cancelled) {
+          setGlobalLoading(false);
+        }
+      }
+    }, 280);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(handle);
+    };
+  }, [enableGlobalSearch, normalised]);
 
   // Build a position map for O(1) lookup — courses not in the list sort to the end
   const orderMap = new Map(courseOrder.map((id, i) => [id, i]));
@@ -144,10 +189,83 @@ export default function CoursesListClient({
         <CourseSearchInput
           value={q}
           onChange={setQ}
-          placeholder="Search courses…"
+          placeholder="Search courses and topic content..."
           totalCount={courses.length}
           filteredCount={filtered.length}
         />
+
+        {enableGlobalSearch && normalised.length >= 3 && (
+          <div className="mt-4 rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 overflow-hidden">
+            <div className="px-4 py-2.5 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between">
+              <h3 className="text-xs font-semibold tracking-wide uppercase text-gray-500 dark:text-gray-400">
+                Global Topic Matches
+              </h3>
+              {globalLoading ? (
+                <span className="text-xs text-gray-400 dark:text-gray-500">Searching...</span>
+              ) : (
+                <span className="text-xs text-gray-400 dark:text-gray-500">{globalResults.length} results</span>
+              )}
+            </div>
+
+            {globalError && (
+              <div className="px-4 py-3 text-xs text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950/30">
+                {globalError}
+              </div>
+            )}
+
+            {!globalError && !globalLoading && globalResults.length === 0 && (
+              <div className="px-4 py-3 text-xs text-gray-500 dark:text-gray-400">
+                No topic-level matches for this query.
+              </div>
+            )}
+
+            {!globalError && globalResults.length > 0 && (
+              <div className="divide-y divide-gray-100 dark:divide-gray-800">
+                {globalResults.map((hit) => {
+                  const href = `/dashboard/courses/${hit.course_id}/${hit.course_slug}/topics/${hit.topic_index}/${hit.topic_slug}`;
+                  const componentLabel = (hit.component_types || "")
+                    .split(" ")
+                    .filter(Boolean)
+                    .slice(0, 3)
+                    .join(", ");
+                  return (
+                    <Link
+                      key={`${hit.course_id}-${hit.topic_index}-${hit.topic_slug}`}
+                      href={href}
+                      className="block px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-800/40 transition-colors"
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="text-sm font-semibold text-gray-900 dark:text-gray-100 truncate">
+                            {hit.topic_name}
+                          </p>
+                          <p className="text-xs text-indigo-600 dark:text-indigo-400 truncate">
+                            {hit.course_title}
+                          </p>
+                        </div>
+                        <span className="text-[11px] text-gray-400 dark:text-gray-500 whitespace-nowrap">
+                          score {hit.score.toFixed(2)}
+                        </span>
+                      </div>
+
+                      {hit.snippet && (
+                        <p className="mt-1.5 text-xs text-gray-600 dark:text-gray-300 line-clamp-2">
+                          {hit.snippet}
+                        </p>
+                      )}
+
+                      {componentLabel && (
+                        <p className="mt-1 text-[11px] text-gray-400 dark:text-gray-500 truncate">
+                          Components: {componentLabel}
+                        </p>
+                      )}
+                    </Link>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       <div className="max-w-5xl mx-auto px-6 py-6">

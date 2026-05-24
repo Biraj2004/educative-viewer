@@ -46,6 +46,7 @@ def register_settings_routes(bp: Blueprint, auth_service: AuthService) -> None:
             "groq_api_key": get_env_variable("GROQ_API_KEY"),
             "course_db_engine": get_env_variable("COURSE_DB_ENGINE", "sqlite"),
             "course_sqlite_db_paths_json": get_env_variable("COURSE_SQLITE_DB_PATHS_JSON", '[]'),
+            "highlights_enabled": get_env_variable("HIGHLIGHTS_ENABLED", "1"),
         })
 
     @bp.route("/settings", methods=["POST"])
@@ -62,6 +63,7 @@ def register_settings_routes(bp: Blueprint, auth_service: AuthService) -> None:
             "groq_api_key": "GROQ_API_KEY",
             "course_db_engine": "COURSE_DB_ENGINE",
             "course_sqlite_db_paths_json": "COURSE_SQLITE_DB_PATHS_JSON",
+            "highlights_enabled": "HIGHLIGHTS_ENABLED",
         }
 
         for key, var_name in mapping.items():
@@ -102,6 +104,9 @@ def register_settings_routes(bp: Blueprint, auth_service: AuthService) -> None:
                 course_db_updated = True
             except Exception:
                 pass
+        if "highlights_enabled" in data:
+            raw = str(data["highlights_enabled"]).strip().lower()
+            cfg.highlights_enabled = raw in ("1", "true", "yes", "on")
 
         if course_db_updated:
             try:

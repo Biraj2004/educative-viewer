@@ -30,6 +30,7 @@ class OracleAuthConfig:
 class AppConfig:
     flask_port: int
     flask_debug: bool
+    waitress_threads: int
     db_keepalive_enabled: bool
     db_keepalive_interval_minutes: int
 
@@ -48,6 +49,7 @@ class AppConfig:
     rsa_private_key: str
     gemini_api_key: str
     groq_api_key: str
+    highlights_enabled: bool
 
 
 def load_env_file(env_path: Path | None = None) -> None:
@@ -149,6 +151,7 @@ def load_config() -> AppConfig:
     return AppConfig(
         flask_port=int(os.environ.get("FLASK_PORT", "5000")),
         flask_debug=os.environ.get("FLASK_DEBUG", "0") == "1",
+        waitress_threads=max(2, int(os.environ.get("WAITRESS_THREADS", "8"))),
         db_keepalive_enabled=os.environ.get("DB_KEEPALIVE_ENABLED", "1") == "1",
         db_keepalive_interval_minutes=max(1, int(os.environ.get("DB_KEEPALIVE_INTERVAL_MINUTES", "10"))),
 
@@ -167,4 +170,5 @@ def load_config() -> AppConfig:
         rsa_private_key=os.environ.get("RSA_PRIVATE_KEY", "").replace("\\n", "\n").strip(),
         gemini_api_key=os.environ.get("GEMINI_API_KEY", "").strip(),
         groq_api_key=os.environ.get("GROQ_API_KEY", "").strip(),
+        highlights_enabled=os.environ.get("HIGHLIGHTS_ENABLED", "1") == "1",
     )

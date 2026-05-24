@@ -2,9 +2,11 @@ from __future__ import annotations
 
 import base64
 import io
+import json
 import re
 import time
 import uuid
+from typing import Any
 
 import bcrypt
 import jwt as pyjwt
@@ -17,6 +19,110 @@ from backend.db.manager import DBManager
 from backend.db.sql_helpers import execute, fetch_one_dict, rollback_quietly
 
 EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+
+MAX_BOOKMARKS_PER_COURSE = 500
+MAX_HIGHLIGHTS_PER_TOPIC = 40
+MAX_HIGHLIGHTS_PER_COURSE = 300
+MAX_HIGHLIGHT_TEXT_LEN = 180
+MAX_HIGHLIGHT_CONTEXT_LEN = 120
+
+
+def _to_int(value: Any, field: str) -> int:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        abort(400, description=f"{field} must be a number")
+
+
+def _parse_viewer_settings(raw: Any) -> dict[str, Any]:
+    if not raw:
+        return {"courses": {}}
+    try:
+        parsed = json.loads(raw)
+    except (TypeError, json.JSONDecodeError):
+        return {"courses": {}}
+    if not isinstance(parsed, dict):
+        return {"courses": {}}
+    courses = parsed.get("courses")
+    if not isinstance(courses, dict):
+        parsed["courses"] = {}
+    return parsed
+
+
+def _clean_topic_list(value: Any) -> list[int]:
+    if not isinstance(value, list):
+        return []
+    out: list[int] = []
+    seen: set[int] = set()
+    for item in value:
+        try:
+            idx = int(item)
+        except (TypeError, ValueError):
+            continue
+        if idx in seen:
+            continue
+        seen.add(idx)
+        out.append(idx)
+    return out
+
+
+def _clean_highlights_map(value: Any) -> dict[str, list[dict[str, Any]]]:
+    if not isinstance(value, dict):
+        return {}
+    cleaned: dict[str, list[dict[str, Any]]] = {}
+    for topic_key, items in value.items():
+        if not isinstance(topic_key, str):
+            continue
+        if not isinstance(items, list):
+            continue
+        rows: list[dict[str, Any]] = []
+        for item in items:
+            if not isinstance(item, dict):
+                continue
+            text = str(item.get("text", "")).strip()
+            if not text:
+                continue
+            start_offset_raw = item.get("start_offset")
+            end_offset_raw = item.get("end_offset")
+            start_offset = None
+            end_offset = None
+            try:
+                if start_offset_raw is not None and end_offset_raw is not None:
+                    start_offset = int(start_offset_raw)
+                    end_offset = int(end_offset_raw)
+            except (TypeError, ValueError):
+                start_offset = None
+                end_offset = None
+            if (
+                start_offset is not None and end_offset is not None
+                and (start_offset < 0 or end_offset <= start_offset)
+            ):
+                start_offset = None
+                end_offset = None
+            rows.append(
+                {
+                    "id": str(item.get("id", "") or uuid.uuid4().hex),
+                    "text": text[:MAX_HIGHLIGHT_TEXT_LEN],
+                    "context": str(item.get("context", "") or "")[:MAX_HIGHLIGHT_CONTEXT_LEN],
+                    "created_at": str(item.get("created_at", "") or ""),
+                    "start_offset": start_offset,
+                    "end_offset": end_offset,
+                    "component_index": int(item.get("component_index")) if str(item.get("component_index", "")).strip().isdigit() else None,
+                }
+            )
+        if rows:
+            cleaned[topic_key] = rows[-MAX_HIGHLIGHTS_PER_TOPIC:]
+    return cleaned
+
+
+def _strip_highlights_from_settings(settings: dict[str, Any]) -> dict[str, Any]:
+    courses = settings.get("courses")
+    if not isinstance(courses, dict):
+        return settings
+    for course_state in courses.values():
+        if isinstance(course_state, dict):
+            course_state.pop("highlights", None)
+    return settings
 
 
 def create_auth_blueprint(auth_service: AuthService, db_manager: DBManager) -> Blueprint:
@@ -146,7 +252,7 @@ def create_auth_blueprint(auth_service: AuthService, db_manager: DBManager) -> B
                 # This only applies if they are in the transitional phase (already changed pw but not finished 2FA).
                 stale_hash = user.get("onboarding_temp_password_hash")
                 if stale_hash and not user.get("is_first_login"):
-                    if bcrypt.checkpw(password_raw.encode(), stale_hash.encode()):
+                    if bcrypt.checkpw(password.encode(), stale_hash.encode()):
                         abort(
                             401,
                             description=(
@@ -401,6 +507,197 @@ def create_auth_blueprint(auth_service: AuthService, db_manager: DBManager) -> B
             conn.close()
 
         return jsonify({"theme": theme}), 200
+
+    @bp.route("/viewer-settings", methods=["GET"])
+    def auth_get_viewer_settings():
+        user, _ = auth_service.resolve_user(require_full=True)
+        if not user:
+            abort(401, description="Not authenticated")
+
+        settings = _parse_viewer_settings(user.get("viewer_settings_json"))
+        if not auth_service.config.highlights_enabled:
+            settings = _strip_highlights_from_settings(settings)
+        return jsonify(
+            {
+                "settings": settings,
+                "features": {
+                    "highlights_enabled": bool(auth_service.config.highlights_enabled),
+                },
+            }
+        ), 200
+
+    @bp.route("/viewer-settings/course", methods=["PUT"])
+    def auth_update_viewer_settings_course():
+        user, _ = auth_service.resolve_user(require_full=True)
+        if not user:
+            abort(401, description="Not authenticated")
+
+        body = request.get_json(force=True, silent=True) or {}
+        course_id_raw = body.get("course_id")
+        if course_id_raw is None:
+            abort(400, description="course_id is required")
+        course_id = _to_int(course_id_raw, "course_id")
+        now_iso = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+
+        conn = db_manager.get_auth_connection()
+        try:
+            row = fetch_one_dict(
+                conn,
+                "SELECT viewer_settings_json FROM users WHERE id = :user_id",
+                {"user_id": user["id"]},
+            ) or {}
+            settings = _parse_viewer_settings(row.get("viewer_settings_json"))
+            courses = settings.setdefault("courses", {})
+            if not isinstance(courses, dict):
+                courses = {}
+                settings["courses"] = courses
+
+            course_key = str(course_id)
+            course_state = courses.get(course_key, {})
+            if not isinstance(course_state, dict):
+                course_state = {}
+
+            bookmarks = _clean_topic_list(course_state.get("bookmarks"))
+            highlights = _clean_highlights_map(course_state.get("highlights"))
+
+            if "last_topic_index" in body:
+                course_state["last_topic_index"] = _to_int(body.get("last_topic_index"), "last_topic_index")
+
+            if "bookmark_topic_index" in body:
+                bookmark_idx = _to_int(body.get("bookmark_topic_index"), "bookmark_topic_index")
+                bookmarked = bool(body.get("bookmarked", True))
+                if bookmarked:
+                    if bookmark_idx not in bookmarks:
+                        bookmarks.append(bookmark_idx)
+                else:
+                    bookmarks = [item for item in bookmarks if item != bookmark_idx]
+                course_state["bookmarks"] = bookmarks[-MAX_BOOKMARKS_PER_COURSE:]
+
+            add_highlight = body.get("add_highlight")
+            if add_highlight is not None:
+                if not auth_service.config.highlights_enabled:
+                    abort(403, description="Highlights are disabled by administrator")
+                if not isinstance(add_highlight, dict):
+                    abort(400, description="add_highlight must be an object")
+                topic_index = _to_int(add_highlight.get("topic_index"), "add_highlight.topic_index")
+                text = str(add_highlight.get("text", "")).strip()
+                if not text:
+                    abort(400, description="add_highlight.text is required")
+                context = str(add_highlight.get("context", "") or "").strip()
+                start_offset = add_highlight.get("start_offset")
+                end_offset = add_highlight.get("end_offset")
+                component_index = add_highlight.get("component_index")
+                start_offset_int: int | None = None
+                end_offset_int: int | None = None
+                component_index_int: int | None = None
+                if start_offset is not None and end_offset is not None:
+                    try:
+                        start_offset_int = int(start_offset)
+                        end_offset_int = int(end_offset)
+                    except (TypeError, ValueError):
+                        abort(400, description="add_highlight offsets must be numeric")
+                    if start_offset_int < 0 or end_offset_int <= start_offset_int:
+                        abort(400, description="add_highlight offsets are invalid")
+                if component_index is not None:
+                    try:
+                        component_index_int = int(component_index)
+                    except (TypeError, ValueError):
+                        abort(400, description="add_highlight.component_index must be numeric")
+                    if component_index_int < 0:
+                        abort(400, description="add_highlight.component_index must be >= 0")
+                topic_key = str(topic_index)
+                topic_highlights = highlights.get(topic_key, [])
+                if start_offset_int is not None and end_offset_int is not None:
+                    duplicate = any(
+                        int(item.get("start_offset") or -1) == start_offset_int
+                        and int(item.get("end_offset") or -1) == end_offset_int
+                        and int(item.get("component_index") or -1) == int(component_index_int or -1)
+                        for item in topic_highlights
+                    )
+                    if duplicate:
+                        course_state["highlights"] = highlights
+                        courses[course_key] = course_state
+                        settings_json = json.dumps(settings, separators=(",", ":"))
+                        execute(
+                            conn,
+                            "UPDATE users SET viewer_settings_json = :settings WHERE id = :user_id",
+                            {"settings": settings_json, "user_id": user["id"]},
+                        )
+                        conn.commit()
+                        return jsonify({"ok": True, "course": course_state}), 200
+                topic_highlights.append(
+                    {
+                        "id": uuid.uuid4().hex,
+                        "text": text[:MAX_HIGHLIGHT_TEXT_LEN],
+                        "context": context[:MAX_HIGHLIGHT_CONTEXT_LEN],
+                        "created_at": now_iso,
+                        "start_offset": start_offset_int,
+                        "end_offset": end_offset_int,
+                        "component_index": component_index_int,
+                    }
+                )
+                highlights[topic_key] = topic_highlights[-MAX_HIGHLIGHTS_PER_TOPIC:]
+                all_highlights: list[tuple[str, dict[str, Any]]] = []
+                for t_key, rows in highlights.items():
+                    for row in rows:
+                        all_highlights.append((t_key, row))
+                if len(all_highlights) > MAX_HIGHLIGHTS_PER_COURSE:
+                    all_highlights.sort(key=lambda item: str(item[1].get("created_at", "")))
+                    keep = all_highlights[-MAX_HIGHLIGHTS_PER_COURSE:]
+                    rebuilt: dict[str, list[dict[str, Any]]] = {}
+                    for t_key, row in keep:
+                        rebuilt.setdefault(t_key, []).append(row)
+                    highlights = rebuilt
+                course_state["highlights"] = highlights
+
+            remove_highlight = body.get("remove_highlight")
+            if remove_highlight is not None:
+                if not isinstance(remove_highlight, dict):
+                    abort(400, description="remove_highlight must be an object")
+                topic_index = _to_int(remove_highlight.get("topic_index"), "remove_highlight.topic_index")
+                highlight_id = str(remove_highlight.get("highlight_id", "")).strip()
+                if not highlight_id:
+                    abort(400, description="remove_highlight.highlight_id is required")
+                topic_key = str(topic_index)
+                topic_highlights = highlights.get(topic_key, [])
+                topic_highlights = [
+                    item
+                    for item in topic_highlights
+                    if str(item.get("id", "")).strip() != highlight_id
+                ]
+                if topic_highlights:
+                    highlights[topic_key] = topic_highlights
+                else:
+                    highlights.pop(topic_key, None)
+                course_state["highlights"] = highlights
+
+            clear_highlights_topic_index = body.get("clear_highlights_topic_index")
+            if clear_highlights_topic_index is not None:
+                topic_index = _to_int(clear_highlights_topic_index, "clear_highlights_topic_index")
+                highlights.pop(str(topic_index), None)
+                course_state["highlights"] = highlights
+
+            if "bookmarks" not in course_state:
+                course_state["bookmarks"] = bookmarks[-MAX_BOOKMARKS_PER_COURSE:]
+            if "highlights" not in course_state:
+                course_state["highlights"] = highlights
+
+            courses[course_key] = course_state
+            settings_json = json.dumps(settings, separators=(",", ":"))
+            execute(
+                conn,
+                "UPDATE users SET viewer_settings_json = :settings WHERE id = :user_id",
+                {"settings": settings_json, "user_id": user["id"]},
+            )
+            conn.commit()
+        finally:
+            conn.close()
+
+        if not auth_service.config.highlights_enabled and isinstance(course_state, dict):
+            course_state = dict(course_state)
+            course_state.pop("highlights", None)
+
+        return jsonify({"ok": True, "course": course_state}), 200
 
     @bp.route("/progress/topic", methods=["POST"])
     def auth_progress_topic():

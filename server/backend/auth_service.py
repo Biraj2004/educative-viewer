@@ -21,12 +21,12 @@ log = logging.getLogger(__name__)
 _USER_JOIN = """
     SELECT u.id, u.email, u.name, u.username, u.avatar,
            r.name AS role, u.is_active,
-           u.role_id, u.two_factor_enabled, u.login_ip_log, u.theme, u.created_at,
+           u.role_id, u.two_factor_enabled, u.login_ip_log, u.theme, u.viewer_settings_json, u.created_at,
            COALESCE(u.is_first_login, 0) AS is_first_login,
            s.password_hash, s.two_factor_secret, s.two_factor_confirmed,
            s.session_id, s.last_login_ip, s.last_login_at, s.current_token,
            COALESCE(s.failed_attempts, 0) AS failed_attempts, s.locked_until,
-           s.temp_password_expires_at
+           s.temp_password_expires_at, s.onboarding_temp_password_hash
     FROM users u
     LEFT JOIN roles r ON r.id = u.role_id
     LEFT JOIN users_sensitive s ON s.user_id = u.id
