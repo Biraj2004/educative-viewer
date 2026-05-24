@@ -191,6 +191,7 @@ export default function TopicLayoutClient({
   const USER_HIGHLIGHT_ATTR = "data-user-highlight";
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [tocDrawerOpen, setTocDrawerOpen] = useState(false);
+  const [highlightDrawerOpen, setHighlightDrawerOpen] = useState(false);
   const [headings, setHeadings] = useState<{ idx: number; text: string; level: number }[]>([]);
   const [activeHeadingIdx, setActiveHeadingIdx] = useState<number>(0);
   const contentRef = useRef<HTMLDivElement>(null);
@@ -203,6 +204,9 @@ export default function TopicLayoutClient({
     () => initialHighlights
   );
   const [selectedText, setSelectedText] = useState("");
+  const [newHighlightNote, setNewHighlightNote] = useState("");
+  const [noteDraftById, setNoteDraftById] = useState<Record<string, string>>({});
+  const [savingNoteById, setSavingNoteById] = useState<Record<string, boolean>>({});
   const selectedTextRef = useRef("");
   const selectedOffsetsRef = useRef<{ start: number; end: number; componentIndex: number } | null>(null);
   const [selectionAction, setSelectionAction] = useState<{
@@ -223,9 +227,10 @@ export default function TopicLayoutClient({
     [currentTopic.components]
   );
   const isBookmarked = bookmarked.has(currentTopic.topic_index);
+  const currentTopicKey = String(currentTopic.topic_index);
   const currentTopicHighlights = React.useMemo(
-    () => highlightsByTopic[String(currentTopic.topic_index)] ?? [],
-    [currentTopic.topic_index, highlightsByTopic]
+    () => highlightsByTopic[currentTopicKey] ?? [],
+    [currentTopicKey, highlightsByTopic]
   );
   
   // Calculate estimated reading time
@@ -258,6 +263,13 @@ export default function TopicLayoutClient({
   // Keep completedRef current (also updated synchronously below when mutating state)
   useEffect(() => { completedRef.current = completed; }, [completed]);
   useEffect(() => { selectedTextRef.current = selectedText; }, [selectedText]);
+  useEffect(() => {
+    const next: Record<string, string> = {};
+    currentTopicHighlights.forEach((item) => {
+      if (item.id) next[item.id] = item.note ?? "";
+    });
+    setNoteDraftById(next);
+  }, [currentTopicHighlights, currentTopic.topic_index]);
 
   // Signal the global NavProgressBar for in-page topic fetches
   // Extract h1/h2/h3 headings from content — store index for reliable click-time lookup
@@ -643,6 +655,7 @@ export default function TopicLayoutClient({
     if (!text) return;
     const topicKey = String(currentTopic.topic_index);
     const selectedOffsets = selectedOffsetsRef.current;
+    const note = newHighlightNote.trim().slice(0, 800);
     const existing = currentTopicHighlights;
     const overlaps: ViewerHighlight[] = [];
     let mergedStart = selectedOffsets?.start ?? null;
@@ -675,6 +688,7 @@ export default function TopicLayoutClient({
     const optimistic: ViewerHighlight = {
       id: optimisticId,
       text,
+      note,
       start_offset: mergedStart,
       end_offset: mergedEnd,
       component_index: mergedComponentIndex,
@@ -686,6 +700,7 @@ export default function TopicLayoutClient({
 
     setHighlightsByTopic((prev) => ({ ...prev, [topicKey]: nextTopicHighlights }));
     setSelectedText("");
+    setNewHighlightNote("");
     selectedOffsetsRef.current = null;
     const sel = window.getSelection();
     sel?.removeAllRanges();
@@ -707,6 +722,7 @@ export default function TopicLayoutClient({
       add_highlight: {
         topic_index: currentTopic.topic_index,
         text,
+        ...(note ? { note } : {}),
         ...(mergedStart !== null && mergedEnd !== null && mergedComponentIndex !== null ? {
           start_offset: mergedStart,
           end_offset: mergedEnd,
@@ -724,6 +740,7 @@ export default function TopicLayoutClient({
     currentTopicHighlights,
     currentTopic.topic_index,
     highlightsEnabled,
+    newHighlightNote,
   ]);
 
   const handleRemoveHighlight = useCallback((highlightId: string) => {
@@ -744,6 +761,25 @@ export default function TopicLayoutClient({
       setHighlightsByTopic(highlights);
     }).catch(() => { });
   }, [courseId, currentTopic.topic_index]);
+
+  const handleSaveHighlightNote = useCallback((highlightId: string) => {
+    const note = (noteDraftById[highlightId] ?? "").slice(0, 800);
+    setSavingNoteById((prev) => ({ ...prev, [highlightId]: true }));
+    updateViewerCourseSettings({
+      course_id: courseId,
+      update_highlight_note: {
+        topic_index: currentTopic.topic_index,
+        highlight_id: highlightId,
+        note,
+      },
+    }).then((courseState) => {
+      const highlights = courseState?.highlights;
+      if (!highlights || typeof highlights !== "object") return;
+      setHighlightsByTopic(highlights);
+    }).catch(() => { }).finally(() => {
+      setSavingNoteById((prev) => ({ ...prev, [highlightId]: false }));
+    });
+  }, [courseId, currentTopic.topic_index, noteDraftById]);
 
   const handleClearTopicHighlights = useCallback(() => {
     const topicKey = String(currentTopic.topic_index);
@@ -977,6 +1013,7 @@ export default function TopicLayoutClient({
 
   useEffect(() => {
     setSelectedText("");
+    setNewHighlightNote("");
     selectedOffsetsRef.current = null;
     setSelectionAction((prev) => ({ ...prev, visible: false }));
   }, [currentTopic.topic_index]);
@@ -1012,13 +1049,16 @@ export default function TopicLayoutClient({
 
   // Keep TOC drawer dismissible via keyboard.
   useEffect(() => {
-    if (!tocDrawerOpen) return;
+    if (!tocDrawerOpen && !highlightDrawerOpen) return;
     const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setTocDrawerOpen(false);
+      if (e.key === "Escape") {
+        setTocDrawerOpen(false);
+        setHighlightDrawerOpen(false);
+      }
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [tocDrawerOpen]);
+  }, [highlightDrawerOpen, tocDrawerOpen]);
 
   return (
     <div className="min-h-screen flex flex-col bg-gray-50 dark:bg-gray-950">
@@ -1114,6 +1154,17 @@ export default function TopicLayoutClient({
                 </svg>
                 <span>{estimatedTime} min read</span>
               </div>
+              {highlightsEnabled && (
+                <button
+                  onClick={() => setHighlightDrawerOpen(true)}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white dark:bg-gray-800 text-gray-500 dark:text-gray-400 rounded-full text-[11px] uppercase tracking-wider font-semibold border border-gray-200 dark:border-gray-700 shadow-sm hover:text-amber-600 dark:hover:text-amber-300 hover:border-amber-300 dark:hover:border-amber-700 transition-colors cursor-pointer"
+                >
+                  <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                    <path d="M15 4H6a2 2 0 0 0-2 2v14l5-2 5 2V6a2 2 0 0 0-2-2Z" />
+                  </svg>
+                  <span>Highlights</span>
+                </button>
+              )}
             </div>
           </div>
 
@@ -1129,37 +1180,6 @@ export default function TopicLayoutClient({
                 <p className="text-sm text-gray-600 dark:text-gray-400">
                   Highlights are disabled by administrator.
                 </p>
-              </section>
-            )}
-
-            {highlightsEnabled && currentTopicHighlights.length > 0 && (
-              <section className="rounded-xl border border-amber-200 dark:border-amber-800 bg-amber-50/70 dark:bg-amber-900/20 p-4">
-                <div className="mb-2 flex items-center justify-between gap-3">
-                  <h3 className="text-sm font-semibold text-amber-800 dark:text-amber-300">
-                    Saved Highlights ({currentTopicHighlights.length})
-                  </h3>
-                  <button
-                    onClick={handleClearTopicHighlights}
-                    className="text-xs px-2 py-1 rounded border border-amber-300 dark:border-amber-700 text-amber-700 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-900/40 transition-colors cursor-pointer"
-                  >
-                    Clear Topic Highlights
-                  </button>
-                </div>
-                <ul className="space-y-2">
-                  {currentTopicHighlights.map((item) => (
-                    <li key={item.id} className="flex items-start gap-3 bg-white/70 dark:bg-gray-900/60 border border-amber-100 dark:border-amber-900 rounded-lg p-2.5">
-                      <p className="text-sm text-gray-700 dark:text-gray-200 flex-1 leading-relaxed">
-                        {item.text}
-                      </p>
-                      <button
-                        onClick={() => handleRemoveHighlight(item.id)}
-                        className="shrink-0 text-xs px-2 py-1 rounded border border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400 hover:text-red-600 dark:hover:text-red-400 hover:border-red-300 dark:hover:border-red-700 transition-colors cursor-pointer"
-                      >
-                        Remove
-                      </button>
-                    </li>
-                  ))}
-                </ul>
               </section>
             )}
           </div>
@@ -1256,6 +1276,21 @@ export default function TopicLayoutClient({
         <span className="text-[9px] font-semibold uppercase tracking-wide [writing-mode:vertical-rl] rotate-180">TOC</span>
       </button>
 
+      {highlightsEnabled && (
+        <button
+          onClick={() => setHighlightDrawerOpen((o) => !o)}
+          className="hidden lg:flex fixed right-0 top-[calc(50%+5.25rem)] z-40 flex-col items-center gap-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 border-r-0 rounded-l-xl px-2 py-3 shadow-md text-gray-500 hover:text-amber-600 dark:hover:text-amber-300 transition-colors cursor-pointer"
+          title="Highlights & Notes"
+        >
+          <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+            <path d="M15 4H6a2 2 0 0 0-2 2v14l5-2 5 2V6a2 2 0 0 0-2-2Z" />
+          </svg>
+          <span className="text-[9px] font-semibold uppercase tracking-wide [writing-mode:vertical-rl] rotate-180">
+            H&N
+          </span>
+        </button>
+      )}
+
       {/* Slide-out TOC Drawer */}
       {tocDrawerOpen && (
         <div className="fixed inset-x-0 bottom-0 top-14 z-40">
@@ -1283,19 +1318,6 @@ export default function TopicLayoutClient({
                   </svg>
                   <span>{isBookmarked ? "Bookmarked" : "Bookmark"}</span>
                 </button>
-                {highlightsEnabled && currentTopicHighlights.length > 0 && (
-                  <button
-                    onClick={handleClearTopicHighlights}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] uppercase tracking-wider font-semibold border shadow-sm transition-colors cursor-pointer bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400 hover:text-red-600 dark:hover:text-red-400 hover:border-red-300 dark:hover:border-red-700"
-                  >
-                    <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M3 6h18" />
-                      <path d="M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2" />
-                      <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
-                    </svg>
-                    <span>Clear Highlights</span>
-                  </button>
-                )}
               </div>
               {headings.length === 0 ? (
                 <p className="text-sm text-gray-500">No headings detected yet.</p>
@@ -1337,11 +1359,105 @@ export default function TopicLayoutClient({
         </div>
       )}
 
+      {highlightsEnabled && highlightDrawerOpen && (
+        <div className="fixed inset-x-0 bottom-0 top-14 z-40">
+          <div className="absolute inset-0 bg-black/40" onClick={() => setHighlightDrawerOpen(false)} />
+          <div className="absolute right-0 top-0 bottom-0 w-[24rem] bg-white dark:bg-gray-900 border-l border-gray-200 dark:border-gray-800 shadow-2xl flex flex-col">
+            <div className="flex items-center justify-between px-6 py-5 border-b border-gray-200 dark:border-gray-800 shrink-0">
+              <h2 className="text-sm font-bold text-gray-900 dark:text-gray-100 uppercase tracking-wider">
+                Highlights & Notes
+              </h2>
+              <button onClick={() => setHighlightDrawerOpen(false)} className="p-1 text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 cursor-pointer">
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-6 space-y-4">
+              {selectedText && (
+                <section className="rounded-lg border border-indigo-200 dark:border-indigo-800 bg-indigo-50/60 dark:bg-indigo-950/30 p-3">
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-indigo-700 dark:text-indigo-300 mb-1">
+                    Add Note To Current Selection
+                  </p>
+                  <p className="text-xs text-gray-700 dark:text-gray-200 line-clamp-2 mb-2">
+                    {selectedText}
+                  </p>
+                  <textarea
+                    value={newHighlightNote}
+                    onChange={(e) => setNewHighlightNote(e.target.value.slice(0, 800))}
+                    rows={2}
+                    placeholder="Optional note for this highlight..."
+                    className="w-full rounded-md border border-indigo-200 dark:border-indigo-800 bg-white dark:bg-gray-800 px-2 py-1.5 text-xs text-gray-700 dark:text-gray-200 outline-none focus:ring-2 focus:ring-indigo-500/40"
+                  />
+                </section>
+              )}
+
+              <div className="flex items-center justify-between">
+                <p className="text-xs uppercase tracking-wide font-semibold text-gray-500 dark:text-gray-400">
+                  Saved ({currentTopicHighlights.length})
+                </p>
+                <button
+                  onClick={handleClearTopicHighlights}
+                  disabled={currentTopicHighlights.length === 0}
+                  className="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] rounded border border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400 hover:text-red-600 dark:hover:text-red-400 hover:border-red-300 dark:hover:border-red-700 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer transition-colors"
+                >
+                  <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M3 6h18" />
+                    <path d="M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2" />
+                    <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+                  </svg>
+                  <span>Clear Topic</span>
+                </button>
+              </div>
+
+              {currentTopicHighlights.length === 0 ? (
+                <p className="text-sm text-gray-500 dark:text-gray-400">
+                  No highlights yet for this topic.
+                </p>
+              ) : (
+                <ul className="space-y-3">
+                  {currentTopicHighlights.map((item) => {
+                    const noteValue = noteDraftById[item.id] ?? "";
+                    const saving = Boolean(savingNoteById[item.id]);
+                    return (
+                      <li key={item.id} className="rounded-lg border border-amber-200 dark:border-amber-900 bg-amber-50/50 dark:bg-amber-950/20 p-3">
+                        <p className="text-sm text-gray-800 dark:text-gray-100 leading-relaxed mb-2">
+                          {item.text}
+                        </p>
+                        <textarea
+                          value={noteValue}
+                          onChange={(e) => setNoteDraftById((prev) => ({ ...prev, [item.id]: e.target.value.slice(0, 800) }))}
+                          rows={2}
+                          placeholder="Add note..."
+                          className="w-full rounded-md border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-2 py-1.5 text-xs text-gray-700 dark:text-gray-200 outline-none focus:ring-2 focus:ring-amber-500/30"
+                        />
+                        <div className="mt-2 flex items-center justify-end gap-2">
+                          <button
+                            onClick={() => handleRemoveHighlight(item.id)}
+                            className="text-xs px-2 py-1 rounded border border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400 hover:text-red-600 dark:hover:text-red-400 hover:border-red-300 dark:hover:border-red-700 transition-colors cursor-pointer"
+                          >
+                            Remove
+                          </button>
+                          <button
+                            onClick={() => handleSaveHighlightNote(item.id)}
+                            disabled={saving}
+                            className="text-xs px-2 py-1 rounded border border-amber-300 dark:border-amber-700 text-amber-700 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-900/40 disabled:opacity-60 cursor-pointer transition-colors"
+                          >
+                            {saving ? "Saving..." : "Save Note"}
+                          </button>
+                        </div>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       {highlightsEnabled && selectionAction.visible && selectedText && (
         <button
           data-highlight-action="1"
-          onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); }}
-          onTouchStart={(e) => { e.preventDefault(); e.stopPropagation(); }}
+          onPointerDown={(e) => { e.stopPropagation(); }}
           onClick={handleAddHighlight}
           className="fixed z-50 inline-flex items-center justify-center w-8 h-8 rounded-full border border-indigo-300 dark:border-indigo-700 bg-white dark:bg-gray-900 text-indigo-600 dark:text-indigo-400 shadow-lg hover:scale-105 transition-transform cursor-pointer"
           style={{

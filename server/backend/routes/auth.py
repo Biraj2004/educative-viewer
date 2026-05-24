@@ -25,6 +25,7 @@ MAX_HIGHLIGHTS_PER_TOPIC = 40
 MAX_HIGHLIGHTS_PER_COURSE = 300
 MAX_HIGHLIGHT_TEXT_LEN = 180
 MAX_HIGHLIGHT_CONTEXT_LEN = 120
+MAX_HIGHLIGHT_NOTE_LEN = 800
 
 
 def _to_int(value: Any, field: str) -> int:
@@ -104,6 +105,7 @@ def _clean_highlights_map(value: Any) -> dict[str, list[dict[str, Any]]]:
                     "id": str(item.get("id", "") or uuid.uuid4().hex),
                     "text": text[:MAX_HIGHLIGHT_TEXT_LEN],
                     "context": str(item.get("context", "") or "")[:MAX_HIGHLIGHT_CONTEXT_LEN],
+                    "note": str(item.get("note", "") or "")[:MAX_HIGHLIGHT_NOTE_LEN],
                     "created_at": str(item.get("created_at", "") or ""),
                     "start_offset": start_offset,
                     "end_offset": end_offset,
@@ -584,6 +586,7 @@ def create_auth_blueprint(auth_service: AuthService, db_manager: DBManager) -> B
                 if not text:
                     abort(400, description="add_highlight.text is required")
                 context = str(add_highlight.get("context", "") or "").strip()
+                note = str(add_highlight.get("note", "") or "").strip()
                 start_offset = add_highlight.get("start_offset")
                 end_offset = add_highlight.get("end_offset")
                 component_index = add_highlight.get("component_index")
@@ -630,6 +633,7 @@ def create_auth_blueprint(auth_service: AuthService, db_manager: DBManager) -> B
                         "id": uuid.uuid4().hex,
                         "text": text[:MAX_HIGHLIGHT_TEXT_LEN],
                         "context": context[:MAX_HIGHLIGHT_CONTEXT_LEN],
+                        "note": note[:MAX_HIGHLIGHT_NOTE_LEN],
                         "created_at": now_iso,
                         "start_offset": start_offset_int,
                         "end_offset": end_offset_int,
@@ -669,6 +673,28 @@ def create_auth_blueprint(auth_service: AuthService, db_manager: DBManager) -> B
                     highlights[topic_key] = topic_highlights
                 else:
                     highlights.pop(topic_key, None)
+                course_state["highlights"] = highlights
+
+            update_highlight_note = body.get("update_highlight_note")
+            if update_highlight_note is not None:
+                if not isinstance(update_highlight_note, dict):
+                    abort(400, description="update_highlight_note must be an object")
+                topic_index = _to_int(update_highlight_note.get("topic_index"), "update_highlight_note.topic_index")
+                highlight_id = str(update_highlight_note.get("highlight_id", "")).strip()
+                if not highlight_id:
+                    abort(400, description="update_highlight_note.highlight_id is required")
+                note = str(update_highlight_note.get("note", "") or "")[:MAX_HIGHLIGHT_NOTE_LEN]
+                topic_key = str(topic_index)
+                topic_highlights = highlights.get(topic_key, [])
+                updated = False
+                for item in topic_highlights:
+                    if str(item.get("id", "")).strip() == highlight_id:
+                        item["note"] = note
+                        updated = True
+                        break
+                if not updated:
+                    abort(404, description="Highlight not found for note update")
+                highlights[topic_key] = topic_highlights
                 course_state["highlights"] = highlights
 
             clear_highlights_topic_index = body.get("clear_highlights_topic_index")

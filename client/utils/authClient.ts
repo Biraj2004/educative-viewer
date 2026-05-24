@@ -224,6 +224,7 @@ export interface ViewerHighlight {
   id: string;
   text: string;
   context?: string;
+  note?: string;
   created_at?: string;
   start_offset?: number | null;
   end_offset?: number | null;
@@ -546,6 +547,7 @@ export interface UpdateViewerCourseSettingsPayload {
     topic_index: number;
     text: string;
     context?: string;
+    note?: string;
     start_offset?: number;
     end_offset?: number;
     component_index?: number;
@@ -553,6 +555,11 @@ export interface UpdateViewerCourseSettingsPayload {
   remove_highlight?: {
     topic_index: number;
     highlight_id: string;
+  };
+  update_highlight_note?: {
+    topic_index: number;
+    highlight_id: string;
+    note: string;
   };
   clear_highlights_topic_index?: number;
 }
