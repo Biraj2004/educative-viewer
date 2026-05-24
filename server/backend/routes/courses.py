@@ -11,6 +11,7 @@ from typing import Any
 from flask import Blueprint, abort, jsonify, request
 
 from backend.auth_service import AuthService
+from backend.config import resolve_viewer_features_for_role
 from backend.db.manager import DBManager
 
 
@@ -26,6 +27,15 @@ def _require(payload: dict[str, Any], *keys: str) -> None:
 
 def _is_admin(user: dict[str, Any]) -> bool:
     return user.get("role") == "admin"
+
+
+def _viewer_search_enabled(auth_service: AuthService, user: dict[str, Any]) -> bool:
+    features = resolve_viewer_features_for_role(
+        str(user.get("role", "") or ""),
+        auth_service.config.viewer_feature_flags,
+        auth_service.config.viewer_feature_role_overrides,
+    )
+    return bool(features.get("search_enabled", True))
 
 
 def _offset_row(row: dict[str, Any], offset: int, fields: tuple[str, ...]) -> dict[str, Any]:
@@ -591,6 +601,8 @@ def create_courses_blueprint(auth_service: AuthService, db_manager: DBManager) -
         user, _ = auth_service.resolve_user(require_full=True)
         if not user:
             abort(401, description="Authentication required")
+        if not _viewer_search_enabled(auth_service, user):
+            abort(403, description="Search is disabled by administrator")
 
         query = str(request.args.get("q", "")).strip()
         if len(query) < 2:

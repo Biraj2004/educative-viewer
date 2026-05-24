@@ -1,7 +1,12 @@
+import json
 import os
 from pathlib import Path
 from flask import Blueprint, jsonify, request
 from backend.auth_service import AuthService
+from backend.config import (
+    normalize_viewer_feature_flags,
+    parse_role_feature_overrides,
+)
 from backend.routes.admin.helpers import require_admin
 
 ENV_FILE_PATH = os.path.join(Path(__file__).resolve().parent.parent.parent.parent, ".env")
@@ -37,6 +42,8 @@ def register_settings_routes(bp: Blueprint, auth_service: AuthService) -> None:
     @bp.route("/settings", methods=["GET"])
     def get_settings():
         require_admin(auth_service)
+        viewer_feature_flags = normalize_viewer_feature_flags(auth_service.config.viewer_feature_flags)
+        viewer_feature_role_overrides = auth_service.config.viewer_feature_role_overrides or {}
         return jsonify({
             "jwt_secret": get_env_variable("JWT_SECRET"),
             "jwt_expires_days": get_env_variable("JWT_EXPIRES_DAYS", "7"),
@@ -46,7 +53,11 @@ def register_settings_routes(bp: Blueprint, auth_service: AuthService) -> None:
             "groq_api_key": get_env_variable("GROQ_API_KEY"),
             "course_db_engine": get_env_variable("COURSE_DB_ENGINE", "sqlite"),
             "course_sqlite_db_paths_json": get_env_variable("COURSE_SQLITE_DB_PATHS_JSON", '[]'),
-            "highlights_enabled": get_env_variable("HIGHLIGHTS_ENABLED", "1"),
+            "highlights_enabled": "1" if viewer_feature_flags.get("highlights_enabled", True) else "0",
+            "viewer_feature_flags_json": json.dumps(viewer_feature_flags, separators=(",", ":")),
+            "viewer_feature_role_overrides_json": json.dumps(
+                viewer_feature_role_overrides, separators=(",", ":")
+            ),
         })
 
     @bp.route("/settings", methods=["POST"])
@@ -104,9 +115,46 @@ def register_settings_routes(bp: Blueprint, auth_service: AuthService) -> None:
                 course_db_updated = True
             except Exception:
                 pass
+        viewer_flags_updated = False
+        if "viewer_feature_flags_json" in data:
+            try:
+                parsed = json.loads(str(data["viewer_feature_flags_json"]))
+                cfg.viewer_feature_flags = normalize_viewer_feature_flags(parsed)
+                viewer_flags_updated = True
+            except Exception:
+                pass
+
+        if "viewer_feature_role_overrides_json" in data:
+            try:
+                parsed = json.loads(str(data["viewer_feature_role_overrides_json"]))
+                cfg.viewer_feature_role_overrides = parse_role_feature_overrides(parsed)
+                viewer_flags_updated = True
+            except Exception:
+                pass
+
         if "highlights_enabled" in data:
             raw = str(data["highlights_enabled"]).strip().lower()
-            cfg.highlights_enabled = raw in ("1", "true", "yes", "on")
+            next_highlights = raw in ("1", "true", "yes", "on")
+            current_flags = normalize_viewer_feature_flags(cfg.viewer_feature_flags)
+            current_flags["highlights_enabled"] = next_highlights
+            cfg.viewer_feature_flags = current_flags
+            viewer_flags_updated = True
+
+        if viewer_flags_updated:
+            cfg.highlights_enabled = bool(cfg.viewer_feature_flags.get("highlights_enabled", True))
+
+            # Keep the legacy env var in sync for deployments still reading only this key.
+            set_env_variable("HIGHLIGHTS_ENABLED", "1" if cfg.highlights_enabled else "0")
+
+            # Ensure normalized JSON is persisted back to env.
+            set_env_variable(
+                "VIEWER_FEATURE_FLAGS_JSON",
+                json.dumps(normalize_viewer_feature_flags(cfg.viewer_feature_flags), separators=(",", ":")),
+            )
+            set_env_variable(
+                "VIEWER_FEATURE_ROLE_OVERRIDES_JSON",
+                json.dumps(cfg.viewer_feature_role_overrides or {}, separators=(",", ":")),
+            )
 
         if course_db_updated:
             try:

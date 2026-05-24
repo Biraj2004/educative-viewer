@@ -243,6 +243,9 @@ export interface ViewerSettingsData {
 
 export interface ViewerFeatures {
   highlights_enabled: boolean;
+  bookmarks_enabled: boolean;
+  notes_enabled: boolean;
+  search_enabled: boolean;
 }
 
 export interface ViewerSettingsPayload {
@@ -521,19 +524,32 @@ export async function getViewerSettings(): Promise<ViewerSettingsPayload> {
     if (!settings || typeof settings !== "object" || typeof settings.courses !== "object") {
       return {
         settings: { courses: {} },
-        features: { highlights_enabled: true },
+        features: {
+          highlights_enabled: true,
+          bookmarks_enabled: true,
+          notes_enabled: true,
+          search_enabled: true,
+        },
       };
     }
     return {
       settings,
       features: {
         highlights_enabled: features?.highlights_enabled !== false,
+        bookmarks_enabled: features?.bookmarks_enabled !== false,
+        notes_enabled: features?.notes_enabled !== false,
+        search_enabled: features?.search_enabled !== false,
       },
     };
   } catch {
     return {
       settings: { courses: {} },
-      features: { highlights_enabled: true },
+      features: {
+        highlights_enabled: true,
+        bookmarks_enabled: true,
+        notes_enabled: true,
+        search_enabled: true,
+      },
     };
   }
 }
@@ -711,10 +727,10 @@ export async function adminResetUserPassword(userId: number): Promise<AdminReset
   return adminApiCall<AdminResetResult>(`${getAdminAPI()}/users/${userId}/reset-password`, "POST");
 }
 
-export async function adminGetSettings(): Promise<any> {
-  return adminApiCall<any>(`${getAdminAPI()}/settings`, "GET");
+export async function adminGetSettings(): Promise<Record<string, string>> {
+  return adminApiCall<Record<string, string>>(`${getAdminAPI()}/settings`, "GET");
 }
 
-export async function adminSaveSettings(settings: any): Promise<{ success: boolean }> {
+export async function adminSaveSettings(settings: Record<string, string>): Promise<{ success: boolean }> {
   return adminApiCall<{ success: boolean }>(`${getAdminAPI()}/settings`, "POST", settings);
 }

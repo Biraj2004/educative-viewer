@@ -136,6 +136,8 @@ interface Props {
   initialBookmarked?: number[];
   initialHighlights?: Record<string, ViewerHighlight[]>;
   highlightsEnabled?: boolean;
+  bookmarksEnabled?: boolean;
+  notesEnabled?: boolean;
 }
 
 const TopicComponentsList = React.memo(function TopicComponentsList({
@@ -187,6 +189,8 @@ export default function TopicLayoutClient({
   initialBookmarked = [],
   initialHighlights = {},
   highlightsEnabled = true,
+  bookmarksEnabled = true,
+  notesEnabled = true,
 }: Props) {
   const USER_HIGHLIGHT_ATTR = "data-user-highlight";
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -366,6 +370,7 @@ export default function TopicLayoutClient({
   }, [isCompleted, courseId, currentTopic.topic_index]);
 
   const handleToggleBookmark = useCallback(() => {
+    if (!bookmarksEnabled) return;
     const topicIndex = currentTopic.topic_index;
     const nextBookmarked = !bookmarked.has(topicIndex);
     setBookmarked((prev) => {
@@ -379,7 +384,7 @@ export default function TopicLayoutClient({
       bookmark_topic_index: topicIndex,
       bookmarked: nextBookmarked,
     }).catch(() => { });
-  }, [bookmarked, courseId, currentTopic.topic_index]);
+  }, [bookmarked, bookmarksEnabled, courseId, currentTopic.topic_index]);
 
   const highlightClassName = "bg-yellow-200/80 dark:bg-yellow-500/35 text-inherit rounded px-0.5";
 
@@ -655,7 +660,7 @@ export default function TopicLayoutClient({
     if (!text) return;
     const topicKey = String(currentTopic.topic_index);
     const selectedOffsets = selectedOffsetsRef.current;
-    const note = newHighlightNote.trim().slice(0, 800);
+    const note = notesEnabled ? newHighlightNote.trim().slice(0, 800) : "";
     const existing = currentTopicHighlights;
     const overlaps: ViewerHighlight[] = [];
     let mergedStart = selectedOffsets?.start ?? null;
@@ -740,6 +745,7 @@ export default function TopicLayoutClient({
     currentTopicHighlights,
     currentTopic.topic_index,
     highlightsEnabled,
+    notesEnabled,
     newHighlightNote,
   ]);
 
@@ -763,6 +769,7 @@ export default function TopicLayoutClient({
   }, [courseId, currentTopic.topic_index]);
 
   const handleSaveHighlightNote = useCallback((highlightId: string) => {
+    if (!notesEnabled) return;
     const note = (noteDraftById[highlightId] ?? "").slice(0, 800);
     setSavingNoteById((prev) => ({ ...prev, [highlightId]: true }));
     updateViewerCourseSettings({
@@ -779,7 +786,7 @@ export default function TopicLayoutClient({
     }).catch(() => { }).finally(() => {
       setSavingNoteById((prev) => ({ ...prev, [highlightId]: false }));
     });
-  }, [courseId, currentTopic.topic_index, noteDraftById]);
+  }, [courseId, currentTopic.topic_index, noteDraftById, notesEnabled]);
 
   const handleClearTopicHighlights = useCallback(() => {
     const topicKey = String(currentTopic.topic_index);
@@ -801,6 +808,54 @@ export default function TopicLayoutClient({
       setHighlightsByTopic(highlights);
     }).catch(() => { });
   }, [courseId, currentTopic.topic_index, unwrapUserHighlights]);
+
+  const handleJumpToHighlight = useCallback((item: ViewerHighlight) => {
+    const container = contentRef.current;
+    const highlightId = String(item.id || "").trim();
+    if (!container || !highlightId) return;
+
+    const findMark = () => {
+      const marks = Array.from(
+        container.querySelectorAll(`mark[${USER_HIGHLIGHT_ATTR}="1"]`)
+      ) as HTMLElement[];
+      return (
+        marks.find(
+          (mark) => String(mark.getAttribute("data-highlight-id") || "").trim() === highlightId
+        ) ?? null
+      );
+    };
+
+    let mark = findMark();
+    if (!mark) {
+      const componentIndex = typeof item.component_index === "number" ? item.component_index : null;
+      const scopedContainer = (
+        componentIndex !== null && Number.isFinite(componentIndex)
+          ? getComponentScopeByIndex(componentIndex)
+          : null
+      );
+      const targetContainer = scopedContainer ?? container;
+      const start = item.start_offset;
+      const end = item.end_offset;
+      if (
+        typeof start === "number"
+        && Number.isFinite(start)
+        && typeof end === "number"
+        && Number.isFinite(end)
+      ) {
+        addMarkByOffsets(targetContainer, start, end, highlightId);
+      } else {
+        applyHighlightByText(targetContainer, item.text, highlightId);
+      }
+      mark = findMark();
+    }
+    if (!mark) return;
+
+    mark.scrollIntoView({ behavior: "smooth", block: "center", inline: "nearest" });
+    mark.classList.add("ring-2", "ring-indigo-400", "ring-offset-1", "ring-offset-white", "dark:ring-offset-gray-900");
+    window.setTimeout(() => {
+      mark?.classList.remove("ring-2", "ring-indigo-400", "ring-offset-1", "ring-offset-white", "dark:ring-offset-gray-900");
+    }, 1200);
+  }, [USER_HIGHLIGHT_ATTR, addMarkByOffsets, applyHighlightByText, getComponentScopeByIndex]);
 
   // In-page topic navigation: fetch new topic, update state + URL (no page remount)
   const handleTopicNav = useCallback(async (href: string, destIdx: number) => {
@@ -1303,22 +1358,24 @@ export default function TopicLayoutClient({
               </button>
             </div>
             <div className="flex-1 overflow-y-auto p-6">
-              <div className="mb-5 flex flex-wrap items-center gap-2">
-                <button
-                  onClick={handleToggleBookmark}
-                  className={[
-                    "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] uppercase tracking-wider font-semibold border shadow-sm transition-colors cursor-pointer",
-                    isBookmarked
-                      ? "bg-amber-50 dark:bg-amber-900/30 border-amber-300 dark:border-amber-700 text-amber-700 dark:text-amber-300"
-                      : "bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400 hover:text-amber-600 dark:hover:text-amber-300 hover:border-amber-300 dark:hover:border-amber-700",
-                  ].join(" ")}
-                >
-                  <svg className="w-3.5 h-3.5" fill={isBookmarked ? "currentColor" : "none"} viewBox="0 0 20 20" stroke="currentColor" strokeWidth={1.6}>
-                    <path d="M5 2a2 2 0 0 0-2 2v14l7-3 7 3V4a2 2 0 0 0-2-2H5Z" />
-                  </svg>
-                  <span>{isBookmarked ? "Bookmarked" : "Bookmark"}</span>
-                </button>
-              </div>
+              {bookmarksEnabled && (
+                <div className="mb-5 flex flex-wrap items-center gap-2">
+                  <button
+                    onClick={handleToggleBookmark}
+                    className={[
+                      "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] uppercase tracking-wider font-semibold border shadow-sm transition-colors cursor-pointer",
+                      isBookmarked
+                        ? "bg-amber-50 dark:bg-amber-900/30 border-amber-300 dark:border-amber-700 text-amber-700 dark:text-amber-300"
+                        : "bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400 hover:text-amber-600 dark:hover:text-amber-300 hover:border-amber-300 dark:hover:border-amber-700",
+                    ].join(" ")}
+                  >
+                    <svg className="w-3.5 h-3.5" fill={isBookmarked ? "currentColor" : "none"} viewBox="0 0 20 20" stroke="currentColor" strokeWidth={1.6}>
+                      <path d="M5 2a2 2 0 0 0-2 2v14l7-3 7 3V4a2 2 0 0 0-2-2H5Z" />
+                    </svg>
+                    <span>{isBookmarked ? "Bookmarked" : "Bookmark"}</span>
+                  </button>
+                </div>
+              )}
               {headings.length === 0 ? (
                 <p className="text-sm text-gray-500">No headings detected yet.</p>
               ) : (
@@ -1375,18 +1432,20 @@ export default function TopicLayoutClient({
               {selectedText && (
                 <section className="rounded-lg border border-indigo-200 dark:border-indigo-800 bg-indigo-50/60 dark:bg-indigo-950/30 p-3">
                   <p className="text-[11px] font-semibold uppercase tracking-wide text-indigo-700 dark:text-indigo-300 mb-1">
-                    Add Note To Current Selection
+                    {notesEnabled ? "Add Note To Current Selection" : "Current Selection"}
                   </p>
                   <p className="text-xs text-gray-700 dark:text-gray-200 line-clamp-2 mb-2">
                     {selectedText}
                   </p>
-                  <textarea
-                    value={newHighlightNote}
-                    onChange={(e) => setNewHighlightNote(e.target.value.slice(0, 800))}
-                    rows={2}
-                    placeholder="Optional note for this highlight..."
-                    className="w-full rounded-md border border-indigo-200 dark:border-indigo-800 bg-white dark:bg-gray-800 px-2 py-1.5 text-xs text-gray-700 dark:text-gray-200 outline-none focus:ring-2 focus:ring-indigo-500/40"
-                  />
+                  {notesEnabled && (
+                    <textarea
+                      value={newHighlightNote}
+                      onChange={(e) => setNewHighlightNote(e.target.value.slice(0, 800))}
+                      rows={2}
+                      placeholder="Optional note for this highlight..."
+                      className="w-full rounded-md border border-indigo-200 dark:border-indigo-800 bg-white dark:bg-gray-800 px-2 py-1.5 text-xs text-gray-700 dark:text-gray-200 outline-none focus:ring-2 focus:ring-indigo-500/40"
+                    />
+                  )}
                 </section>
               )}
 
@@ -1419,30 +1478,45 @@ export default function TopicLayoutClient({
                     const saving = Boolean(savingNoteById[item.id]);
                     return (
                       <li key={item.id} className="rounded-lg border border-amber-200 dark:border-amber-900 bg-amber-50/50 dark:bg-amber-950/20 p-3">
-                        <p className="text-sm text-gray-800 dark:text-gray-100 leading-relaxed mb-2">
+                        <button
+                          type="button"
+                          onClick={() => handleJumpToHighlight(item)}
+                          className="block w-full text-left text-sm text-gray-800 dark:text-gray-100 leading-relaxed mb-2 hover:text-indigo-600 dark:hover:text-indigo-300 transition-colors cursor-pointer"
+                          title="Jump to highlight"
+                        >
                           {item.text}
-                        </p>
-                        <textarea
-                          value={noteValue}
-                          onChange={(e) => setNoteDraftById((prev) => ({ ...prev, [item.id]: e.target.value.slice(0, 800) }))}
-                          rows={2}
-                          placeholder="Add note..."
-                          className="w-full rounded-md border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-2 py-1.5 text-xs text-gray-700 dark:text-gray-200 outline-none focus:ring-2 focus:ring-amber-500/30"
-                        />
+                        </button>
+                        {notesEnabled && (
+                          <textarea
+                            value={noteValue}
+                            onChange={(e) => setNoteDraftById((prev) => ({ ...prev, [item.id]: e.target.value.slice(0, 800) }))}
+                            rows={2}
+                            placeholder="Add note..."
+                            className="w-full rounded-md border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-2 py-1.5 text-xs text-gray-700 dark:text-gray-200 outline-none focus:ring-2 focus:ring-amber-500/30"
+                          />
+                        )}
                         <div className="mt-2 flex items-center justify-end gap-2">
+                          <button
+                            onClick={() => handleJumpToHighlight(item)}
+                            className="text-xs px-2 py-1 rounded border border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-300 hover:border-indigo-300 dark:hover:border-indigo-700 transition-colors cursor-pointer"
+                          >
+                            Jump
+                          </button>
                           <button
                             onClick={() => handleRemoveHighlight(item.id)}
                             className="text-xs px-2 py-1 rounded border border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400 hover:text-red-600 dark:hover:text-red-400 hover:border-red-300 dark:hover:border-red-700 transition-colors cursor-pointer"
                           >
                             Remove
                           </button>
-                          <button
-                            onClick={() => handleSaveHighlightNote(item.id)}
-                            disabled={saving}
-                            className="text-xs px-2 py-1 rounded border border-amber-300 dark:border-amber-700 text-amber-700 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-900/40 disabled:opacity-60 cursor-pointer transition-colors"
-                          >
-                            {saving ? "Saving..." : "Save Note"}
-                          </button>
+                          {notesEnabled && (
+                            <button
+                              onClick={() => handleSaveHighlightNote(item.id)}
+                              disabled={saving}
+                              className="text-xs px-2 py-1 rounded border border-amber-300 dark:border-amber-700 text-amber-700 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-900/40 disabled:opacity-60 cursor-pointer transition-colors"
+                            >
+                              {saving ? "Saving..." : "Save Note"}
+                            </button>
+                          )}
                         </div>
                       </li>
                     );

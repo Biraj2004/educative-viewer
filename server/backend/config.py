@@ -5,8 +5,80 @@ import logging
 import os
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 log = logging.getLogger(__name__)
+
+VIEWER_FEATURE_FLAG_KEYS: tuple[str, ...] = (
+    "highlights_enabled",
+    "bookmarks_enabled",
+    "notes_enabled",
+    "search_enabled",
+)
+DEFAULT_VIEWER_FEATURE_FLAGS: dict[str, bool] = {
+    "highlights_enabled": True,
+    "bookmarks_enabled": True,
+    "notes_enabled": True,
+    "search_enabled": True,
+}
+
+
+def _env_truthy(value: Any) -> bool:
+    if isinstance(value, bool):
+        return value
+    return str(value or "").strip().lower() in ("1", "true", "yes", "on")
+
+
+def normalize_viewer_feature_flags(
+    value: Any,
+    *,
+    base: dict[str, bool] | None = None,
+) -> dict[str, bool]:
+    flags = dict(base) if isinstance(base, dict) else dict(DEFAULT_VIEWER_FEATURE_FLAGS)
+    if not isinstance(value, dict):
+        return flags
+    for key in VIEWER_FEATURE_FLAG_KEYS:
+        if key in value:
+            flags[key] = _env_truthy(value.get(key))
+    return flags
+
+
+def parse_role_feature_overrides(value: Any) -> dict[str, dict[str, bool]]:
+    if not isinstance(value, dict):
+        return {}
+    out: dict[str, dict[str, bool]] = {}
+    for role_raw, role_flags_raw in value.items():
+        role = str(role_raw or "").strip().lower()
+        if not role or not isinstance(role_flags_raw, dict):
+            continue
+        role_flags: dict[str, bool] = {}
+        for key in VIEWER_FEATURE_FLAG_KEYS:
+            if key in role_flags_raw:
+                role_flags[key] = _env_truthy(role_flags_raw.get(key))
+        if role_flags:
+            out[role] = role_flags
+    return out
+
+
+def resolve_viewer_features_for_role(
+    role: str | None,
+    global_flags: dict[str, bool] | None,
+    role_overrides: dict[str, dict[str, bool]] | None,
+) -> dict[str, bool]:
+    resolved = normalize_viewer_feature_flags(global_flags)
+    if not role:
+        return resolved
+    role_key = role.strip().lower()
+    if not role_key:
+        return resolved
+    override_map = role_overrides or {}
+    override = override_map.get(role_key)
+    if not isinstance(override, dict):
+        return resolved
+    for key in VIEWER_FEATURE_FLAG_KEYS:
+        if key in override:
+            resolved[key] = _env_truthy(override.get(key))
+    return resolved
 
 
 @dataclass(frozen=True)
@@ -50,6 +122,8 @@ class AppConfig:
     gemini_api_key: str
     groq_api_key: str
     highlights_enabled: bool
+    viewer_feature_flags: dict[str, bool]
+    viewer_feature_role_overrides: dict[str, dict[str, bool]]
 
 
 def load_env_file(env_path: Path | None = None) -> None:
@@ -148,6 +222,29 @@ def load_config() -> AppConfig:
         lib_dir=os.environ.get("ORACLE_LIB_DIR", "").strip(),
     )
 
+    raw_highlights_enabled = _env_truthy(os.environ.get("HIGHLIGHTS_ENABLED", "1"))
+    raw_viewer_flags_json = os.environ.get("VIEWER_FEATURE_FLAGS_JSON", "").strip()
+    raw_viewer_role_overrides_json = os.environ.get("VIEWER_FEATURE_ROLE_OVERRIDES_JSON", "").strip()
+
+    viewer_feature_flags = dict(DEFAULT_VIEWER_FEATURE_FLAGS)
+    viewer_feature_flags["highlights_enabled"] = raw_highlights_enabled
+    if raw_viewer_flags_json:
+        try:
+            parsed_flags = json.loads(raw_viewer_flags_json)
+            viewer_feature_flags = normalize_viewer_feature_flags(parsed_flags, base=viewer_feature_flags)
+        except json.JSONDecodeError:
+            log.warning("Invalid VIEWER_FEATURE_FLAGS_JSON ignored; expected JSON object")
+
+    viewer_feature_role_overrides: dict[str, dict[str, bool]] = {}
+    if raw_viewer_role_overrides_json:
+        try:
+            parsed_role_overrides = json.loads(raw_viewer_role_overrides_json)
+            viewer_feature_role_overrides = parse_role_feature_overrides(parsed_role_overrides)
+        except json.JSONDecodeError:
+            log.warning(
+                "Invalid VIEWER_FEATURE_ROLE_OVERRIDES_JSON ignored; expected JSON object"
+            )
+
     return AppConfig(
         flask_port=int(os.environ.get("FLASK_PORT", "5000")),
         flask_debug=os.environ.get("FLASK_DEBUG", "0") == "1",
@@ -170,5 +267,7 @@ def load_config() -> AppConfig:
         rsa_private_key=os.environ.get("RSA_PRIVATE_KEY", "").replace("\\n", "\n").strip(),
         gemini_api_key=os.environ.get("GEMINI_API_KEY", "").strip(),
         groq_api_key=os.environ.get("GROQ_API_KEY", "").strip(),
-        highlights_enabled=os.environ.get("HIGHLIGHTS_ENABLED", "1") == "1",
+        highlights_enabled=viewer_feature_flags.get("highlights_enabled", True),
+        viewer_feature_flags=viewer_feature_flags,
+        viewer_feature_role_overrides=viewer_feature_role_overrides,
     )

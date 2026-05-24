@@ -92,6 +92,7 @@ interface Props {
   error?: string;
   isAdmin?: boolean;
   authToken?: string;
+  searchEnabled?: boolean;
 }
 
 export default function CoursesListClient({
@@ -100,11 +101,14 @@ export default function CoursesListClient({
   error,
   isAdmin = false,
   authToken = "",
+  searchEnabled = true,
 }: Props) {
-  const enableGlobalSearch =
+  const envSearchEnabled =
     typeof process.env.NEXT_PUBLIC_ENABLE_GLOBAL_SEARCH === "string"
       ? process.env.NEXT_PUBLIC_ENABLE_GLOBAL_SEARCH === "1"
-      : false;
+      : true;
+  const enableCourseSearch = searchEnabled;
+  const enableGlobalSearch = enableCourseSearch && envSearchEnabled;
 
   const searchParams = useSearchParams();
   const [q, setQ] = useState(() => searchParams.get("q") ?? "");
@@ -114,7 +118,7 @@ export default function CoursesListClient({
   const [globalError, setGlobalError] = useState<string | null>(null);
   const ITEMS_PER_PAGE = 30;
 
-  const normalised = q.toLowerCase().trim();
+  const normalised = enableCourseSearch ? q.toLowerCase().trim() : "";
 
   // Scroll to top whenever the page number changes
   useEffect(() => {
@@ -123,7 +127,6 @@ export default function CoursesListClient({
 
   // Reset to page 1 when search query changes
   useEffect(() => {
-    // eslint-disable-next-line
     setPage(1);
   }, [normalised]);
 
@@ -186,13 +189,21 @@ export default function CoursesListClient({
     <>
       {/* Search */}
       <div className="max-w-5xl mx-auto px-6 pt-6 pb-2">
-        <CourseSearchInput
-          value={q}
-          onChange={setQ}
-          placeholder="Search courses and topic content..."
-          totalCount={courses.length}
-          filteredCount={filtered.length}
-        />
+        {enableCourseSearch ? (
+          <CourseSearchInput
+            value={q}
+            onChange={setQ}
+            placeholder="Search courses and topic content..."
+            totalCount={courses.length}
+            filteredCount={filtered.length}
+          />
+        ) : (
+          <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 px-4 py-3">
+            <p className="text-xs text-gray-500 dark:text-gray-400">
+              Search is disabled by administrator.
+            </p>
+          </div>
+        )}
 
         {enableGlobalSearch && normalised.length >= 3 && (
           <div className="mt-4 rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 overflow-hidden">

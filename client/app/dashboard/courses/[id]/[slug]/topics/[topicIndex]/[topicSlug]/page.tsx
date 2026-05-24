@@ -86,6 +86,8 @@ export default function TopicDetailPage() {
   const [initialBookmarked, setInitialBookmarked] = useState<number[]>([]);
   const [initialHighlights, setInitialHighlights] = useState<Record<string, ViewerHighlight[]>>({});
   const [highlightsEnabled, setHighlightsEnabled] = useState(true);
+  const [bookmarksEnabled, setBookmarksEnabled] = useState(true);
+  const [notesEnabled, setNotesEnabled] = useState(true);
   const [loading, setLoading] = useState(true);
   const [missing, setMissing] = useState(false);
 
@@ -144,6 +146,8 @@ export default function TopicDetailPage() {
             setCourse(courseData);
             setInitialCompleted(prog.completed[String(courseId)] ?? []);
             setHighlightsEnabled(viewerPayload.features.highlights_enabled !== false);
+            setBookmarksEnabled(viewerPayload.features.bookmarks_enabled !== false);
+            setNotesEnabled(viewerPayload.features.notes_enabled !== false);
             const viewerSettings = viewerPayload.settings;
             const viewerCourse = viewerSettings?.courses?.[String(courseId)];
             setInitialBookmarked(Array.isArray(viewerCourse?.bookmarks) ? viewerCourse.bookmarks : []);
@@ -241,6 +245,8 @@ export default function TopicDetailPage() {
       initialBookmarked={initialBookmarked}
       initialHighlights={initialHighlights}
       highlightsEnabled={highlightsEnabled}
+      bookmarksEnabled={bookmarksEnabled}
+      notesEnabled={notesEnabled}
     />
   );
 }

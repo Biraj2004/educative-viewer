@@ -47,6 +47,8 @@ export default function CourseDetailPage() {
   const [progress, setProgress] = useState<ProgressData>({ course_order: [], completed: {} });
   const [lastVisitedTopicIndex, setLastVisitedTopicIndex] = useState<number | null>(null);
   const [bookmarkedTopicIndices, setBookmarkedTopicIndices] = useState<Set<number>>(new Set());
+  const [bookmarksEnabled, setBookmarksEnabled] = useState(true);
+  const [searchEnabled, setSearchEnabled] = useState(true);
   const [loading, setLoading] = useState(true);
   const [missing, setMissing] = useState(false);
   const [resetting, setResetting] = useState(false);
@@ -92,6 +94,9 @@ export default function CourseDetailPage() {
             setCourse(data);
             setProgress(prog);
             const viewerSettings = viewerPayload.settings;
+            const canUseBookmarks = viewerPayload.features.bookmarks_enabled !== false;
+            setBookmarksEnabled(canUseBookmarks);
+            setSearchEnabled(viewerPayload.features.search_enabled !== false);
             const rawLastVisited = viewerSettings?.courses?.[String(courseId)]?.last_topic_index;
             setLastVisitedTopicIndex(
               typeof rawLastVisited === "number" && Number.isFinite(rawLastVisited)
@@ -101,7 +106,7 @@ export default function CourseDetailPage() {
             const rawBookmarks = viewerSettings?.courses?.[String(courseId)]?.bookmarks;
             setBookmarkedTopicIndices(
               new Set(
-                Array.isArray(rawBookmarks)
+                canUseBookmarks && Array.isArray(rawBookmarks)
                   ? rawBookmarks.filter((v): v is number => typeof v === "number" && Number.isFinite(v))
                   : []
               )
@@ -268,8 +273,9 @@ export default function CourseDetailPage() {
           slug={course.slug}
           fromPath={fromPath}
           completedTopicIndices={completedTopicIndices}
-          bookmarkedTopicIndices={bookmarkedTopicIndices}
+          bookmarkedTopicIndices={bookmarksEnabled ? bookmarkedTopicIndices : new Set<number>()}
           lastVisitedTopicIndex={lastVisitedTopicIndex}
+          searchEnabled={searchEnabled}
         />
       </div>
     </main>

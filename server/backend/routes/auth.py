@@ -15,6 +15,7 @@ import segno
 from flask import Blueprint, abort, jsonify, request
 
 from backend.auth_service import AuthService
+from backend.config import resolve_viewer_features_for_role
 from backend.db.manager import DBManager
 from backend.db.sql_helpers import execute, fetch_one_dict, rollback_quietly
 
@@ -125,6 +126,86 @@ def _strip_highlights_from_settings(settings: dict[str, Any]) -> dict[str, Any]:
         if isinstance(course_state, dict):
             course_state.pop("highlights", None)
     return settings
+
+
+def _viewer_features_for_user(auth_service: AuthService, user: dict[str, Any]) -> dict[str, bool]:
+    return resolve_viewer_features_for_role(
+        str(user.get("role", "") or ""),
+        auth_service.config.viewer_feature_flags,
+        auth_service.config.viewer_feature_role_overrides,
+    )
+
+
+def _filter_settings_by_features(
+    settings: dict[str, Any],
+    features: dict[str, bool],
+) -> dict[str, Any]:
+    courses = settings.get("courses")
+    if not isinstance(courses, dict):
+        return settings
+
+    highlights_enabled = bool(features.get("highlights_enabled", True))
+    bookmarks_enabled = bool(features.get("bookmarks_enabled", True))
+    notes_enabled = bool(features.get("notes_enabled", True))
+
+    for course_state in courses.values():
+        if not isinstance(course_state, dict):
+            continue
+        if not bookmarks_enabled:
+            course_state.pop("bookmarks", None)
+        if not highlights_enabled:
+            course_state.pop("highlights", None)
+            continue
+        if notes_enabled:
+            continue
+        highlights = course_state.get("highlights")
+        if not isinstance(highlights, dict):
+            continue
+        for topic_rows in highlights.values():
+            if not isinstance(topic_rows, list):
+                continue
+            for item in topic_rows:
+                if isinstance(item, dict):
+                    item.pop("note", None)
+    return settings
+
+
+def _filter_course_state_by_features(
+    course_state: dict[str, Any],
+    features: dict[str, bool],
+) -> dict[str, Any]:
+    filtered = dict(course_state)
+    highlights_enabled = bool(features.get("highlights_enabled", True))
+    bookmarks_enabled = bool(features.get("bookmarks_enabled", True))
+    notes_enabled = bool(features.get("notes_enabled", True))
+
+    if not bookmarks_enabled:
+        filtered.pop("bookmarks", None)
+    if not highlights_enabled:
+        filtered.pop("highlights", None)
+        return filtered
+    if notes_enabled:
+        return filtered
+
+    raw_highlights = filtered.get("highlights")
+    if not isinstance(raw_highlights, dict):
+        return filtered
+
+    sanitized_highlights: dict[str, list[dict[str, Any]]] = {}
+    for topic_key, rows in raw_highlights.items():
+        if not isinstance(rows, list):
+            continue
+        sanitized_rows: list[dict[str, Any]] = []
+        for row in rows:
+            if not isinstance(row, dict):
+                continue
+            row_copy = dict(row)
+            row_copy.pop("note", None)
+            sanitized_rows.append(row_copy)
+        if sanitized_rows:
+            sanitized_highlights[str(topic_key)] = sanitized_rows
+    filtered["highlights"] = sanitized_highlights
+    return filtered
 
 
 def create_auth_blueprint(auth_service: AuthService, db_manager: DBManager) -> Blueprint:
@@ -516,15 +597,13 @@ def create_auth_blueprint(auth_service: AuthService, db_manager: DBManager) -> B
         if not user:
             abort(401, description="Not authenticated")
 
+        features = _viewer_features_for_user(auth_service, user)
         settings = _parse_viewer_settings(user.get("viewer_settings_json"))
-        if not auth_service.config.highlights_enabled:
-            settings = _strip_highlights_from_settings(settings)
+        settings = _filter_settings_by_features(settings, features)
         return jsonify(
             {
                 "settings": settings,
-                "features": {
-                    "highlights_enabled": bool(auth_service.config.highlights_enabled),
-                },
+                "features": features,
             }
         ), 200
 
@@ -540,6 +619,10 @@ def create_auth_blueprint(auth_service: AuthService, db_manager: DBManager) -> B
             abort(400, description="course_id is required")
         course_id = _to_int(course_id_raw, "course_id")
         now_iso = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+        features = _viewer_features_for_user(auth_service, user)
+        highlights_enabled = bool(features.get("highlights_enabled", True))
+        bookmarks_enabled = bool(features.get("bookmarks_enabled", True))
+        notes_enabled = bool(features.get("notes_enabled", True))
 
         conn = db_manager.get_auth_connection()
         try:
@@ -566,6 +649,8 @@ def create_auth_blueprint(auth_service: AuthService, db_manager: DBManager) -> B
                 course_state["last_topic_index"] = _to_int(body.get("last_topic_index"), "last_topic_index")
 
             if "bookmark_topic_index" in body:
+                if not bookmarks_enabled:
+                    abort(403, description="Bookmarks are disabled by administrator")
                 bookmark_idx = _to_int(body.get("bookmark_topic_index"), "bookmark_topic_index")
                 bookmarked = bool(body.get("bookmarked", True))
                 if bookmarked:
@@ -577,7 +662,7 @@ def create_auth_blueprint(auth_service: AuthService, db_manager: DBManager) -> B
 
             add_highlight = body.get("add_highlight")
             if add_highlight is not None:
-                if not auth_service.config.highlights_enabled:
+                if not highlights_enabled:
                     abort(403, description="Highlights are disabled by administrator")
                 if not isinstance(add_highlight, dict):
                     abort(400, description="add_highlight must be an object")
@@ -586,7 +671,7 @@ def create_auth_blueprint(auth_service: AuthService, db_manager: DBManager) -> B
                 if not text:
                     abort(400, description="add_highlight.text is required")
                 context = str(add_highlight.get("context", "") or "").strip()
-                note = str(add_highlight.get("note", "") or "").strip()
+                note = str(add_highlight.get("note", "") or "").strip() if notes_enabled else ""
                 start_offset = add_highlight.get("start_offset")
                 end_offset = add_highlight.get("end_offset")
                 component_index = add_highlight.get("component_index")
@@ -656,6 +741,8 @@ def create_auth_blueprint(auth_service: AuthService, db_manager: DBManager) -> B
 
             remove_highlight = body.get("remove_highlight")
             if remove_highlight is not None:
+                if not highlights_enabled:
+                    abort(403, description="Highlights are disabled by administrator")
                 if not isinstance(remove_highlight, dict):
                     abort(400, description="remove_highlight must be an object")
                 topic_index = _to_int(remove_highlight.get("topic_index"), "remove_highlight.topic_index")
@@ -677,6 +764,10 @@ def create_auth_blueprint(auth_service: AuthService, db_manager: DBManager) -> B
 
             update_highlight_note = body.get("update_highlight_note")
             if update_highlight_note is not None:
+                if not highlights_enabled:
+                    abort(403, description="Highlights are disabled by administrator")
+                if not notes_enabled:
+                    abort(403, description="Notes are disabled by administrator")
                 if not isinstance(update_highlight_note, dict):
                     abort(400, description="update_highlight_note must be an object")
                 topic_index = _to_int(update_highlight_note.get("topic_index"), "update_highlight_note.topic_index")
@@ -699,6 +790,8 @@ def create_auth_blueprint(auth_service: AuthService, db_manager: DBManager) -> B
 
             clear_highlights_topic_index = body.get("clear_highlights_topic_index")
             if clear_highlights_topic_index is not None:
+                if not highlights_enabled:
+                    abort(403, description="Highlights are disabled by administrator")
                 topic_index = _to_int(clear_highlights_topic_index, "clear_highlights_topic_index")
                 highlights.pop(str(topic_index), None)
                 course_state["highlights"] = highlights
@@ -719,9 +812,8 @@ def create_auth_blueprint(auth_service: AuthService, db_manager: DBManager) -> B
         finally:
             conn.close()
 
-        if not auth_service.config.highlights_enabled and isinstance(course_state, dict):
-            course_state = dict(course_state)
-            course_state.pop("highlights", None)
+        if isinstance(course_state, dict):
+            course_state = _filter_course_state_by_features(course_state, features)
 
         return jsonify({"ok": True, "course": course_state}), 200
 
