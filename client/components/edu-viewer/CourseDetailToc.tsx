@@ -218,7 +218,7 @@ export default function CourseDetailToc({
                         >
                           <Link
                             href={buildTopicHref(courseId, slug, topic.topic_index, topic.slug, fromPath)}
-                            prefetch={true}
+                            prefetch={false}
                             className={[
                               "flex items-center gap-3 px-4 py-2.5 text-sm transition-colors border-l-2 relative",
                               isDone
@@ -279,7 +279,7 @@ export default function CourseDetailToc({
                 >
                   <Link
                     href={buildTopicHref(courseId, slug, entry.topic_index, entry.slug, fromPath)}
-                    prefetch={true}
+                    prefetch={false}
                     className={[
                       "flex items-center gap-3 px-4 py-2.5 text-sm transition-colors border-l-2 relative",
                       isDone

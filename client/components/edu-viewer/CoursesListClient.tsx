@@ -243,6 +243,7 @@ export default function CoursesListClient({
                     <Link
                       key={`${hit.course_id}-${hit.topic_index}-${hit.topic_slug}`}
                       href={href}
+                      prefetch={false}
                       className="block px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-800/40 transition-colors"
                     >
                       <div className="flex items-start justify-between gap-3">
