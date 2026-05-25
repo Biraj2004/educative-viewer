@@ -20,6 +20,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 60
     permissions:
+      actions: write
       contents: write
     defaults:
       run:
@@ -39,6 +40,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -187,3 +190,31 @@ jobs:
           name: client-next-zip-${{ steps.tag.outputs.next_tag }}
           path: ${{ github.workspace }}/client/.next.zip
           if-no-files-found: ignore
+
+      - name: Trigger server release workflow when server code changed
+        if: github.event_name == 'push'
+        run: |
+          set -euo pipefail
+
+          before_sha='${{ github.event.before }}'
+          after_sha='${{ github.sha }}'
+
+          if [ "$before_sha" = "0000000000000000000000000000000000000000" ]; then
+            changed_files="$(git ls-tree -r --name-only "$after_sha")"
+          else
+            changed_files="$(git diff --name-only "$before_sha" "$after_sha")"
+          fi
+
+          echo "Changed files:"
+          echo "$changed_files"
+
+          if echo "$changed_files" | grep -q '^server/'; then
+            echo "Detected server changes. Dispatching server-release.yml ..."
+            gh api \
+              --method POST \
+              repos/${{ github.repository }}/actions/workflows/server-release.yml/dispatches \
+              -f ref='main' \
+              -f inputs[deploy_branch]='main'
+          else
+            echo "No server/** changes detected. Skipping server release dispatch."
+          fi
