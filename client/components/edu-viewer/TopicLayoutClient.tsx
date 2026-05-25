@@ -142,6 +142,16 @@ interface Props {
 }
 
 type HighlightColor = "yellow" | "blue" | "green" | "pink" | "orange";
+type HighlightHistoryCommand =
+  | { type: "add"; row: ViewerHighlight }
+  | { type: "remove"; highlightId?: string; row?: ViewerHighlight };
+
+type HighlightHistoryEntry = {
+  topicKey: string;
+  topicIndex: number;
+  undo: HighlightHistoryCommand[];
+  redo: HighlightHistoryCommand[];
+};
 
 const HIGHLIGHT_COLORS: ReadonlyArray<HighlightColor> = [
   "yellow",
@@ -253,10 +263,16 @@ export default function TopicLayoutClient({
   const [newHighlightNote, setNewHighlightNote] = useState("");
   const [noteDraftById, setNoteDraftById] = useState<Record<string, string>>({});
   const [savingNoteById, setSavingNoteById] = useState<Record<string, boolean>>({});
+  const [highlightUndoStack, setHighlightUndoStack] = useState<HighlightHistoryEntry[]>([]);
+  const [highlightRedoStack, setHighlightRedoStack] = useState<HighlightHistoryEntry[]>([]);
+  const [highlightHistoryBusy, setHighlightHistoryBusy] = useState(false);
+  const [highlightMutationBusy, setHighlightMutationBusy] = useState(false);
   const selectedTextRef = useRef("");
   const selectedOffsetsRef = useRef<{ start: number; end: number; componentIndex: number } | null>(null);
   const selectedQuoteContextRef = useRef<{ prefix: string; suffix: string } | null>(null);
   const inFlightHighlightKeyRef = useRef<string | null>(null);
+  const highlightMutationQueueRef = useRef<Promise<unknown>>(Promise.resolve());
+  const pendingHighlightMutationsRef = useRef(0);
   const [selectionAction, setSelectionAction] = useState<{
     visible: boolean;
     x: number;
@@ -280,6 +296,195 @@ export default function TopicLayoutClient({
     () => highlightsByTopic[currentTopicKey] ?? [],
     [currentTopicKey, highlightsByTopic]
   );
+  const highlightsByTopicRef = useRef(highlightsByTopic);
+
+  const cloneHighlights = useCallback((rows: ViewerHighlight[]): ViewerHighlight[] => (
+    rows.map((item) => ({ ...item }))
+  ), []);
+  useEffect(() => {
+    highlightsByTopicRef.current = highlightsByTopic;
+  }, [highlightsByTopic]);
+
+  const isSameHighlightAnchor = useCallback((a: ViewerHighlight, b: ViewerHighlight): boolean => {
+    const aStart = typeof a.start_offset === "number" ? a.start_offset : null;
+    const aEnd = typeof a.end_offset === "number" ? a.end_offset : null;
+    const aComponent = typeof a.component_index === "number" ? a.component_index : null;
+    const bStart = typeof b.start_offset === "number" ? b.start_offset : null;
+    const bEnd = typeof b.end_offset === "number" ? b.end_offset : null;
+    const bComponent = typeof b.component_index === "number" ? b.component_index : null;
+    return (
+      aStart !== null
+      && aEnd !== null
+      && aComponent !== null
+      && bStart !== null
+      && bEnd !== null
+      && bComponent !== null
+      && aStart === bStart
+      && aEnd === bEnd
+      && aComponent === bComponent
+      && normalizeHighlightTextKey(a.text) === normalizeHighlightTextKey(b.text)
+    );
+  }, []);
+
+  const resolveHighlightIdByRow = useCallback((topicKey: string, row: ViewerHighlight): string | null => {
+    const rows = highlightsByTopicRef.current[topicKey] ?? [];
+    const matched = rows.find((item) => isSameHighlightAnchor(item, row));
+    return matched?.id ?? null;
+  }, [isSameHighlightAnchor]);
+
+  const pushHighlightHistory = useCallback((entry: HighlightHistoryEntry) => {
+    setHighlightUndoStack((prev) => [...prev.slice(-24), entry]);
+    setHighlightRedoStack([]);
+  }, []);
+
+  const enqueueHighlightMutation = useCallback(<T,>(task: () => Promise<T>): Promise<T> => {
+    pendingHighlightMutationsRef.current += 1;
+    setHighlightMutationBusy(true);
+    const run = highlightMutationQueueRef.current.then(task, task);
+    highlightMutationQueueRef.current = run.then(
+      () => undefined,
+      () => undefined,
+    );
+    run.finally(() => {
+      pendingHighlightMutationsRef.current = Math.max(0, pendingHighlightMutationsRef.current - 1);
+      if (pendingHighlightMutationsRef.current === 0) {
+        setHighlightMutationBusy(false);
+      }
+    });
+    return run;
+  }, []);
+
+  const runHistoryCommand = useCallback(async (
+    topicIndex: number,
+    topicKey: string,
+    command: HighlightHistoryCommand,
+  ) => {
+    if (command.type === "remove") {
+      let highlightId = command.highlightId;
+      if (!highlightId && command.row) {
+        highlightId = resolveHighlightIdByRow(topicKey, command.row) ?? undefined;
+      }
+      if (!highlightId) return null;
+      return enqueueHighlightMutation(() => updateViewerCourseSettings({
+        course_id: courseId,
+        remove_highlight: {
+          topic_index: topicIndex,
+          highlight_id: highlightId,
+        },
+      }));
+    }
+    const row = command.row;
+    const startOffset = row.start_offset;
+    const endOffset = row.end_offset;
+    const componentIndex = row.component_index;
+    if (
+      typeof startOffset !== "number"
+      || typeof endOffset !== "number"
+      || endOffset <= startOffset
+      || typeof componentIndex !== "number"
+    ) {
+      return null;
+    }
+    return enqueueHighlightMutation(() => updateViewerCourseSettings({
+      course_id: courseId,
+      add_highlight: {
+        topic_index: topicIndex,
+        text: String(row.text || "").slice(0, 280),
+        color: normalizeHighlightColor(row.color),
+        ...(row.note ? { note: String(row.note).slice(0, 800) } : {}),
+        ...(row.quote_prefix ? { quote_prefix: String(row.quote_prefix).slice(0, 80) } : {}),
+        ...(row.quote_suffix ? { quote_suffix: String(row.quote_suffix).slice(0, 80) } : {}),
+        start_offset: startOffset,
+        end_offset: endOffset,
+        component_index: componentIndex,
+      },
+    }));
+  }, [courseId, enqueueHighlightMutation, resolveHighlightIdByRow]);
+
+  const applyHistoryEntry = useCallback(async (
+    entry: HighlightHistoryEntry,
+    direction: "undo" | "redo",
+  ): Promise<{ applied: boolean; entry: HighlightHistoryEntry }> => {
+    const commands = direction === "undo" ? entry.undo : entry.redo;
+    if (commands.length === 0) return { applied: false, entry };
+    const nextEntry: HighlightHistoryEntry = {
+      ...entry,
+      undo: entry.undo.map((cmd) => ({ ...cmd })),
+      redo: entry.redo.map((cmd) => ({ ...cmd })),
+    };
+    let lastCourseState: Awaited<ReturnType<typeof updateViewerCourseSettings>> = null;
+    for (const command of commands) {
+      // Single-action inverse calls only; no replay of unrelated highlights.
+      lastCourseState = await runHistoryCommand(entry.topicIndex, entry.topicKey, command);
+      if (command.type !== "add") continue;
+      const topicRows = lastCourseState?.highlights?.[entry.topicKey] ?? [];
+      const resolved = topicRows.find((row) => (
+        typeof row.start_offset === "number"
+        && typeof row.end_offset === "number"
+        && typeof row.component_index === "number"
+        && typeof command.row.start_offset === "number"
+        && typeof command.row.end_offset === "number"
+        && typeof command.row.component_index === "number"
+        && row.start_offset === command.row.start_offset
+        && row.end_offset === command.row.end_offset
+        && row.component_index === command.row.component_index
+        && normalizeHighlightTextKey(row.text) === normalizeHighlightTextKey(command.row.text)
+      ));
+      const resolvedId = resolved?.id;
+      if (!resolvedId) continue;
+      if (direction === "undo") {
+        nextEntry.redo = nextEntry.redo.map((cmd) => {
+          if (cmd.type !== "remove" || !cmd.row) return cmd;
+          return isSameHighlightAnchor(cmd.row, command.row)
+            ? { ...cmd, highlightId: resolvedId }
+            : cmd;
+        });
+      } else {
+        nextEntry.undo = nextEntry.undo.map((cmd) => {
+          if (cmd.type !== "remove" || !cmd.row) return cmd;
+          return isSameHighlightAnchor(cmd.row, command.row)
+            ? { ...cmd, highlightId: resolvedId }
+            : cmd;
+        });
+      }
+    }
+    const highlights = lastCourseState?.highlights;
+    if (highlights && typeof highlights === "object") {
+      setHighlightsByTopic(highlights);
+      return { applied: true, entry: nextEntry };
+    }
+    return { applied: false, entry: nextEntry };
+  }, [isSameHighlightAnchor, runHistoryCommand]);
+
+  const handleUndoHighlightChange = useCallback(async () => {
+    if (highlightHistoryBusy || highlightMutationBusy) return;
+    const entry = highlightUndoStack[highlightUndoStack.length - 1];
+    if (!entry || entry.topicKey !== currentTopicKey) return;
+    setHighlightHistoryBusy(true);
+    try {
+      const result = await applyHistoryEntry(entry, "undo");
+      if (!result.applied) return;
+      setHighlightUndoStack((prev) => prev.slice(0, -1));
+      setHighlightRedoStack((prev) => [...prev.slice(-24), result.entry]);
+    } finally {
+      setHighlightHistoryBusy(false);
+    }
+  }, [applyHistoryEntry, currentTopicKey, highlightHistoryBusy, highlightMutationBusy, highlightUndoStack]);
+
+  const handleRedoHighlightChange = useCallback(async () => {
+    if (highlightHistoryBusy || highlightMutationBusy) return;
+    const entry = highlightRedoStack[highlightRedoStack.length - 1];
+    if (!entry || entry.topicKey !== currentTopicKey) return;
+    setHighlightHistoryBusy(true);
+    try {
+      const result = await applyHistoryEntry(entry, "redo");
+      if (!result.applied) return;
+      setHighlightRedoStack((prev) => prev.slice(0, -1));
+      setHighlightUndoStack((prev) => [...prev.slice(-24), result.entry]);
+    } finally {
+      setHighlightHistoryBusy(false);
+    }
+  }, [applyHistoryEntry, currentTopicKey, highlightHistoryBusy, highlightMutationBusy, highlightRedoStack]);
   
   // Calculate estimated reading time
   const estimatedTime = React.useMemo(() => {
@@ -859,7 +1064,7 @@ export default function TopicLayoutClient({
   }, [getQuoteContextByOffsets, getRangeOffsetsWithinContainer, highlightsEnabled]);
 
   const handleAddHighlight = useCallback((overrideColor?: HighlightColor) => {
-    if (!highlightsEnabled) return;
+    if (!highlightsEnabled || highlightMutationBusy) return;
     const text = (selectedTextRef.current || captureSelectionFromTopicContent()).trim();
     if (!text) return;
     const topicKey = String(currentTopic.topic_index);
@@ -998,6 +1203,8 @@ export default function TopicLayoutClient({
     const nextTopicHighlights = existing
       .filter((item) => !overlapIds.has(item.id))
       .concat(optimistic);
+    const beforeSnapshot = cloneHighlights(existing);
+    const optimisticSnapshot = cloneHighlights(nextTopicHighlights);
 
     setHighlightsByTopic((prev) => ({ ...prev, [topicKey]: nextTopicHighlights }));
     setSelectedText("");
@@ -1009,7 +1216,7 @@ export default function TopicLayoutClient({
     sel?.removeAllRanges();
     setSelectionAction((prev) => ({ ...prev, visible: false }));
 
-    updateViewerCourseSettings({
+    enqueueHighlightMutation(() => updateViewerCourseSettings({
       course_id: courseId,
       last_highlight_color: color,
       add_highlight: {
@@ -1023,14 +1230,51 @@ export default function TopicLayoutClient({
         end_offset: mergedEnd,
         component_index: mergedComponentIndex,
       },
-    }).then((courseState) => {
+    })).then((courseState) => {
       const highlights = courseState?.highlights;
-      if (!highlights || typeof highlights !== "object") return;
-      setHighlightsByTopic(highlights);
-    }).catch(() => { }).finally(() => {
+      const serverRows = (
+        highlights && typeof highlights === "object"
+          ? (highlights[topicKey] ?? [])
+          : optimisticSnapshot
+      ) as ViewerHighlight[];
+      if (highlights && typeof highlights === "object") {
+        setHighlightsByTopic(highlights);
+      }
+      const beforeIds = new Set(beforeSnapshot.map((row) => row.id));
+      const addedRows = serverRows.filter((row) => !beforeIds.has(row.id));
+      if (addedRows.length === 1 && overlaps.length === 0) {
+        const added = { ...addedRows[0] };
+        pushHighlightHistory({
+          topicKey,
+          topicIndex: currentTopic.topic_index,
+          undo: [{ type: "remove", highlightId: added.id, row: { ...added } }],
+          redo: [{ type: "add", row: added }],
+        });
+      } else if (addedRows.length === 1 && overlaps.length > 0) {
+        const merged = { ...addedRows[0] };
+        const overlapSnapshots = overlaps.map((row) => ({ ...row }));
+        const undoCommands: HighlightHistoryCommand[] = [
+          { type: "remove", highlightId: merged.id, row: { ...merged } },
+          ...overlapSnapshots.map((row): HighlightHistoryCommand => ({ type: "add", row })),
+        ];
+        const redoCommands: HighlightHistoryCommand[] = [
+          ...overlapSnapshots.map((row): HighlightHistoryCommand => ({ type: "remove", highlightId: row.id, row })),
+          { type: "add", row: merged },
+        ];
+        pushHighlightHistory({
+          topicKey,
+          topicIndex: currentTopic.topic_index,
+          undo: undoCommands,
+          redo: redoCommands,
+        });
+      }
+    }).catch(() => {
+      setHighlightsByTopic((prev) => ({ ...prev, [topicKey]: beforeSnapshot }));
+    }).finally(() => {
       inFlightHighlightKeyRef.current = null;
     });
   }, [
+    cloneHighlights,
     captureSelectionFromTopicContent,
     courseId,
     currentTopicHighlights,
@@ -1043,46 +1287,63 @@ export default function TopicLayoutClient({
     newHighlightNote,
     selectedColor,
     setSelectionColorPaletteOpen,
+    pushHighlightHistory,
+    enqueueHighlightMutation,
+    highlightMutationBusy,
   ]);
 
   const handleRemoveHighlight = useCallback((highlightId: string) => {
+    if (highlightMutationBusy) return;
     const topicKey = String(currentTopic.topic_index);
+    const beforeRows = cloneHighlights(highlightsByTopic[topicKey] ?? []);
     setHighlightsByTopic((prev) => {
       const nextTopicHighlights = (prev[topicKey] ?? []).filter((item) => item.id !== highlightId);
       return { ...prev, [topicKey]: nextTopicHighlights };
     });
-    updateViewerCourseSettings({
+    enqueueHighlightMutation(() => updateViewerCourseSettings({
       course_id: courseId,
       remove_highlight: {
         topic_index: currentTopic.topic_index,
         highlight_id: highlightId,
       },
-    }).then((courseState) => {
+    })).then((courseState) => {
       const highlights = courseState?.highlights;
-      if (!highlights || typeof highlights !== "object") return;
-      setHighlightsByTopic(highlights);
-    }).catch(() => { });
-  }, [courseId, currentTopic.topic_index]);
+      if (highlights && typeof highlights === "object") {
+        setHighlightsByTopic(highlights);
+      }
+      const removedRow = beforeRows.find((item) => item.id === highlightId);
+      if (removedRow) {
+        pushHighlightHistory({
+          topicKey,
+          topicIndex: currentTopic.topic_index,
+          undo: [{ type: "add", row: { ...removedRow } }],
+          redo: [{ type: "remove", highlightId, row: { ...removedRow } }],
+        });
+      }
+    }).catch(() => {
+      setHighlightsByTopic((prev) => ({ ...prev, [topicKey]: beforeRows }));
+    });
+  }, [cloneHighlights, courseId, currentTopic.topic_index, highlightsByTopic, pushHighlightHistory, enqueueHighlightMutation, highlightMutationBusy]);
 
   const handleSaveHighlightNote = useCallback((highlightId: string) => {
-    if (!notesEnabled) return;
+    if (!notesEnabled || highlightMutationBusy) return;
     const note = (noteDraftById[highlightId] ?? "").slice(0, 800);
     setSavingNoteById((prev) => ({ ...prev, [highlightId]: true }));
-    updateViewerCourseSettings({
+    enqueueHighlightMutation(() => updateViewerCourseSettings({
       course_id: courseId,
       update_highlight_note: {
         topic_index: currentTopic.topic_index,
         highlight_id: highlightId,
         note,
       },
-    }).then((courseState) => {
+    })).then((courseState) => {
       const highlights = courseState?.highlights;
       if (!highlights || typeof highlights !== "object") return;
       setHighlightsByTopic(highlights);
     }).catch(() => { }).finally(() => {
       setSavingNoteById((prev) => ({ ...prev, [highlightId]: false }));
     });
-  }, [courseId, currentTopic.topic_index, noteDraftById, notesEnabled]);
+  }, [courseId, currentTopic.topic_index, noteDraftById, notesEnabled, enqueueHighlightMutation, highlightMutationBusy]);
 
   const persistLastHighlightColor = useCallback((color: HighlightColor) => {
     updateViewerCourseSettings({
@@ -1092,6 +1353,7 @@ export default function TopicLayoutClient({
   }, [courseId]);
 
   const handleSaveHighlightColor = useCallback((highlightId: string, color: HighlightColor) => {
+    if (highlightMutationBusy) return;
     const topicKey = String(currentTopic.topic_index);
     const normalizedColor = normalizeHighlightColor(color);
     setSelectedColor(normalizedColor);
@@ -1104,7 +1366,7 @@ export default function TopicLayoutClient({
         )),
       };
     });
-    updateViewerCourseSettings({
+    enqueueHighlightMutation(() => updateViewerCourseSettings({
       course_id: courseId,
       last_highlight_color: normalizedColor,
       update_highlight_color: {
@@ -1112,12 +1374,12 @@ export default function TopicLayoutClient({
         highlight_id: highlightId,
         color: normalizedColor,
       },
-    }).then((courseState) => {
+    })).then((courseState) => {
       const highlights = courseState?.highlights;
       if (!highlights || typeof highlights !== "object") return;
       setHighlightsByTopic(highlights);
     }).catch(() => { });
-  }, [courseId, currentTopic.topic_index]);
+  }, [courseId, currentTopic.topic_index, enqueueHighlightMutation, highlightMutationBusy]);
 
   const handleSelectionColorPick = useCallback((color: HighlightColor) => {
     const normalizedColor = normalizeHighlightColor(color);
@@ -1128,7 +1390,11 @@ export default function TopicLayoutClient({
   }, [handleAddHighlight, persistLastHighlightColor]);
 
   const handleClearTopicHighlights = useCallback(() => {
+    if (highlightMutationBusy || highlightHistoryBusy) return;
     const topicKey = String(currentTopic.topic_index);
+    const beforeRows = cloneHighlights(highlightsByTopic[topicKey] ?? []);
+    const prevUndo = [...highlightUndoStack];
+    const prevRedo = [...highlightRedoStack];
     setHighlightsByTopic((prev) => {
       const next = { ...prev };
       delete next[topicKey];
@@ -1138,15 +1404,34 @@ export default function TopicLayoutClient({
     if (container) {
       unwrapUserHighlights(container);
     }
-    updateViewerCourseSettings({
+    enqueueHighlightMutation(() => updateViewerCourseSettings({
       course_id: courseId,
       clear_highlights_topic_index: currentTopic.topic_index,
-    }).then((courseState) => {
+    })).then((courseState) => {
       const highlights = courseState?.highlights;
-      if (!highlights || typeof highlights !== "object") return;
-      setHighlightsByTopic(highlights);
-    }).catch(() => { });
-  }, [courseId, currentTopic.topic_index, unwrapUserHighlights]);
+      if (highlights && typeof highlights === "object") {
+        setHighlightsByTopic(highlights);
+      }
+      // Clear is a destructive bulk boundary: reset local undo/redo history for this topic.
+      setHighlightUndoStack([]);
+      setHighlightRedoStack([]);
+    }).catch(() => {
+      setHighlightsByTopic((prev) => ({ ...prev, [topicKey]: beforeRows }));
+      setHighlightUndoStack(prevUndo);
+      setHighlightRedoStack(prevRedo);
+    });
+  }, [
+    cloneHighlights,
+    courseId,
+    currentTopic.topic_index,
+    highlightsByTopic,
+    unwrapUserHighlights,
+    enqueueHighlightMutation,
+    highlightMutationBusy,
+    highlightHistoryBusy,
+    highlightUndoStack,
+    highlightRedoStack,
+  ]);
 
   const handleJumpToHighlight = useCallback((item: ViewerHighlight) => {
     const container = contentRef.current;
@@ -1457,6 +1742,8 @@ export default function TopicLayoutClient({
     selectedQuoteContextRef.current = null;
     setSelectionAction((prev) => ({ ...prev, visible: false }));
     setSelectionColorPaletteOpen(false);
+    setHighlightUndoStack([]);
+    setHighlightRedoStack([]);
   }, [currentTopic.topic_index]);
 
   // Track reading progress bar and persist last visited topic in auth DB
@@ -1863,18 +2150,46 @@ export default function TopicLayoutClient({
                 <p className="text-xs uppercase tracking-wide font-semibold text-gray-500 dark:text-gray-400">
                   Saved ({currentTopicHighlights.length})
                 </p>
-                <button
-                  onClick={handleClearTopicHighlights}
-                  disabled={currentTopicHighlights.length === 0}
-                  className="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] rounded border border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400 hover:text-red-600 dark:hover:text-red-400 hover:border-red-300 dark:hover:border-red-700 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer transition-colors"
-                >
-                  <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M3 6h18" />
-                    <path d="M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2" />
-                    <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
-                  </svg>
-                  <span>Clear Topic</span>
-                </button>
+                <div className="flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={handleUndoHighlightChange}
+                    disabled={highlightHistoryBusy || highlightMutationBusy || highlightUndoStack.length === 0}
+                    className="inline-flex items-center justify-center w-8 h-8 rounded border border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-300 hover:border-indigo-300 dark:hover:border-indigo-700 disabled:opacity-45 disabled:cursor-not-allowed cursor-pointer transition-colors"
+                    title="Undo recent highlight change"
+                    aria-label="Undo recent highlight change"
+                  >
+                    <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M9 14 4 9l5-5" />
+                      <path d="M4 9h8a6 6 0 1 1 0 12h-1" />
+                    </svg>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleRedoHighlightChange}
+                    disabled={highlightHistoryBusy || highlightMutationBusy || highlightRedoStack.length === 0}
+                    className="inline-flex items-center justify-center w-8 h-8 rounded border border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-300 hover:border-indigo-300 dark:hover:border-indigo-700 disabled:opacity-45 disabled:cursor-not-allowed cursor-pointer transition-colors"
+                    title="Redo recent highlight change"
+                    aria-label="Redo recent highlight change"
+                  >
+                    <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                      <path d="m15 14 5-5-5-5" />
+                      <path d="M20 9h-8a6 6 0 1 0 0 12h1" />
+                    </svg>
+                  </button>
+                  <button
+                    onClick={handleClearTopicHighlights}
+                    disabled={currentTopicHighlights.length === 0 || highlightHistoryBusy || highlightMutationBusy}
+                    className="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] rounded border border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400 hover:text-red-600 dark:hover:text-red-400 hover:border-red-300 dark:hover:border-red-700 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer transition-colors"
+                  >
+                    <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M3 6h18" />
+                      <path d="M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2" />
+                      <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+                    </svg>
+                    <span>Clear Topic</span>
+                  </button>
+                </div>
               </div>
 
               {currentTopicHighlights.length === 0 ? (
@@ -1921,37 +2236,61 @@ export default function TopicLayoutClient({
                           {item.text}
                         </button>
                         {notesEnabled && (
-                          <textarea
-                            value={noteValue}
-                            onChange={(e) => setNoteDraftById((prev) => ({ ...prev, [item.id]: e.target.value.slice(0, 800) }))}
-                            rows={2}
-                            placeholder="Add note..."
-                            className="w-full rounded-md border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-2 py-1.5 text-xs text-gray-700 dark:text-gray-200 outline-none focus:ring-2 focus:ring-amber-500/30"
-                          />
+                          <div className="flex items-start gap-2">
+                            <textarea
+                              value={noteValue}
+                              onChange={(e) => setNoteDraftById((prev) => ({ ...prev, [item.id]: e.target.value.slice(0, 800) }))}
+                              rows={2}
+                              placeholder="Add note..."
+                              className="flex-1 rounded-md border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-2 py-1.5 text-xs text-gray-700 dark:text-gray-200 outline-none focus:ring-2 focus:ring-amber-500/30"
+                            />
+                            <div className="flex shrink-0 flex-col gap-1.5">
+                              <button
+                                onClick={() => handleSaveHighlightNote(item.id)}
+                                disabled={saving || highlightMutationBusy}
+                                className="inline-flex items-center justify-center w-8 h-8 rounded border border-amber-300 dark:border-amber-700 text-amber-700 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-900/40 disabled:opacity-60 cursor-pointer transition-colors"
+                                title={saving ? "Saving note..." : "Save note"}
+                                aria-label={saving ? "Saving note..." : "Save note"}
+                              >
+                                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                                  <path d="M5 4a1 1 0 0 1 1-1h10l3 3v14a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V4Z" />
+                                  <path d="M8 3v6h8V3" />
+                                  <path d="M8 17h8" />
+                                </svg>
+                              </button>
+                              <button
+                                onClick={() => handleRemoveHighlight(item.id)}
+                                disabled={highlightMutationBusy}
+                                className="inline-flex items-center justify-center w-8 h-8 rounded border border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400 hover:text-red-600 dark:hover:text-red-400 hover:border-red-300 dark:hover:border-red-700 transition-colors cursor-pointer"
+                                title="Remove highlight"
+                                aria-label="Remove highlight"
+                              >
+                                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                                  <path d="M3 6h18" />
+                                  <path d="M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2" />
+                                  <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+                                </svg>
+                              </button>
+                            </div>
+                          </div>
                         )}
-                        <div className="mt-2 flex items-center justify-end gap-2">
-                          <button
-                            onClick={() => handleJumpToHighlight(item)}
-                            className="text-xs px-2 py-1 rounded border border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-300 hover:border-indigo-300 dark:hover:border-indigo-700 transition-colors cursor-pointer"
-                          >
-                            Jump
-                          </button>
-                          <button
-                            onClick={() => handleRemoveHighlight(item.id)}
-                            className="text-xs px-2 py-1 rounded border border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400 hover:text-red-600 dark:hover:text-red-400 hover:border-red-300 dark:hover:border-red-700 transition-colors cursor-pointer"
-                          >
-                            Remove
-                          </button>
-                          {notesEnabled && (
-                            <button
-                              onClick={() => handleSaveHighlightNote(item.id)}
-                              disabled={saving}
-                              className="text-xs px-2 py-1 rounded border border-amber-300 dark:border-amber-700 text-amber-700 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-900/40 disabled:opacity-60 cursor-pointer transition-colors"
+                        {!notesEnabled && (
+                          <div className="mt-2 flex items-center justify-end">
+                              <button
+                                onClick={() => handleRemoveHighlight(item.id)}
+                                disabled={highlightMutationBusy}
+                                className="inline-flex items-center justify-center w-8 h-8 rounded border border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400 hover:text-red-600 dark:hover:text-red-400 hover:border-red-300 dark:hover:border-red-700 transition-colors cursor-pointer"
+                              title="Remove highlight"
+                              aria-label="Remove highlight"
                             >
-                              {saving ? "Saving..." : "Save Note"}
+                              <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M3 6h18" />
+                                <path d="M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2" />
+                                <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+                              </svg>
                             </button>
-                          )}
-                        </div>
+                          </div>
+                        )}
                       </li>
                     );
                   })}
