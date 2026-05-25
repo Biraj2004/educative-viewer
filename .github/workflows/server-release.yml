@@ -23,6 +23,7 @@ jobs:
       DEPLOY_PORT: ${{ vars.DEPLOY_PORT }}
       DEPLOY_SERVER_DIR: ${{ vars.DEPLOY_SERVER_DIR }}
       DEPLOY_VENV_NAME: ${{ vars.DEPLOY_VENV_NAME }}
+      DEPLOY_TNS_ADMIN: ${{ vars.DEPLOY_TNS_ADMIN }}
       DEPLOY_APP_START_COMMAND: ${{ vars.DEPLOY_APP_START_COMMAND }}
       DEPLOY_APP_PROCESS_MATCH: ${{ vars.DEPLOY_APP_PROCESS_MATCH }}
       DEPLOY_APP_LOG_FILE: ${{ vars.DEPLOY_APP_LOG_FILE }}
@@ -30,7 +31,7 @@ jobs:
     steps:
       - name: Validate remote deploy configuration
         run: |
-          required=(DEPLOY_HOST DEPLOY_USER DEPLOY_SERVER_DIR)
+          required=(DEPLOY_HOST DEPLOY_USER DEPLOY_SERVER_DIR DEPLOY_TNS_ADMIN)
           for key in "${required[@]}"; do
             if [ -z "${!key}" ]; then
               echo "::error::Missing deploy variable: ${key}"
@@ -66,6 +67,8 @@ jobs:
             [ -n "$deploy_app_start_command" ] || deploy_app_start_command="python3 app.py"
             [ -n "$deploy_app_process_match" ] || deploy_app_process_match="python3 app.py"
             [ -n "$deploy_app_log_file" ] || deploy_app_log_file="app.log"
+            deploy_tns_admin='${{ env.DEPLOY_TNS_ADMIN }}'
+            export TNS_ADMIN="$deploy_tns_admin"
 
             cd "$deploy_server_dir"
             stashed="0"
@@ -98,6 +101,6 @@ jobs:
               sleep 1
             fi
 
-            nohup bash -lc "$deploy_app_start_command" > "$deploy_app_log_file" 2>&1 < /dev/null &
+            nohup bash -lc "export TNS_ADMIN='$TNS_ADMIN'; $deploy_app_start_command" > "$deploy_app_log_file" 2>&1 < /dev/null &
             disown || true
             echo "Backend restarted with command: $deploy_app_start_command"
