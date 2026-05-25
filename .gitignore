@@ -16,3 +16,6 @@ temp.json
 agent-context.md
 README_OLD.md
 *.pem
+.kiro*
+proxy/backend-api-map.generated.conf
+proxy/backend-route-manifest.json
