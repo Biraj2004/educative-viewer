@@ -1,0 +1,89 @@
+name: Server Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      deploy_branch:
+        description: Branch to pull on server
+        required: false
+        default: main
+        type: string
+
+concurrency:
+  group: server-release
+  cancel-in-progress: false
+
+jobs:
+  deploy-server:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      DEPLOY_HOST: ${{ vars.DEPLOY_HOST }}
+      DEPLOY_USER: ${{ vars.DEPLOY_USER }}
+      DEPLOY_PORT: ${{ vars.DEPLOY_PORT }}
+      DEPLOY_SERVER_DIR: ${{ vars.DEPLOY_SERVER_DIR }}
+      DEPLOY_VENV_NAME: ${{ vars.DEPLOY_VENV_NAME }}
+      DEPLOY_APP_START_COMMAND: ${{ vars.DEPLOY_APP_START_COMMAND }}
+      DEPLOY_APP_PROCESS_MATCH: ${{ vars.DEPLOY_APP_PROCESS_MATCH }}
+      DEPLOY_APP_LOG_FILE: ${{ vars.DEPLOY_APP_LOG_FILE }}
+
+    steps:
+      - name: Validate remote deploy configuration
+        run: |
+          required=(DEPLOY_HOST DEPLOY_USER DEPLOY_SERVER_DIR)
+          for key in "${required[@]}"; do
+            if [ -z "${!key}" ]; then
+              echo "::error::Missing deploy variable: ${key}"
+              exit 1
+            fi
+          done
+
+          if [ -z "${{ secrets.DEPLOY_SSH_PRIVATE_KEY }}" ]; then
+            echo "::error::Missing required secret: DEPLOY_SSH_PRIVATE_KEY"
+            exit 1
+          fi
+
+      - name: Deploy backend on Linux server (git pull + restart app.py)
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ env.DEPLOY_HOST }}
+          username: ${{ env.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_PRIVATE_KEY }}
+          port: ${{ env.DEPLOY_PORT || '22' }}
+          script: |
+            set -euo pipefail
+
+            deploy_branch='${{ github.event.inputs.deploy_branch }}'
+            deploy_server_dir='${{ env.DEPLOY_SERVER_DIR }}'
+            deploy_venv_name='${{ env.DEPLOY_VENV_NAME }}'
+            deploy_app_start_command='${{ env.DEPLOY_APP_START_COMMAND }}'
+            deploy_app_process_match='${{ env.DEPLOY_APP_PROCESS_MATCH }}'
+            deploy_app_log_file='${{ env.DEPLOY_APP_LOG_FILE }}'
+
+            [ -n "$deploy_branch" ] || deploy_branch="main"
+            [ -n "$deploy_server_dir" ] || { echo "DEPLOY_SERVER_DIR is required"; exit 1; }
+            [ -n "$deploy_venv_name" ] || deploy_venv_name="venv"
+            [ -n "$deploy_app_start_command" ] || deploy_app_start_command="python3 app.py"
+            [ -n "$deploy_app_process_match" ] || deploy_app_process_match="python3 app.py"
+            [ -n "$deploy_app_log_file" ] || deploy_app_log_file="app.log"
+
+            cd "$deploy_server_dir"
+            git fetch origin "$deploy_branch"
+            git checkout "$deploy_branch"
+            git pull --ff-only origin "$deploy_branch"
+
+            if [ ! -f "$deploy_venv_name/bin/activate" ]; then
+              echo "Missing venv activate script at: $deploy_venv_name/bin/activate"
+              exit 1
+            fi
+            # shellcheck disable=SC1090
+            source "$deploy_venv_name/bin/activate"
+
+            if pgrep -f "$deploy_app_process_match" >/dev/null 2>&1; then
+              pkill -f "$deploy_app_process_match" || true
+              sleep 1
+            fi
+
+            nohup bash -lc "$deploy_app_start_command" > "$deploy_app_log_file" 2>&1 < /dev/null &
+            disown || true
+            echo "Backend restarted with command: $deploy_app_start_command"
