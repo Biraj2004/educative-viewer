@@ -88,6 +88,7 @@ export default function UserMenu() {
     return (
       <Link
         href="/auth"
+        prefetch={false}
         className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold transition-colors"
       >
         Sign In
@@ -168,6 +169,7 @@ export default function UserMenu() {
                   <>
                     <Link
                       href="/dashboard/admin/users"
+                      prefetch={false}
                       onClick={() => setOpen(false)}
                       className="flex items-center gap-2.5 px-4 py-2.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 hover:text-indigo-700 dark:hover:text-indigo-400 transition-colors cursor-pointer"
                     >
@@ -181,6 +183,7 @@ export default function UserMenu() {
                     </Link>
                     <Link
                       href="/dashboard/admin/settings"
+                      prefetch={false}
                       onClick={() => setOpen(false)}
                       className="flex items-center gap-2.5 px-4 py-2.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 hover:text-indigo-700 dark:hover:text-indigo-400 transition-colors cursor-pointer"
                     >
@@ -196,6 +199,7 @@ export default function UserMenu() {
 
                 <Link
                   href={profileHref}
+                  prefetch={false}
                   onClick={() => setOpen(false)}
                   className="flex items-center gap-2.5 px-4 py-2.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 hover:text-indigo-700 dark:hover:text-indigo-400 transition-colors cursor-pointer"
                 >

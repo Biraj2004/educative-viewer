@@ -152,6 +152,7 @@ export default function ProjectsPage() {
           </div>
           <Link
             href="/dashboard/courses"
+            prefetch={false}
             className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-xs font-semibold text-indigo-600 dark:text-indigo-400 hover:border-indigo-300 dark:hover:border-indigo-700 transition-colors"
           >
             Browse Courses
@@ -195,6 +196,7 @@ export default function ProjectsPage() {
                 <Link
                   key={project.id}
                   href={href}
+                  prefetch={false}
                   className={[
                     "block rounded-xl border bg-white dark:bg-gray-900 p-5 transition-colors",
                     active

@@ -157,7 +157,7 @@ export default function AdminDashboardPage() {
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {/* User Management Card */}
-          <Link href="/dashboard/admin/users" className="group block animate-in slide-in-from-bottom-4 fade-in duration-700">
+          <Link prefetch={false} href="/dashboard/admin/users" className="group block animate-in slide-in-from-bottom-4 fade-in duration-700">
             <div className="h-full relative overflow-hidden bg-white dark:bg-gray-900/50 rounded-2xl border border-gray-200 dark:border-gray-800 p-6 transition-all duration-300 hover:shadow-xl hover:shadow-indigo-500/10 dark:hover:shadow-indigo-500/5 hover:-translate-y-1 hover:bg-gray-50 dark:hover:bg-gray-800">
               <div className="absolute top-0 right-0 p-4 opacity-0 group-hover:opacity-5 transition-opacity duration-300 transform group-hover:scale-110">
                 <UsersIcon className="w-32 h-32 text-indigo-600 dark:text-indigo-400" />
@@ -184,7 +184,7 @@ export default function AdminDashboardPage() {
           </Link>
 
           {/* Settings Card */}
-          <Link href="/dashboard/admin/settings" className="group block animate-in slide-in-from-bottom-4 fade-in duration-700 delay-100">
+          <Link prefetch={false} href="/dashboard/admin/settings" className="group block animate-in slide-in-from-bottom-4 fade-in duration-700 delay-100">
             <div className="h-full relative overflow-hidden bg-white dark:bg-gray-900/50 rounded-2xl border border-gray-200 dark:border-gray-800 p-6 transition-all duration-300 hover:shadow-xl hover:shadow-indigo-500/10 dark:hover:shadow-indigo-500/5 hover:-translate-y-1 hover:bg-gray-50 dark:hover:bg-gray-800">
               <div className="absolute top-0 right-0 p-4 opacity-0 group-hover:opacity-5 transition-opacity duration-300 transform group-hover:scale-110">
                 <SettingsIcon className="w-32 h-32 text-indigo-600 dark:text-indigo-400" />

@@ -82,7 +82,7 @@ export default function AppNavbar({
             <span className="lg:hidden shrink-0">{mobileMenuTrigger}</span>
           )}
           {/* Logo */}
-          <Link href={logoHref || "/"} onClick={onLogoClick as any} className="flex items-center gap-2 group shrink-0">
+          <Link href={logoHref || "/"} prefetch={false} onClick={onLogoClick as any} className="flex items-center gap-2 group shrink-0">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={BRAND_ICON_URL}
@@ -121,6 +121,7 @@ export default function AppNavbar({
               ) : crumb.href ? (
                 <Link
                   href={crumb.href}
+                  prefetch={false}
                   className="text-sm font-medium text-gray-500 dark:text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors truncate max-w-45"
                 >
                   {crumb.label}

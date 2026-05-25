@@ -191,6 +191,7 @@ export default function LandingPage() {
               <HomeHeroCTA />
               <Link
                 href="/about"
+                prefetch={false}
                 className="group flex items-center gap-2 text-gray-600 dark:text-gray-400 font-semibold hover:text-gray-900 dark:hover:text-white transition-colors"
               >
                 Discover the architecture
@@ -320,6 +321,7 @@ export default function LandingPage() {
             <div className="flex items-center gap-6">
               <Link
                 href="/about"
+                prefetch={false}
                 className="group inline-flex items-center gap-1.5 text-sm font-semibold text-gray-600 dark:text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors"
               >
                 About Project

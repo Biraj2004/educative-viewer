@@ -233,6 +233,7 @@ export default function PathsPage() {
           </div>
           <Link
             href="/dashboard/courses"
+            prefetch={false}
             className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-xs font-semibold text-indigo-600 dark:text-indigo-400 hover:border-indigo-300 dark:hover:border-indigo-700 transition-colors"
           >
             Browse Courses
@@ -342,6 +343,7 @@ export default function PathsPage() {
                       <Link
                         key={course.id}
                         href={href}
+                        prefetch={false}
                         className={[
                           "flex items-center justify-between gap-3 rounded-lg border border-gray-200 dark:border-gray-800 px-3 py-2.5 hover:border-indigo-300 dark:hover:border-indigo-700 hover:bg-indigo-50/40 dark:hover:bg-indigo-950/20 transition-colors",
                           !(course.is_active === undefined ? true : Boolean(course.is_active)) && isAdmin ? "opacity-50" : "",

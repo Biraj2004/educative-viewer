@@ -181,7 +181,7 @@ export default function DashboardHome() {
             );
 
             return s.available ? (
-              <Link key={s.label} href={s.href} className={cardBase}>{inner}</Link>
+              <Link key={s.label} href={s.href} prefetch={false} className={cardBase}>{inner}</Link>
             ) : (
               <div key={s.label} className={`${cardBase} opacity-60 cursor-not-allowed`}>{inner}</div>
             );
@@ -192,6 +192,7 @@ export default function DashboardHome() {
         <div className="mt-6 flex justify-end">
           <Link
             href="/dashboard/test"
+            prefetch={false}
             className="inline-flex font-bold items-center gap-1.5 text-xs text-gray-400 dark:text-gray-600 hover:text-gray-600 dark:hover:text-gray-400 transition-colors"
           >
             <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">

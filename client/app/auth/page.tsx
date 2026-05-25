@@ -144,7 +144,7 @@ function TwoFAStep({
           <div className="flex flex-col gap-2">
             <p className="text-xs text-red-600 dark:text-red-400 text-center">{error}</p>
             {error.toLowerCase().includes("deactivated") && (
-              <Link href="/contact" className="text-[11px] text-indigo-600 dark:text-indigo-400 hover:underline text-center font-medium">
+              <Link prefetch={false} href="/contact" className="text-[11px] text-indigo-600 dark:text-indigo-400 hover:underline text-center font-medium">
                 Contact an administrator to regain access
               </Link>
             )}
@@ -504,7 +504,7 @@ function LoginForm({
           {error}
           {error.toLowerCase().includes("deactivated") && (
             <div className="mt-2 border-t border-red-100 dark:border-red-800/50 pt-2">
-              <Link href="/contact" className="text-indigo-600 dark:text-indigo-400 hover:underline font-bold">
+              <Link prefetch={false} href="/contact" className="text-indigo-600 dark:text-indigo-400 hover:underline font-bold">
                 Contact Support →
               </Link>
             </div>
@@ -950,6 +950,7 @@ function AuthPageInner() {
           <div className="flex flex-wrap items-center justify-center gap-3">
             <Link
               href="/"
+              prefetch={false}
               className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300/80 bg-white/70 px-3 py-1.5 text-xs font-medium text-slate-600 transition-colors hover:border-cyan-400/40 hover:text-cyan-700 dark:border-slate-700 dark:bg-slate-900/60 dark:text-slate-300 dark:hover:border-cyan-700 dark:hover:text-cyan-300"
             >
               <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">
@@ -959,6 +960,7 @@ function AuthPageInner() {
             </Link>
             <Link
               href="/contact"
+              prefetch={false}
               className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300/80 bg-white/70 px-3 py-1.5 text-xs font-medium text-slate-600 transition-colors hover:border-cyan-400/40 hover:text-cyan-700 dark:border-slate-700 dark:bg-slate-900/60 dark:text-slate-300 dark:hover:border-cyan-700 dark:hover:text-cyan-300"
             >
               <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">

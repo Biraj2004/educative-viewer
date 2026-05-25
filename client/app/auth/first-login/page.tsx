@@ -420,6 +420,7 @@ export default function FirstLoginPage() {
               Having trouble?{" "}
               <Link 
                 href="/contact" 
+                prefetch={false}
                 className="font-bold text-indigo-600 dark:text-indigo-400 hover:text-indigo-500 underline underline-offset-4 decoration-indigo-200 dark:decoration-indigo-500/30 hover:decoration-indigo-500 transition-all"
               >
                 Contact Administrator
