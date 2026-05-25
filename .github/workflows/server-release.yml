@@ -68,9 +68,17 @@ jobs:
             [ -n "$deploy_app_log_file" ] || deploy_app_log_file="app.log"
 
             cd "$deploy_server_dir"
+            stashed="0"
+            if [ -n "$(git status --porcelain)" ]; then
+              git stash push -u -m "gha-auto-stash-$(date +%s)"
+              stashed="1"
+            fi
             git fetch origin "$deploy_branch"
             git checkout "$deploy_branch"
             git pull --ff-only origin "$deploy_branch"
+            if [ "$stashed" = "1" ]; then
+              git stash pop || true
+            fi
 
             if [ ! -f "$deploy_venv_name/bin/activate" ]; then
               echo "Missing venv activate script at: $deploy_venv_name/bin/activate"
@@ -79,8 +87,14 @@ jobs:
             # shellcheck disable=SC1090
             source "$deploy_venv_name/bin/activate"
 
-            if pgrep -f "$deploy_app_process_match" >/dev/null 2>&1; then
-              pkill -f "$deploy_app_process_match" || true
+            pids="$(pgrep -f -- "$deploy_app_process_match" || true)"
+            if [ -n "$pids" ]; then
+              for pid in $pids; do
+                if [ "$pid" = "$$" ] || [ "$pid" = "$PPID" ]; then
+                  continue
+                fi
+                kill "$pid" || true
+              done
               sleep 1
             fi
 
