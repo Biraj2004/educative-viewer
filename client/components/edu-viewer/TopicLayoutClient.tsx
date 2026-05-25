@@ -1828,6 +1828,33 @@ export default function TopicLayoutClient({
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [handleRedoHighlightChange, handleUndoHighlightChange, highlightsEnabled]);
 
+  // ── Alt+Arrow: navigate between topics ──────────────────────────────────────
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (!event.altKey) return;
+      if (event.ctrlKey || event.metaKey || event.shiftKey) return;
+      const target = event.target as HTMLElement | null;
+      if (
+        target &&
+        (target.tagName === "INPUT" ||
+          target.tagName === "TEXTAREA" ||
+          target.isContentEditable)
+      ) {
+        return;
+      }
+
+      if (event.key === "ArrowLeft" && prev) {
+        event.preventDefault();
+        handleTopicNav(buildTopicHref(prev.topic_index, prev.slug), prev.topic_index);
+      } else if (event.key === "ArrowRight" && next) {
+        event.preventDefault();
+        handleTopicNav(buildTopicHref(next.topic_index, next.slug), next.topic_index);
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [prev, next, handleTopicNav, buildTopicHref]);
+
   useEffect(() => {
     const container = contentRef.current;
     if (!container) return;
@@ -2082,17 +2109,6 @@ export default function TopicLayoutClient({
                 </svg>
                 <span>{estimatedTime} min read</span>
               </div>
-              {highlightsEnabled && (
-                <button
-                  onClick={() => setHighlightDrawerOpen(true)}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white dark:bg-gray-800 text-gray-500 dark:text-gray-400 rounded-full text-[11px] uppercase tracking-wider font-semibold border border-gray-200 dark:border-gray-700 shadow-sm hover:text-amber-600 dark:hover:text-amber-300 hover:border-amber-300 dark:hover:border-amber-700 transition-colors cursor-pointer"
-                >
-                  <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
-                    <path d="M15 4H6a2 2 0 0 0-2 2v14l5-2 5 2V6a2 2 0 0 0-2-2Z" />
-                  </svg>
-                  <span>Highlights</span>
-                </button>
-              )}
             </div>
           </div>
 

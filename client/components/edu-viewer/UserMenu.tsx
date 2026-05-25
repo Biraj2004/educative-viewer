@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import { useAuth } from "./AuthProvider";
 import FontManager from "./FontManager";
 import DarkModeToggle from "./DarkModeToggle";
+import KeyboardShortcutsModal from "./KeyboardShortcutsModal";
 
 // ─── Avatar initials helper ───────────────────────────────────────────────────
 
@@ -30,6 +31,7 @@ export default function UserMenu() {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const [view, setView] = useState<"main" | "font">("main");
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
   // Close on outside click
@@ -58,6 +60,26 @@ export default function UserMenu() {
     return () => document.removeEventListener("keydown", handleKey);
   }, [open]);
 
+  // Global "?" key opens keyboard shortcuts modal
+  useEffect(() => {
+    function handleKey(e: KeyboardEvent) {
+      if (e.key !== "?") return;
+      const target = e.target as HTMLElement | null;
+      if (
+        target &&
+        (target.tagName === "INPUT" ||
+          target.tagName === "TEXTAREA" ||
+          target.isContentEditable)
+      ) {
+        return;
+      }
+      e.preventDefault();
+      setShortcutsOpen((o) => !o);
+    }
+    window.addEventListener("keydown", handleKey);
+    return () => window.removeEventListener("keydown", handleKey);
+  }, []);
+
   if (loading) {
     return <div className="w-8 h-8 rounded-full bg-gray-200 dark:bg-gray-700 animate-pulse" />;
   }
@@ -81,6 +103,11 @@ export default function UserMenu() {
 
   return (
     <div ref={containerRef} className="relative">
+      {/* Keyboard Shortcuts Modal (portaled to body) */}
+      {shortcutsOpen && (
+        <KeyboardShortcutsModal onClose={() => setShortcutsOpen(false)} />
+      )}
+
       {/* Trigger button */}
       <button
         type="button"
@@ -208,6 +235,22 @@ export default function UserMenu() {
                   </div>
                   <DarkModeToggle />
                 </div>
+
+                <div className="h-px bg-gray-100 dark:bg-gray-800 my-1" />
+
+                {/* Keyboard Shortcuts */}
+                <button
+                  type="button"
+                  onClick={() => { setOpen(false); setShortcutsOpen(true); }}
+                  className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 hover:text-indigo-700 dark:hover:text-indigo-400 transition-colors cursor-pointer"
+                >
+                  <svg className="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="2" y="6" width="20" height="12" rx="2" />
+                    <path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M8 14h8" />
+                  </svg>
+                  <span className="text-xs font-medium">Keyboard Shortcuts</span>
+                  <span className="ml-auto text-[10px] font-mono text-gray-400 dark:text-gray-600 bg-gray-100 dark:bg-gray-800 px-1.5 py-0.5 rounded">?</span>
+                </button>
 
                 <div className="h-px bg-gray-100 dark:bg-gray-800 my-1" />
 
