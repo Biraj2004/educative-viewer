@@ -601,6 +601,32 @@ export default function TopicLayoutClient({
     return { start, end };
   }, [getSelectableTextNodes, isSelectableTextNode]);
 
+  const getTextByOffsetsWithinContainer = useCallback((
+    container: HTMLElement,
+    start: number,
+    end: number,
+  ): string => {
+    if (start < 0 || end <= start) return "";
+    const nodes = getSelectableTextNodes(container);
+    if (nodes.length === 0) return "";
+    let traversed = 0;
+    let out = "";
+    for (const node of nodes) {
+      const value = node.nodeValue ?? "";
+      const len = value.length;
+      const nodeStart = traversed;
+      const nodeEnd = traversed + len;
+      const overlapStart = Math.max(start, nodeStart);
+      const overlapEnd = Math.min(end, nodeEnd);
+      if (overlapEnd > overlapStart) {
+        out += value.slice(overlapStart - nodeStart, overlapEnd - nodeStart);
+      }
+      traversed = nodeEnd;
+      if (traversed >= end) break;
+    }
+    return out.trim();
+  }, [getSelectableTextNodes]);
+
   const applyHighlightByText = useCallback((
     container: HTMLElement,
     text: string,
@@ -778,7 +804,22 @@ export default function TopicLayoutClient({
       });
     }
 
-    const normalizedText = normalizeHighlightTextKey(text);
+    let mergedText = text;
+    if (
+      mergedStart !== null
+      && mergedEnd !== null
+      && mergedComponentIndex !== null
+    ) {
+      const scope = getComponentScopeByIndex(mergedComponentIndex);
+      if (scope) {
+        const textFromOffsets = getTextByOffsetsWithinContainer(scope, mergedStart, mergedEnd);
+        if (textFromOffsets) {
+          mergedText = textFromOffsets;
+        }
+      }
+    }
+
+    const normalizedText = normalizeHighlightTextKey(mergedText);
     const hasDuplicateAlready = existing.some((item) => {
       const itemStart = typeof item.start_offset === "number" ? item.start_offset : null;
       const itemEnd = typeof item.end_offset === "number" ? item.end_offset : null;
@@ -822,7 +863,7 @@ export default function TopicLayoutClient({
     const optimisticId = `local-${Date.now()}`;
     const optimistic: ViewerHighlight = {
       id: optimisticId,
-      text,
+      text: mergedText,
       note,
       color,
       start_offset: mergedStart,
@@ -848,7 +889,7 @@ export default function TopicLayoutClient({
       last_highlight_color: color,
       add_highlight: {
         topic_index: currentTopic.topic_index,
-        text,
+        text: mergedText,
         color,
         ...(note ? { note } : {}),
         ...(mergedStart !== null && mergedEnd !== null && mergedComponentIndex !== null ? {
@@ -869,6 +910,8 @@ export default function TopicLayoutClient({
     courseId,
     currentTopicHighlights,
     currentTopic.topic_index,
+    getComponentScopeByIndex,
+    getTextByOffsetsWithinContainer,
     highlightsEnabled,
     notesEnabled,
     newHighlightNote,
