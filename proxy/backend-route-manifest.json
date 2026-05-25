@@ -1,5 +1,5 @@
 {
-  "generated_at_utc": "2026-05-25T16:44:51Z",
+  "generated_at_utc": "2026-05-25T17:54:06Z",
   "backend_api_rules": [
     "/api/admin/set-course-status",
     "/api/admin/set-user-status",

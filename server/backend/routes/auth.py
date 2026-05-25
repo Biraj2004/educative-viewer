@@ -28,6 +28,9 @@ MAX_HIGHLIGHT_TEXT_LEN = 180
 MAX_HIGHLIGHT_CONTEXT_LEN = 120
 MAX_HIGHLIGHT_QUOTE_CONTEXT_LEN = 80
 MAX_HIGHLIGHT_NOTE_LEN = 800
+MAX_TOPIC_NOTES_PER_TOPIC = 100
+MAX_TOPIC_NOTES_PER_COURSE = 800
+MAX_TOPIC_NOTE_TEXT_LEN = 1200
 ALLOWED_HIGHLIGHT_COLORS: set[str] = {"yellow", "blue", "green", "pink", "orange"}
 
 
@@ -166,6 +169,44 @@ def _clean_highlights_map(value: Any) -> dict[str, list[dict[str, Any]]]:
     return cleaned
 
 
+def _clean_topic_notes_map(value: Any) -> dict[str, list[dict[str, Any]]]:
+    if not isinstance(value, dict):
+        return {}
+    cleaned: dict[str, list[dict[str, Any]]] = {}
+    for topic_key, items in value.items():
+        if not isinstance(topic_key, str):
+            continue
+        if not isinstance(items, list):
+            continue
+        rows: list[dict[str, Any]] = []
+        seen_ids: set[str] = set()
+        seen_texts: set[str] = set()
+        for item in items:
+            if not isinstance(item, dict):
+                continue
+            text = str(item.get("text", "")).strip()
+            if not text:
+                continue
+            note_id = str(item.get("id", "") or uuid.uuid4().hex)
+            if note_id in seen_ids:
+                continue
+            normalized = _normalize_highlight_text_key(text)
+            if normalized in seen_texts:
+                continue
+            seen_ids.add(note_id)
+            seen_texts.add(normalized)
+            rows.append(
+                {
+                    "id": note_id,
+                    "text": text[:MAX_TOPIC_NOTE_TEXT_LEN],
+                    "created_at": str(item.get("created_at", "") or ""),
+                }
+            )
+        if rows:
+            cleaned[topic_key] = rows[-MAX_TOPIC_NOTES_PER_TOPIC:]
+    return cleaned
+
+
 def _strip_highlights_from_settings(settings: dict[str, Any]) -> dict[str, Any]:
     courses = settings.get("courses")
     if not isinstance(courses, dict):
@@ -203,19 +244,21 @@ def _filter_settings_by_features(
             course_state.pop("bookmarks", None)
         if not highlights_enabled:
             course_state.pop("highlights", None)
-            continue
-        course_state["highlights"] = _clean_highlights_map(course_state.get("highlights"))
-        if notes_enabled:
-            continue
-        highlights = course_state.get("highlights")
-        if not isinstance(highlights, dict):
-            continue
-        for topic_rows in highlights.values():
-            if not isinstance(topic_rows, list):
-                continue
-            for item in topic_rows:
-                if isinstance(item, dict):
-                    item.pop("note", None)
+        else:
+            course_state["highlights"] = _clean_highlights_map(course_state.get("highlights"))
+            if not notes_enabled:
+                highlights = course_state.get("highlights")
+                if isinstance(highlights, dict):
+                    for topic_rows in highlights.values():
+                        if not isinstance(topic_rows, list):
+                            continue
+                        for item in topic_rows:
+                            if isinstance(item, dict):
+                                item.pop("note", None)
+        if not notes_enabled:
+            course_state.pop("topic_notes", None)
+        else:
+            course_state["topic_notes"] = _clean_topic_notes_map(course_state.get("topic_notes"))
     return settings
 
 
@@ -232,28 +275,31 @@ def _filter_course_state_by_features(
         filtered.pop("bookmarks", None)
     if not highlights_enabled:
         filtered.pop("highlights", None)
-        return filtered
-    if notes_enabled:
+    if not notes_enabled:
+        filtered.pop("topic_notes", None)
+    else:
+        filtered["topic_notes"] = _clean_topic_notes_map(filtered.get("topic_notes"))
+
+    if not highlights_enabled:
         return filtered
 
-    raw_highlights = filtered.get("highlights")
-    if not isinstance(raw_highlights, dict):
-        return filtered
-
-    sanitized_highlights: dict[str, list[dict[str, Any]]] = {}
-    for topic_key, rows in raw_highlights.items():
-        if not isinstance(rows, list):
-            continue
-        sanitized_rows: list[dict[str, Any]] = []
-        for row in rows:
-            if not isinstance(row, dict):
-                continue
-            row_copy = dict(row)
-            row_copy.pop("note", None)
-            sanitized_rows.append(row_copy)
-        if sanitized_rows:
-            sanitized_highlights[str(topic_key)] = sanitized_rows
-    filtered["highlights"] = sanitized_highlights
+    if not notes_enabled:
+        raw_highlights = filtered.get("highlights")
+        if isinstance(raw_highlights, dict):
+            sanitized_highlights: dict[str, list[dict[str, Any]]] = {}
+            for topic_key, rows in raw_highlights.items():
+                if not isinstance(rows, list):
+                    continue
+                sanitized_rows: list[dict[str, Any]] = []
+                for row in rows:
+                    if not isinstance(row, dict):
+                        continue
+                    row_copy = dict(row)
+                    row_copy.pop("note", None)
+                    sanitized_rows.append(row_copy)
+                if sanitized_rows:
+                    sanitized_highlights[str(topic_key)] = sanitized_rows
+            filtered["highlights"] = sanitized_highlights
     return filtered
 
 
@@ -693,6 +739,7 @@ def create_auth_blueprint(auth_service: AuthService, db_manager: DBManager) -> B
 
             bookmarks = _clean_topic_list(course_state.get("bookmarks"))
             highlights = _clean_highlights_map(course_state.get("highlights"))
+            topic_notes = _clean_topic_notes_map(course_state.get("topic_notes"))
 
             if "last_topic_index" in body:
                 course_state["last_topic_index"] = _to_int(body.get("last_topic_index"), "last_topic_index")
@@ -938,10 +985,69 @@ def create_auth_blueprint(auth_service: AuthService, db_manager: DBManager) -> B
                 highlights.pop(str(topic_index), None)
                 course_state["highlights"] = highlights
 
+            add_topic_note = body.get("add_topic_note")
+            if add_topic_note is not None:
+                if not notes_enabled:
+                    abort(403, description="Notes are disabled by administrator")
+                if not isinstance(add_topic_note, dict):
+                    abort(400, description="add_topic_note must be an object")
+                topic_index = _to_int(add_topic_note.get("topic_index"), "add_topic_note.topic_index")
+                text = str(add_topic_note.get("text", "") or "").strip()
+                if not text:
+                    abort(400, description="add_topic_note.text is required")
+                topic_key = str(topic_index)
+                rows = [item for item in topic_notes.get(topic_key, []) if isinstance(item, dict)]
+                normalized_text = _normalize_highlight_text_key(text)
+                duplicate = any(_normalize_highlight_text_key(item.get("text")) == normalized_text for item in rows)
+                if not duplicate:
+                    rows.append(
+                        {
+                            "id": uuid.uuid4().hex,
+                            "text": text[:MAX_TOPIC_NOTE_TEXT_LEN],
+                            "created_at": now_iso,
+                        }
+                    )
+                topic_notes[topic_key] = rows[-MAX_TOPIC_NOTES_PER_TOPIC:]
+
+                all_notes: list[tuple[str, dict[str, Any]]] = []
+                for t_key, note_rows in topic_notes.items():
+                    for row in note_rows:
+                        if isinstance(row, dict):
+                            all_notes.append((t_key, row))
+                if len(all_notes) > MAX_TOPIC_NOTES_PER_COURSE:
+                    all_notes.sort(key=lambda item: str(item[1].get("created_at", "")))
+                    keep = all_notes[-MAX_TOPIC_NOTES_PER_COURSE:]
+                    rebuilt_notes: dict[str, list[dict[str, Any]]] = {}
+                    for t_key, row in keep:
+                        rebuilt_notes.setdefault(t_key, []).append(row)
+                    topic_notes = rebuilt_notes
+                course_state["topic_notes"] = topic_notes
+
+            remove_topic_note = body.get("remove_topic_note")
+            if remove_topic_note is not None:
+                if not notes_enabled:
+                    abort(403, description="Notes are disabled by administrator")
+                if not isinstance(remove_topic_note, dict):
+                    abort(400, description="remove_topic_note must be an object")
+                topic_index = _to_int(remove_topic_note.get("topic_index"), "remove_topic_note.topic_index")
+                note_id = str(remove_topic_note.get("note_id", "")).strip()
+                if not note_id:
+                    abort(400, description="remove_topic_note.note_id is required")
+                topic_key = str(topic_index)
+                rows = [item for item in topic_notes.get(topic_key, []) if isinstance(item, dict)]
+                rows = [item for item in rows if str(item.get("id", "")).strip() != note_id]
+                if rows:
+                    topic_notes[topic_key] = rows
+                else:
+                    topic_notes.pop(topic_key, None)
+                course_state["topic_notes"] = topic_notes
+
             if "bookmarks" not in course_state:
                 course_state["bookmarks"] = bookmarks[-MAX_BOOKMARKS_PER_COURSE:]
             if "highlights" not in course_state:
                 course_state["highlights"] = highlights
+            if "topic_notes" not in course_state:
+                course_state["topic_notes"] = topic_notes
 
             courses[course_key] = course_state
             settings_json = json.dumps(settings, separators=(",", ":"))

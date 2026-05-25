@@ -234,11 +234,18 @@ export interface ViewerHighlight {
   component_index?: number | null;
 }
 
+export interface ViewerTopicNote {
+  id: string;
+  text: string;
+  created_at?: string;
+}
+
 export interface CourseViewerSettings {
   last_topic_index?: number;
   last_highlight_color?: "yellow" | "blue" | "green" | "pink" | "orange";
   bookmarks?: number[];
   highlights?: Record<string, ViewerHighlight[]>;
+  topic_notes?: Record<string, ViewerTopicNote[]>;
 }
 
 export interface ViewerSettingsData {
@@ -589,6 +596,14 @@ export interface UpdateViewerCourseSettingsPayload {
     topic_index: number;
     highlight_id: string;
     color: "yellow" | "blue" | "green" | "pink" | "orange";
+  };
+  add_topic_note?: {
+    topic_index: number;
+    text: string;
+  };
+  remove_topic_note?: {
+    topic_index: number;
+    note_id: string;
   };
   clear_highlights_topic_index?: number;
 }

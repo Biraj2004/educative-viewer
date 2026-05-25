@@ -6,7 +6,7 @@ import { notFound } from "next/navigation";
 import TopicLayoutClient from "@/components/edu-viewer/TopicLayoutClient";
 import AppNavbar from "@/components/edu-viewer/AppNavbar";
 import UserMenu from "@/components/edu-viewer/UserMenu";
-import { getAuthToken, clearAuthToken, getProgress, getUser, getViewerSettings, type ViewerHighlight } from "@/utils/authClient";
+import { getAuthToken, clearAuthToken, getProgress, getUser, getViewerSettings, type ViewerHighlight, type ViewerTopicNote } from "@/utils/authClient";
 import { getBackendApiBase } from "@/utils/runtime-config";
 
 const BACKEND = getBackendApiBase();
@@ -87,6 +87,7 @@ export default function TopicDetailPage() {
   const [initialCompleted, setInitialCompleted] = useState<number[]>([]);
   const [initialBookmarked, setInitialBookmarked] = useState<number[]>([]);
   const [initialHighlights, setInitialHighlights] = useState<Record<string, ViewerHighlight[]>>({});
+  const [initialTopicNotes, setInitialTopicNotes] = useState<Record<string, ViewerTopicNote[]>>({});
   const [initialHighlightColor, setInitialHighlightColor] = useState<HighlightColor>("yellow");
   const [highlightsEnabled, setHighlightsEnabled] = useState(true);
   const [bookmarksEnabled, setBookmarksEnabled] = useState(true);
@@ -163,6 +164,11 @@ export default function TopicDetailPage() {
             setInitialHighlights(
               viewerCourse?.highlights && typeof viewerCourse.highlights === "object"
                 ? viewerCourse.highlights
+                : {}
+            );
+            setInitialTopicNotes(
+              viewerCourse?.topic_notes && typeof viewerCourse.topic_notes === "object"
+                ? viewerCourse.topic_notes
                 : {}
             );
             setLoading(false);
@@ -253,6 +259,7 @@ export default function TopicDetailPage() {
       initialCompleted={initialCompleted}
       initialBookmarked={initialBookmarked}
       initialHighlights={initialHighlights}
+      initialTopicNotes={initialTopicNotes}
       initialHighlightColor={initialHighlightColor}
       highlightsEnabled={highlightsEnabled}
       bookmarksEnabled={bookmarksEnabled}
