@@ -26,6 +26,7 @@ MAX_HIGHLIGHTS_PER_TOPIC = 40
 MAX_HIGHLIGHTS_PER_COURSE = 300
 MAX_HIGHLIGHT_TEXT_LEN = 180
 MAX_HIGHLIGHT_CONTEXT_LEN = 120
+MAX_HIGHLIGHT_QUOTE_CONTEXT_LEN = 80
 MAX_HIGHLIGHT_NOTE_LEN = 800
 ALLOWED_HIGHLIGHT_COLORS: set[str] = {"yellow", "blue", "green", "pink", "orange"}
 
@@ -57,6 +58,16 @@ def _coerce_non_negative_int(value: Any) -> int | None:
     except (TypeError, ValueError):
         return None
     return out if out >= 0 else None
+
+
+def _coerce_component_index(value: Any) -> int | None:
+    if value is None:
+        return None
+    try:
+        out = int(value)
+    except (TypeError, ValueError):
+        return None
+    return out if out >= -1 else None
 
 
 def _parse_viewer_settings(raw: Any) -> dict[str, Any]:
@@ -125,7 +136,7 @@ def _clean_highlights_map(value: Any) -> dict[str, list[dict[str, Any]]]:
             ):
                 start_offset = None
                 end_offset = None
-            component_index = _coerce_non_negative_int(item.get("component_index"))
+            component_index = _coerce_component_index(item.get("component_index"))
             normalized_text_key = _normalize_highlight_text_key(text)
             dedupe_key: tuple[Any, ...]
             if start_offset is not None and end_offset is not None and component_index is not None:
@@ -140,6 +151,8 @@ def _clean_highlights_map(value: Any) -> dict[str, list[dict[str, Any]]]:
                     "id": str(item.get("id", "") or uuid.uuid4().hex),
                     "text": text[:MAX_HIGHLIGHT_TEXT_LEN],
                     "context": str(item.get("context", "") or "")[:MAX_HIGHLIGHT_CONTEXT_LEN],
+                    "quote_prefix": str(item.get("quote_prefix", "") or "")[:MAX_HIGHLIGHT_QUOTE_CONTEXT_LEN],
+                    "quote_suffix": str(item.get("quote_suffix", "") or "")[:MAX_HIGHLIGHT_QUOTE_CONTEXT_LEN],
                     "note": str(item.get("note", "") or "")[:MAX_HIGHLIGHT_NOTE_LEN],
                     "color": _normalize_highlight_color(item.get("color")),
                     "created_at": str(item.get("created_at", "") or ""),
@@ -709,6 +722,8 @@ def create_auth_blueprint(auth_service: AuthService, db_manager: DBManager) -> B
                 if not text:
                     abort(400, description="add_highlight.text is required")
                 context = str(add_highlight.get("context", "") or "").strip()
+                quote_prefix = str(add_highlight.get("quote_prefix", "") or "").strip()
+                quote_suffix = str(add_highlight.get("quote_suffix", "") or "").strip()
                 note = str(add_highlight.get("note", "") or "").strip() if notes_enabled else ""
                 color = _normalize_highlight_color(add_highlight.get("color"))
                 start_offset = add_highlight.get("start_offset")
@@ -717,27 +732,29 @@ def create_auth_blueprint(auth_service: AuthService, db_manager: DBManager) -> B
                 start_offset_int: int | None = None
                 end_offset_int: int | None = None
                 component_index_int: int | None = None
-                if start_offset is not None and end_offset is not None:
-                    try:
-                        start_offset_int = int(start_offset)
-                        end_offset_int = int(end_offset)
-                    except (TypeError, ValueError):
-                        abort(400, description="add_highlight offsets must be numeric")
-                    if start_offset_int < 0 or end_offset_int <= start_offset_int:
-                        abort(400, description="add_highlight offsets are invalid")
-                if component_index is not None:
-                    try:
-                        component_index_int = int(component_index)
-                    except (TypeError, ValueError):
-                        abort(400, description="add_highlight.component_index must be numeric")
-                    if component_index_int < 0:
-                        abort(400, description="add_highlight.component_index must be >= 0")
+                if start_offset is None or end_offset is None or component_index is None:
+                    abort(400, description="add_highlight requires start_offset, end_offset, and component_index")
+                try:
+                    start_offset_int = int(start_offset)
+                    end_offset_int = int(end_offset)
+                except (TypeError, ValueError):
+                    abort(400, description="add_highlight offsets must be numeric")
+                if start_offset_int < 0 or end_offset_int <= start_offset_int:
+                    abort(400, description="add_highlight offsets are invalid")
+                try:
+                    component_index_int = int(component_index)
+                except (TypeError, ValueError):
+                    abort(400, description="add_highlight.component_index must be numeric")
+                if component_index_int < -1:
+                    abort(400, description="add_highlight.component_index must be >= -1")
                 topic_key = str(topic_index)
                 topic_highlights = [item for item in highlights.get(topic_key, []) if isinstance(item, dict)]
                 normalized_text_key = _normalize_highlight_text_key(text)
                 should_add = True
                 add_text = text[:MAX_HIGHLIGHT_TEXT_LEN]
                 add_context = context[:MAX_HIGHLIGHT_CONTEXT_LEN]
+                add_quote_prefix = quote_prefix[:MAX_HIGHLIGHT_QUOTE_CONTEXT_LEN]
+                add_quote_suffix = quote_suffix[:MAX_HIGHLIGHT_QUOTE_CONTEXT_LEN]
                 add_note = note[:MAX_HIGHLIGHT_NOTE_LEN]
                 add_start = start_offset_int
                 add_end = end_offset_int
@@ -754,7 +771,7 @@ def create_auth_blueprint(auth_service: AuthService, db_manager: DBManager) -> B
                     for item in topic_highlights:
                         item_start = _coerce_non_negative_int(item.get("start_offset"))
                         item_end = _coerce_non_negative_int(item.get("end_offset"))
-                        item_component = _coerce_non_negative_int(item.get("component_index"))
+                        item_component = _coerce_component_index(item.get("component_index"))
                         if (
                             item_start is None
                             or item_end is None
@@ -779,6 +796,10 @@ def create_auth_blueprint(auth_service: AuthService, db_manager: DBManager) -> B
                                 add_text = item_text[:MAX_HIGHLIGHT_TEXT_LEN]
                             if not add_context:
                                 add_context = str(item.get("context", "") or "")[:MAX_HIGHLIGHT_CONTEXT_LEN]
+                            if not add_quote_prefix:
+                                add_quote_prefix = str(item.get("quote_prefix", "") or "")[:MAX_HIGHLIGHT_QUOTE_CONTEXT_LEN]
+                            if not add_quote_suffix:
+                                add_quote_suffix = str(item.get("quote_suffix", "") or "")[:MAX_HIGHLIGHT_QUOTE_CONTEXT_LEN]
                             if not add_note:
                                 add_note = str(item.get("note", "") or "")[:MAX_HIGHLIGHT_NOTE_LEN]
                     if should_add:
@@ -797,7 +818,7 @@ def create_auth_blueprint(auth_service: AuthService, db_manager: DBManager) -> B
                         add_end = merged_end
                 else:
                     for item in topic_highlights:
-                        item_component = _coerce_non_negative_int(item.get("component_index"))
+                        item_component = _coerce_component_index(item.get("component_index"))
                         item_text_key = _normalize_highlight_text_key(item.get("text"))
                         if item_text_key != normalized_text_key:
                             continue
@@ -812,6 +833,8 @@ def create_auth_blueprint(auth_service: AuthService, db_manager: DBManager) -> B
                             "id": uuid.uuid4().hex,
                             "text": add_text,
                             "context": add_context,
+                            "quote_prefix": add_quote_prefix,
+                            "quote_suffix": add_quote_suffix,
                             "note": add_note,
                             "color": color,
                             "created_at": now_iso,

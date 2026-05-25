@@ -224,6 +224,8 @@ export interface ViewerHighlight {
   id: string;
   text: string;
   context?: string;
+  quote_prefix?: string;
+  quote_suffix?: string;
   note?: string;
   color?: "yellow" | "blue" | "green" | "pink" | "orange";
   created_at?: string;
@@ -566,6 +568,8 @@ export interface UpdateViewerCourseSettingsPayload {
     topic_index: number;
     text: string;
     context?: string;
+    quote_prefix?: string;
+    quote_suffix?: string;
     note?: string;
     color?: "yellow" | "blue" | "green" | "pink" | "orange";
     start_offset?: number;

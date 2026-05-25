@@ -255,6 +255,7 @@ export default function TopicLayoutClient({
   const [savingNoteById, setSavingNoteById] = useState<Record<string, boolean>>({});
   const selectedTextRef = useRef("");
   const selectedOffsetsRef = useRef<{ start: number; end: number; componentIndex: number } | null>(null);
+  const selectedQuoteContextRef = useRef<{ prefix: string; suffix: string } | null>(null);
   const inFlightHighlightKeyRef = useRef<string | null>(null);
   const [selectionAction, setSelectionAction] = useState<{
     visible: boolean;
@@ -452,6 +453,13 @@ export default function TopicLayoutClient({
     if (parentEl.closest("[data-component-badge], script, style")) {
       return false;
     }
+    if (parentEl.closest("[hidden], [aria-hidden='true']")) {
+      return false;
+    }
+    const style = window.getComputedStyle(parentEl);
+    if (style.display === "none" || style.visibility === "hidden") {
+      return false;
+    }
     return true;
   }, []);
 
@@ -554,52 +562,75 @@ export default function TopicLayoutClient({
     return (host.querySelector("[data-highlight-scope='1']") as HTMLElement | null) ?? host;
   }, []);
 
-  const getComponentScopeFromNode = useCallback((node: Node): { componentIndex: number; scope: HTMLElement } | null => {
-    const el = node instanceof Element ? node : node.parentElement;
-    if (!el) return null;
-    const host = el.closest("[data-topic-component-index]") as HTMLElement | null;
-    if (!host) return null;
-    const raw = host.getAttribute("data-topic-component-index");
-    if (raw == null) return null;
-    const componentIndex = Number(raw);
-    if (!Number.isFinite(componentIndex)) return null;
-    const scope = (host.querySelector("[data-highlight-scope='1']") as HTMLElement | null) ?? host;
-    return { componentIndex, scope };
-  }, []);
-
   const getRangeOffsetsWithinContainer = useCallback((container: HTMLElement, range: Range) => {
     if (range.collapsed) return null;
-    if (range.startContainer.nodeType !== Node.TEXT_NODE || range.endContainer.nodeType !== Node.TEXT_NODE) {
+    if (!container.contains(range.startContainer) || !container.contains(range.endContainer)) {
       return null;
     }
-    if (!isSelectableTextNode(range.startContainer) || !isSelectableTextNode(range.endContainer)) {
-      return null;
-    }
+    const textNodes = getSelectableTextNodes(container);
+    if (textNodes.length === 0) return null;
 
-    const startTextNode = range.startContainer as Text;
-    const endTextNode = range.endContainer as Text;
-    const startOffsetInNode = range.startOffset;
-    const endOffsetInNode = range.endOffset;
-
-    const nodes = getSelectableTextNodes(container);
+    const nodeBaseOffsets = new Map<Text, number>();
     let traversed = 0;
-    let start: number | null = null;
-    let end: number | null = null;
-    for (const textNode of nodes) {
-      const len = textNode.nodeValue?.length ?? 0;
-      if (textNode === startTextNode) {
-        start = traversed + Math.max(0, Math.min(startOffsetInNode, len));
-      }
-      if (textNode === endTextNode) {
-        end = traversed + Math.max(0, Math.min(endOffsetInNode, len));
-      }
-      traversed += len;
-      if (start !== null && end !== null) break;
-    }
+    textNodes.forEach((node) => {
+      nodeBaseOffsets.set(node, traversed);
+      traversed += node.nodeValue?.length ?? 0;
+    });
 
-    if (start === null || end === null || end <= start) return null;
-    return { start, end };
-  }, [getSelectableTextNodes, isSelectableTextNode]);
+    const boundaryToOffset = (boundaryNode: Node, boundaryOffset: number) => {
+      if (boundaryNode.nodeType === Node.TEXT_NODE) {
+        const textNode = boundaryNode as Text;
+        const base = nodeBaseOffsets.get(textNode);
+        if (base !== undefined) {
+          const len = textNode.nodeValue?.length ?? 0;
+          const local = Math.max(0, Math.min(boundaryOffset, len));
+          return base + local;
+        }
+      }
+
+      try {
+        const pointRange = document.createRange();
+        pointRange.setStart(boundaryNode, boundaryOffset);
+        pointRange.collapse(true);
+        let count = 0;
+        for (const node of textNodes) {
+          const len = node.nodeValue?.length ?? 0;
+          if (len <= 0) continue;
+          const endRelation = pointRange.comparePoint(node, len);
+          if (endRelation <= 0) {
+            count += len;
+            continue;
+          }
+          const startRelation = pointRange.comparePoint(node, 0);
+          if (startRelation >= 0) {
+            return count;
+          }
+          let lo = 0;
+          let hi = len;
+          while (lo < hi) {
+            const mid = Math.floor((lo + hi + 1) / 2);
+            const relMid = pointRange.comparePoint(node, mid);
+            if (relMid <= 0) lo = mid;
+            else hi = mid - 1;
+          }
+          return count + lo;
+        }
+        return count;
+      } catch {
+        return null;
+      }
+    };
+
+    try {
+      const start = boundaryToOffset(range.startContainer, range.startOffset);
+      const end = boundaryToOffset(range.endContainer, range.endOffset);
+      if (start === null || end === null) return null;
+      if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) return null;
+      return { start, end };
+    } catch {
+      return null;
+    }
+  }, [getSelectableTextNodes]);
 
   const getTextByOffsetsWithinContainer = useCallback((
     container: HTMLElement,
@@ -625,6 +656,87 @@ export default function TopicLayoutClient({
       if (traversed >= end) break;
     }
     return out.trim();
+  }, [getSelectableTextNodes]);
+
+  const getQuoteContextByOffsets = useCallback((
+    container: HTMLElement,
+    start: number,
+    end: number,
+  ): { prefix: string; suffix: string } => {
+    if (start < 0 || end <= start) return { prefix: "", suffix: "" };
+    const nodes = getSelectableTextNodes(container);
+    if (nodes.length === 0) return { prefix: "", suffix: "" };
+    const fullText = nodes.map((node) => node.nodeValue ?? "").join("");
+    const prefixWindow = 48;
+    const suffixWindow = 48;
+    return {
+      prefix: fullText.slice(Math.max(0, start - prefixWindow), start),
+      suffix: fullText.slice(end, Math.min(fullText.length, end + suffixWindow)),
+    };
+  }, [getSelectableTextNodes]);
+
+  const findOffsetsByQuote = useCallback((
+    container: HTMLElement,
+    highlight: ViewerHighlight,
+  ): { start: number; end: number } | null => {
+    const exactRaw = String(highlight.text || "");
+    const exact = exactRaw.trim();
+    if (!exact) return null;
+    const nodes = getSelectableTextNodes(container);
+    if (nodes.length === 0) return null;
+    const haystack = nodes.map((node) => node.nodeValue ?? "").join("");
+    if (!haystack) return null;
+    const prefix = String(highlight.quote_prefix || "");
+    const suffix = String(highlight.quote_suffix || "");
+    const hint = typeof highlight.start_offset === "number" ? highlight.start_offset : null;
+    const candidates: number[] = [];
+
+    let from = 0;
+    while (from <= haystack.length) {
+      const idx = haystack.indexOf(exact, from);
+      if (idx < 0) break;
+      candidates.push(idx);
+      from = idx + 1;
+    }
+    if (candidates.length === 0) {
+      const lowerHaystack = haystack.toLowerCase();
+      const lowerExact = exact.toLowerCase();
+      from = 0;
+      while (from <= lowerHaystack.length) {
+        const idx = lowerHaystack.indexOf(lowerExact, from);
+        if (idx < 0) break;
+        candidates.push(idx);
+        from = idx + 1;
+      }
+    }
+    if (candidates.length === 0) return null;
+
+    let bestIdx: number | null = null;
+    let bestScore = Number.NEGATIVE_INFINITY;
+    const exactLen = exact.length;
+    candidates.forEach((idx) => {
+      let score = 0;
+      if (prefix) {
+        const start = Math.max(0, idx - prefix.length);
+        const candidatePrefix = haystack.slice(start, idx);
+        if (candidatePrefix === prefix) score += 6;
+      }
+      if (suffix) {
+        const candidateSuffix = haystack.slice(idx + exactLen, idx + exactLen + suffix.length);
+        if (candidateSuffix === suffix) score += 6;
+      }
+      if (hint !== null) {
+        const distance = Math.abs(idx - hint);
+        score += Math.max(0, 3 - Math.min(3, distance / 250));
+      }
+      if (score > bestScore) {
+        bestScore = score;
+        bestIdx = idx;
+      }
+    });
+
+    if (bestIdx === null) return null;
+    return { start: bestIdx, end: bestIdx + exactLen };
   }, [getSelectableTextNodes]);
 
   const applyHighlightByText = useCallback((
@@ -669,6 +781,7 @@ export default function TopicLayoutClient({
     if (!rootContainer) {
       setSelectedText("");
       selectedOffsetsRef.current = null;
+      selectedQuoteContextRef.current = null;
       setSelectionAction((prev) => ({ ...prev, visible: false }));
       setSelectionColorPaletteOpen(false);
       return "";
@@ -678,14 +791,13 @@ export default function TopicLayoutClient({
     if (!selection || selection.rangeCount === 0 || selection.isCollapsed) {
       setSelectedText("");
       selectedOffsetsRef.current = null;
+      selectedQuoteContextRef.current = null;
       setSelectionAction((prev) => ({ ...prev, visible: false }));
       setSelectionColorPaletteOpen(false);
       return "";
     }
 
     const range = selection.getRangeAt(0);
-    const startInfo = getComponentScopeFromNode(range.startContainer);
-    const endInfo = getComponentScopeFromNode(range.endContainer);
     const startNodeForScope = (
       range.startContainer.nodeType === Node.TEXT_NODE
         ? range.startContainer.parentNode
@@ -702,6 +814,7 @@ export default function TopicLayoutClient({
     if (!isInsideTopicContent) {
       setSelectedText("");
       selectedOffsetsRef.current = null;
+      selectedQuoteContextRef.current = null;
       setSelectionAction((prev) => ({ ...prev, visible: false }));
       setSelectionColorPaletteOpen(false);
       return "";
@@ -711,23 +824,24 @@ export default function TopicLayoutClient({
     if (!text) {
       setSelectedText("");
       selectedOffsetsRef.current = null;
+      selectedQuoteContextRef.current = null;
       setSelectionAction((prev) => ({ ...prev, visible: false }));
       setSelectionColorPaletteOpen(false);
       return "";
     }
-    if (
-      startInfo
-      && endInfo
-      && startInfo.componentIndex === endInfo.componentIndex
-      && startInfo.scope.contains(startNodeForScope as Node)
-      && startInfo.scope.contains(endNodeForScope as Node)
-    ) {
-      const offsets = getRangeOffsetsWithinContainer(startInfo.scope, range);
-      selectedOffsetsRef.current = offsets
-        ? { ...offsets, componentIndex: startInfo.componentIndex }
-        : null;
+    const globalOffsets = getRangeOffsetsWithinContainer(rootContainer, range);
+    if (globalOffsets) {
+      selectedOffsetsRef.current = { ...globalOffsets, componentIndex: -1 };
+      selectedQuoteContextRef.current = getQuoteContextByOffsets(rootContainer, globalOffsets.start, globalOffsets.end);
     } else {
       selectedOffsetsRef.current = null;
+      selectedQuoteContextRef.current = null;
+    }
+    if (!selectedOffsetsRef.current) {
+      setSelectedText("");
+      setSelectionAction((prev) => ({ ...prev, visible: false }));
+      setSelectionColorPaletteOpen(false);
+      return "";
     }
     setSelectedText(text);
     setSelectionColorPaletteOpen(false);
@@ -742,7 +856,7 @@ export default function TopicLayoutClient({
       placement: wantsBelow ? "below" : "above",
     });
     return text;
-  }, [getComponentScopeFromNode, getRangeOffsetsWithinContainer, highlightsEnabled]);
+  }, [getQuoteContextByOffsets, getRangeOffsetsWithinContainer, highlightsEnabled]);
 
   const handleAddHighlight = useCallback((overrideColor?: HighlightColor) => {
     if (!highlightsEnabled) return;
@@ -750,67 +864,72 @@ export default function TopicLayoutClient({
     if (!text) return;
     const topicKey = String(currentTopic.topic_index);
     const selectedOffsets = selectedOffsetsRef.current;
+    if (!selectedOffsets) {
+      setSelectedText("");
+      setSelectionAction((prev) => ({ ...prev, visible: false }));
+      setSelectionColorPaletteOpen(false);
+      return;
+    }
     const note = notesEnabled ? newHighlightNote.trim().slice(0, 800) : "";
     const color = normalizeHighlightColor(overrideColor ?? selectedColor);
     const existing = currentTopicHighlights;
     const overlaps: ViewerHighlight[] = [];
-    let mergedStart = selectedOffsets?.start ?? null;
-    let mergedEnd = selectedOffsets?.end ?? null;
-    let mergedComponentIndex = selectedOffsets?.componentIndex ?? null;
+    let mergedStart = selectedOffsets.start;
+    let mergedEnd = selectedOffsets.end;
+    let mergedComponentIndex = selectedOffsets.componentIndex;
 
-    if (selectedOffsets) {
-      const containsExisting = existing.some((item) => {
-        const itemStart = typeof item.start_offset === "number" ? item.start_offset : null;
-        const itemEnd = typeof item.end_offset === "number" ? item.end_offset : null;
-        const itemComponentIndex = typeof item.component_index === "number" ? item.component_index : null;
-        if (
-          itemStart === null
-          || itemEnd === null
-          || itemComponentIndex === null
-          || itemComponentIndex !== selectedOffsets.componentIndex
-        ) {
-          return false;
-        }
-        return itemStart <= selectedOffsets.start && itemEnd >= selectedOffsets.end;
-      });
-      if (containsExisting) {
-        setSelectedText("");
-        setNewHighlightNote("");
-        selectedOffsetsRef.current = null;
-        setSelectionColorPaletteOpen(false);
-        const sel = window.getSelection();
-        sel?.removeAllRanges();
-        setSelectionAction((prev) => ({ ...prev, visible: false }));
+    const containsExisting = existing.some((item) => {
+      const itemStart = typeof item.start_offset === "number" ? item.start_offset : null;
+      const itemEnd = typeof item.end_offset === "number" ? item.end_offset : null;
+      const itemComponentIndex = typeof item.component_index === "number" ? item.component_index : null;
+      if (
+        itemStart === null
+        || itemEnd === null
+        || itemComponentIndex === null
+        || itemComponentIndex !== selectedOffsets.componentIndex
+      ) {
+        return false;
+      }
+      return itemStart <= selectedOffsets.start && itemEnd >= selectedOffsets.end;
+    });
+    if (containsExisting) {
+      setSelectedText("");
+      setNewHighlightNote("");
+      selectedOffsetsRef.current = null;
+      selectedQuoteContextRef.current = null;
+      setSelectionColorPaletteOpen(false);
+      const sel = window.getSelection();
+      sel?.removeAllRanges();
+      setSelectionAction((prev) => ({ ...prev, visible: false }));
+      return;
+    }
+    existing.forEach((item) => {
+      const itemStart = typeof item.start_offset === "number" ? item.start_offset : null;
+      const itemEnd = typeof item.end_offset === "number" ? item.end_offset : null;
+      const itemComponentIndex = typeof item.component_index === "number" ? item.component_index : null;
+      if (
+        itemStart === null
+        || itemEnd === null
+        || itemComponentIndex === null
+        || itemComponentIndex !== selectedOffsets.componentIndex
+      ) {
         return;
       }
-      existing.forEach((item) => {
-        const itemStart = typeof item.start_offset === "number" ? item.start_offset : null;
-        const itemEnd = typeof item.end_offset === "number" ? item.end_offset : null;
-        const itemComponentIndex = typeof item.component_index === "number" ? item.component_index : null;
-        if (
-          itemStart === null
-          || itemEnd === null
-          || itemComponentIndex === null
-          || itemComponentIndex !== selectedOffsets.componentIndex
-        ) {
-          return;
-        }
-        const hasOverlap = itemStart < selectedOffsets.end && itemEnd > selectedOffsets.start;
-        if (!hasOverlap) return;
-        overlaps.push(item);
-        mergedStart = mergedStart === null ? itemStart : Math.min(mergedStart, itemStart);
-        mergedEnd = mergedEnd === null ? itemEnd : Math.max(mergedEnd, itemEnd);
-        mergedComponentIndex = itemComponentIndex;
-      });
-    }
+      const hasOverlap = itemStart < selectedOffsets.end && itemEnd > selectedOffsets.start;
+      if (!hasOverlap) return;
+      overlaps.push(item);
+      mergedStart = Math.min(mergedStart, itemStart);
+      mergedEnd = Math.max(mergedEnd, itemEnd);
+      mergedComponentIndex = itemComponentIndex;
+    });
 
     let mergedText = text;
-    if (
-      mergedStart !== null
-      && mergedEnd !== null
-      && mergedComponentIndex !== null
-    ) {
-      const scope = getComponentScopeByIndex(mergedComponentIndex);
+    {
+      const scope = (
+        mergedComponentIndex === -1
+          ? contentRef.current
+          : getComponentScopeByIndex(mergedComponentIndex)
+      );
       if (scope) {
         const textFromOffsets = getTextByOffsetsWithinContainer(scope, mergedStart, mergedEnd);
         if (textFromOffsets) {
@@ -824,22 +943,16 @@ export default function TopicLayoutClient({
       const itemStart = typeof item.start_offset === "number" ? item.start_offset : null;
       const itemEnd = typeof item.end_offset === "number" ? item.end_offset : null;
       const itemComponentIndex = typeof item.component_index === "number" ? item.component_index : null;
-      if (
-        mergedStart !== null
-        && mergedEnd !== null
-        && mergedComponentIndex !== null
-        && itemStart !== null
-        && itemEnd !== null
-        && itemComponentIndex !== null
-      ) {
-        return itemStart === mergedStart && itemEnd === mergedEnd && itemComponentIndex === mergedComponentIndex;
+      if (itemStart === null || itemEnd === null || itemComponentIndex === null) {
+        return false;
       }
-      return normalizeHighlightTextKey(item.text) === normalizedText;
+      return itemStart === mergedStart && itemEnd === mergedEnd && itemComponentIndex === mergedComponentIndex;
     });
     if (hasDuplicateAlready) {
       setSelectedText("");
       setNewHighlightNote("");
       selectedOffsetsRef.current = null;
+      selectedQuoteContextRef.current = null;
       setSelectionColorPaletteOpen(false);
       const sel = window.getSelection();
       sel?.removeAllRanges();
@@ -849,9 +962,9 @@ export default function TopicLayoutClient({
 
     const inFlightKey = [
       String(currentTopic.topic_index),
-      String(mergedComponentIndex ?? "x"),
-      String(mergedStart ?? "x"),
-      String(mergedEnd ?? "x"),
+      String(mergedComponentIndex),
+      String(mergedStart),
+      String(mergedEnd),
       normalizedText,
       color,
     ].join("|");
@@ -861,6 +974,15 @@ export default function TopicLayoutClient({
     inFlightHighlightKeyRef.current = inFlightKey;
 
     const optimisticId = `local-${Date.now()}`;
+    const quoteContext = (() => {
+      const scope = (
+        mergedComponentIndex === -1
+          ? contentRef.current
+          : getComponentScopeByIndex(mergedComponentIndex)
+      );
+      if (!scope) return selectedQuoteContextRef.current ?? { prefix: "", suffix: "" };
+      return getQuoteContextByOffsets(scope, mergedStart, mergedEnd);
+    })();
     const optimistic: ViewerHighlight = {
       id: optimisticId,
       text: mergedText,
@@ -869,6 +991,8 @@ export default function TopicLayoutClient({
       start_offset: mergedStart,
       end_offset: mergedEnd,
       component_index: mergedComponentIndex,
+      quote_prefix: quoteContext.prefix,
+      quote_suffix: quoteContext.suffix,
     };
     const overlapIds = new Set(overlaps.map((item) => item.id));
     const nextTopicHighlights = existing
@@ -879,6 +1003,7 @@ export default function TopicLayoutClient({
     setSelectedText("");
     setNewHighlightNote("");
     selectedOffsetsRef.current = null;
+    selectedQuoteContextRef.current = null;
     setSelectionColorPaletteOpen(false);
     const sel = window.getSelection();
     sel?.removeAllRanges();
@@ -891,12 +1016,12 @@ export default function TopicLayoutClient({
         topic_index: currentTopic.topic_index,
         text: mergedText,
         color,
+        ...(quoteContext.prefix ? { quote_prefix: quoteContext.prefix } : {}),
+        ...(quoteContext.suffix ? { quote_suffix: quoteContext.suffix } : {}),
         ...(note ? { note } : {}),
-        ...(mergedStart !== null && mergedEnd !== null && mergedComponentIndex !== null ? {
-          start_offset: mergedStart,
-          end_offset: mergedEnd,
-          component_index: mergedComponentIndex,
-        } : {}),
+        start_offset: mergedStart,
+        end_offset: mergedEnd,
+        component_index: mergedComponentIndex,
       },
     }).then((courseState) => {
       const highlights = courseState?.highlights;
@@ -911,6 +1036,7 @@ export default function TopicLayoutClient({
     currentTopicHighlights,
     currentTopic.topic_index,
     getComponentScopeByIndex,
+    getQuoteContextByOffsets,
     getTextByOffsetsWithinContainer,
     highlightsEnabled,
     notesEnabled,
@@ -1056,9 +1182,20 @@ export default function TopicLayoutClient({
         && typeof end === "number"
         && Number.isFinite(end)
       ) {
-        addMarkByOffsets(targetContainer, start, end, highlightId, color);
+        const appliedByOffset = addMarkByOffsets(targetContainer, start, end, highlightId, color);
+        if (!appliedByOffset) {
+          const anchored = findOffsetsByQuote(targetContainer, item);
+          if (anchored) {
+            addMarkByOffsets(targetContainer, anchored.start, anchored.end, highlightId, color);
+          }
+        }
       } else {
-        applyHighlightByText(targetContainer, item.text, highlightId, color);
+        const anchored = findOffsetsByQuote(targetContainer, item);
+        if (anchored) {
+          addMarkByOffsets(targetContainer, anchored.start, anchored.end, highlightId, color);
+        } else {
+          applyHighlightByText(targetContainer, item.text, highlightId, color);
+        }
       }
       mark = findMark();
     }
@@ -1069,7 +1206,7 @@ export default function TopicLayoutClient({
     window.setTimeout(() => {
       mark?.classList.remove("ring-2", "ring-indigo-400", "ring-offset-1", "ring-offset-white", "dark:ring-offset-gray-900");
     }, 1200);
-  }, [USER_HIGHLIGHT_ATTR, addMarkByOffsets, applyHighlightByText, getComponentScopeByIndex]);
+  }, [USER_HIGHLIGHT_ATTR, addMarkByOffsets, applyHighlightByText, findOffsetsByQuote, getComponentScopeByIndex]);
 
   // In-page topic navigation: fetch new topic, update state + URL (no page remount)
   const handleTopicNav = useCallback(async (href: string, destIdx: number) => {
@@ -1122,19 +1259,48 @@ export default function TopicLayoutClient({
     const container = contentRef.current;
     if (!container) return;
 
-    const onCaptureSelection = () => {
-      window.requestAnimationFrame(() => {
+    let rafId: number | null = null;
+    let touchTimer: number | null = null;
+    const scheduleCapture = () => {
+      if (rafId !== null) return;
+      rafId = window.requestAnimationFrame(() => {
+        rafId = null;
         captureSelectionFromTopicContent();
       });
     };
 
+    const onCaptureSelection = () => {
+      scheduleCapture();
+    };
+    const onTouchEndCapture = () => {
+      scheduleCapture();
+      if (touchTimer !== null) window.clearTimeout(touchTimer);
+      touchTimer = window.setTimeout(() => {
+        scheduleCapture();
+      }, 90);
+    };
+    const onSelectionChange = () => {
+      const sel = window.getSelection();
+      if (!sel || sel.rangeCount === 0 || sel.isCollapsed) return;
+      const range = sel.getRangeAt(0);
+      const startNode = range.startContainer.nodeType === Node.TEXT_NODE ? range.startContainer.parentNode : range.startContainer;
+      const endNode = range.endContainer.nodeType === Node.TEXT_NODE ? range.endContainer.parentNode : range.endContainer;
+      if (!startNode || !endNode) return;
+      if (!container.contains(startNode) || !container.contains(endNode)) return;
+      scheduleCapture();
+    };
+
     container.addEventListener("mouseup", onCaptureSelection);
     container.addEventListener("keyup", onCaptureSelection);
-    container.addEventListener("touchend", onCaptureSelection);
+    container.addEventListener("touchend", onTouchEndCapture);
+    document.addEventListener("selectionchange", onSelectionChange);
     return () => {
       container.removeEventListener("mouseup", onCaptureSelection);
       container.removeEventListener("keyup", onCaptureSelection);
-      container.removeEventListener("touchend", onCaptureSelection);
+      container.removeEventListener("touchend", onTouchEndCapture);
+      document.removeEventListener("selectionchange", onSelectionChange);
+      if (rafId !== null) window.cancelAnimationFrame(rafId);
+      if (touchTimer !== null) window.clearTimeout(touchTimer);
     };
   }, [captureSelectionFromTopicContent, currentTopic.topic_index]);
 
@@ -1209,6 +1375,11 @@ export default function TopicLayoutClient({
         const appliedByOffset = addMarkByOffsets(highlightContainer, start, end, id, color);
         if (appliedByOffset) return;
       }
+      const anchored = findOffsetsByQuote(highlightContainer, item);
+      if (anchored) {
+        const appliedByQuote = addMarkByOffsets(highlightContainer, anchored.start, anchored.end, id, color);
+        if (appliedByQuote) return;
+      }
       applyHighlightByText(highlightContainer, item.text, id, color);
     };
     const removeStaleMarks = () => {
@@ -1264,22 +1435,17 @@ export default function TopicLayoutClient({
     });
     observer.observe(container, { childList: true, subtree: true, characterData: true });
 
-    const t1 = window.setTimeout(applyFull, 80);
-    const t2 = window.setTimeout(applyMissingOnly, 600);
-    const t3 = window.setTimeout(applyMissingOnly, 1800);
     applyFull();
     return () => {
       observer.disconnect();
       if (rafId !== null) window.cancelAnimationFrame(rafId);
-      window.clearTimeout(t1);
-      window.clearTimeout(t2);
-      window.clearTimeout(t3);
     };
   }, [
     addMarkByOffsets,
     applyHighlightByText,
     currentTopic.topic_index,
     currentTopicHighlights,
+    findOffsetsByQuote,
     getComponentScopeByIndex,
     unwrapUserHighlights,
   ]);
@@ -1288,6 +1454,7 @@ export default function TopicLayoutClient({
     setSelectedText("");
     setNewHighlightNote("");
     selectedOffsetsRef.current = null;
+    selectedQuoteContextRef.current = null;
     setSelectionAction((prev) => ({ ...prev, visible: false }));
     setSelectionColorPaletteOpen(false);
   }, [currentTopic.topic_index]);
@@ -1795,7 +1962,7 @@ export default function TopicLayoutClient({
         </div>
       )}
 
-      {highlightsEnabled && selectionAction.visible && selectedText && (
+      {highlightsEnabled && selectionAction.visible && selectedText && selectedOffsetsRef.current && (
         <>
           {selectionColorPaletteOpen && (
             <div
