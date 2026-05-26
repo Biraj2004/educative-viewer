@@ -1,5 +1,5 @@
 {
-  "generated_at_utc": "2026-05-26T19:28:31Z",
+  "generated_at_utc": "2026-05-26T20:39:34Z",
   "backend_api_rules": [
     "/api/admin/set-course-status",
     "/api/admin/set-user-status",
@@ -29,6 +29,7 @@
     "/api/auth/theme",
     "/api/auth/viewer-settings",
     "/api/auth/viewer-settings/course",
+    "/api/code-test/execute",
     "/api/contact",
     "/api/course-details",
     "/api/courses",
@@ -68,6 +69,7 @@
     "^/api/auth/theme/?$",
     "^/api/auth/viewer\\-settings/?$",
     "^/api/auth/viewer\\-settings/course/?$",
+    "^/api/code\\-test/execute/?$",
     "^/api/contact/?$",
     "^/api/course\\-details/?$",
     "^/api/courses/?$",
@@ -78,5 +80,5 @@
     "^/api/search/?$",
     "^/api/topic\\-details/?$"
   ],
-  "count": 37
+  "count": 38
 }

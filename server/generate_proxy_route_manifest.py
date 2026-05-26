@@ -8,6 +8,7 @@ from backend.route_manifest import build_backend_route_manifest, write_manifest_
 from backend.routes.admin import create_admin_blueprint
 from backend.routes.ai import create_ai_blueprint
 from backend.routes.auth import create_auth_blueprint
+from backend.routes.code_test import create_code_test_blueprint
 from backend.routes.contact import create_contact_blueprint
 from backend.routes.courses import create_courses_blueprint
 
@@ -23,6 +24,7 @@ def main() -> int:
     app.register_blueprint(create_admin_blueprint(auth_service_stub, db_manager_stub))
     app.register_blueprint(create_contact_blueprint())
     app.register_blueprint(create_ai_blueprint(auth_service_stub))
+    app.register_blueprint(create_code_test_blueprint())
 
     manifest = build_backend_route_manifest(app)
 

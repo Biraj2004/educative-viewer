@@ -121,6 +121,9 @@ class AppConfig:
     rsa_private_key: str
     gemini_api_key: str
     groq_api_key: str
+    judge0_rapidapi_base_url: str
+    judge0_rapidapi_host: str
+    judge0_rapidapi_key: str
     highlights_enabled: bool
     viewer_feature_flags: dict[str, bool]
     viewer_feature_role_overrides: dict[str, dict[str, bool]]
@@ -267,6 +270,9 @@ def load_config() -> AppConfig:
         rsa_private_key=os.environ.get("RSA_PRIVATE_KEY", "").replace("\\n", "\n").strip(),
         gemini_api_key=os.environ.get("GEMINI_API_KEY", "").strip(),
         groq_api_key=os.environ.get("GROQ_API_KEY", "").strip(),
+        judge0_rapidapi_base_url=os.environ.get("JUDGE0_RAPIDAPI_BASE_URL", "https://judge029.p.rapidapi.com").strip(),
+        judge0_rapidapi_host=os.environ.get("JUDGE0_RAPIDAPI_HOST", "judge029.p.rapidapi.com").strip(),
+        judge0_rapidapi_key=os.environ.get("JUDGE0_RAPIDAPI_KEY", "").strip(),
         highlights_enabled=viewer_feature_flags.get("highlights_enabled", True),
         viewer_feature_flags=viewer_feature_flags,
         viewer_feature_role_overrides=viewer_feature_role_overrides,

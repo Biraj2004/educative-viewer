@@ -1484,11 +1484,15 @@ export default function CodeTest({ data }: { data: CodeTestData }) {
         </div>
 
         <div className="flex items-center gap-3 text-gray-400 dark:text-gray-500">
+          <span className="shrink-0 text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+            Provider
+          </span>
           <select
             value={judge0Provider}
             onChange={(event) => setJudge0Provider(event.target.value as Judge0Provider)}
-            className="text-xs font-medium bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded px-2 py-1 text-gray-700 dark:text-gray-200 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-            title="Execution Provider"
+            className="shrink-0 min-w-[150px] text-xs font-medium bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded px-2 py-1 text-gray-700 dark:text-gray-200 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+            title="Judge0 Provider"
+            aria-label="Judge0 Provider"
           >
             {JUDGE0_PROVIDER_OPTIONS.map((provider) => (
               <option
