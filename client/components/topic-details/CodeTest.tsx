@@ -81,6 +81,13 @@ interface Judge0LanguageInfo {
   name: string;
 }
 
+type Judge0Provider = "ce" | "rapidapi";
+
+const JUDGE0_PROVIDER_OPTIONS: Array<{ value: Judge0Provider; label: string }> = [
+  { value: "ce", label: "Judge0 CE" },
+  { value: "rapidapi", label: "Judge0 RapidAPI" },
+];
+
 interface EditableCodeFile {
   content: string;
   language: string;
@@ -447,8 +454,8 @@ function resolveJudge0LanguageId(
   return null;
 }
 
-async function fetchJudge0Languages(): Promise<Judge0LanguageInfo[]> {
-  const response = await fetch("/service/code-test/execute", { method: "GET" });
+async function fetchJudge0Languages(provider: Judge0Provider): Promise<Judge0LanguageInfo[]> {
+  const response = await fetch(`/service/code-test/execute?provider=${encodeURIComponent(provider)}`, { method: "GET" });
   const payload = (await response.json().catch(() => ({}))) as
     | { languages?: unknown; error?: string; details?: unknown }
     | Record<string, unknown>;
@@ -1162,6 +1169,7 @@ function formatSubmissionError(payload: Judge0ExecuteResponse | { error?: string
 export default function CodeTest({ data }: { data: CodeTestData }) {
   const [activeTab, setActiveTab] = useState<"testCases" | "results" | "feedback">("testCases");
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [judge0Provider, setJudge0Provider] = useState<Judge0Provider>("ce");
   const editorRef = useRef<{ setValue: (value: string) => void } | null>(null);
 
   const preferredLanguage = useMemo(() => {
@@ -1313,7 +1321,7 @@ export default function CodeTest({ data }: { data: CodeTestData }) {
     }
 
     try {
-      const judge0Languages = await fetchJudge0Languages();
+      const judge0Languages = await fetchJudge0Languages(judge0Provider);
       const languageId = resolveJudge0LanguageId(judge0Languages, selectedLanguage, runtimeLanguage);
       if (!languageId) {
         throw new Error(
@@ -1348,6 +1356,7 @@ export default function CodeTest({ data }: { data: CodeTestData }) {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
+          provider: judge0Provider,
           sharedAdditionalFiles: Object.keys(sharedAdditionalFiles).length
             ? sharedAdditionalFiles
             : undefined,
@@ -1435,7 +1444,7 @@ export default function CodeTest({ data }: { data: CodeTestData }) {
       setRunState("error");
       setRunError(error instanceof Error ? error.message : "Unknown execution error");
     }
-  }, [data.functionName, editorFiles, mainFileName, runtimeLanguage, selectedLanguage, testCases]);
+  }, [data.functionName, editorFiles, judge0Provider, mainFileName, runtimeLanguage, selectedLanguage, testCases]);
 
   const activeResult = runResults[activeTestIndex];
 
@@ -1475,6 +1484,22 @@ export default function CodeTest({ data }: { data: CodeTestData }) {
         </div>
 
         <div className="flex items-center gap-3 text-gray-400 dark:text-gray-500">
+          <select
+            value={judge0Provider}
+            onChange={(event) => setJudge0Provider(event.target.value as Judge0Provider)}
+            className="text-xs font-medium bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded px-2 py-1 text-gray-700 dark:text-gray-200 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+            title="Execution Provider"
+          >
+            {JUDGE0_PROVIDER_OPTIONS.map((provider) => (
+              <option
+                key={provider.value}
+                value={provider.value}
+                className="bg-white text-gray-900 dark:bg-gray-900 dark:text-gray-100"
+              >
+                {provider.label}
+              </option>
+            ))}
+          </select>
           <button title="Help" className="hover:text-gray-600 dark:hover:text-gray-300 cursor-pointer transition-colors">
             <HelpIcon />
           </button>
