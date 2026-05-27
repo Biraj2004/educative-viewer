@@ -35,6 +35,7 @@ const PUBLIC_ZIP_REPO  = process.env.PUBLIC_ZIP_REPO  || 'Biraj2004/educative-vi
 const PUBLIC_ZIP_TAG   = process.env.PUBLIC_ZIP_TAG   || 'public-files';
 const PUBLIC_ZIP_ASSET = process.env.PUBLIC_ZIP_ASSET || 'public.zip';
 const PUBLIC_ZIP_PATH  = path.join(ROOT, '.public.zip');
+const JS_OBFUSCATOR_VERSION = process.env.JS_OBFUSCATOR_VERSION || '4.1.1';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -106,10 +107,13 @@ function downloadReleaseAsset(repo, tag, pattern, outputPath, directAssetName) {
 function stepInstallObfuscator() {
   header('Install javascript-obfuscator');
   const existing = runCapture('javascript-obfuscator --version');
-  if (existing) {
+  if (existing === JS_OBFUSCATOR_VERSION) {
     console.log(`[+] Already installed: ${existing}`);
   } else {
-    run('npm install -g javascript-obfuscator');
+    if (existing) {
+      console.log(`[i] Detected javascript-obfuscator ${existing}; switching to pinned ${JS_OBFUSCATOR_VERSION}`);
+    }
+    run(`npm install -g javascript-obfuscator@${JS_OBFUSCATOR_VERSION}`);
   }
 }
 
@@ -162,8 +166,7 @@ function stepObfuscate() {
     `--output "${CHUNKS_DIR}" ` +
     `--compact true ` +
     `--identifier-names-generator hexadecimal ` +
-    `--string-array true ` +
-    `--string-array-encoding base64`
+    `--string-array true`
   );
   console.log('[+] Obfuscation complete.');
 }
