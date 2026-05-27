@@ -138,7 +138,7 @@ export default function TopicDrawingPad({
   const [dirty, setDirty] = useState(false);
   const [localSaveBusy, setLocalSaveBusy] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
-  const didReceiveInitialChangeRef = useRef(false);
+  const [confirmCloseOpen, setConfirmCloseOpen] = useState(false);
   const lastSavedContentKeyRef = useRef<string>("");
 
   useEffect(() => {
@@ -186,9 +186,9 @@ export default function TopicDrawingPad({
   }, [initialData]);
 
   useEffect(() => {
-    didReceiveInitialChangeRef.current = false;
     setDirty(false);
     setSaveError(null);
+    setConfirmCloseOpen(false);
   }, [initialData]);
 
   const handleSave = useCallback(async (): Promise<boolean> => {
@@ -213,7 +213,6 @@ export default function TopicDrawingPad({
       });
       await onSave(nextScene);
       lastSavedContentKeyRef.current = contentSignatureFromSerialized(serialized);
-      didReceiveInitialChangeRef.current = true;
       setDirty(false);
       return true;
     } catch (err: unknown) {
@@ -229,8 +228,8 @@ export default function TopicDrawingPad({
 
   const handleClose = useCallback(() => {
     if (dirty) {
-      const confirmed = window.confirm("You have unsaved drawing changes. Close without saving?");
-      if (!confirmed) return;
+      setConfirmCloseOpen(true);
+      return;
     }
     onClose();
   }, [dirty, onClose]);
@@ -279,6 +278,38 @@ export default function TopicDrawingPad({
         </div>
       )}
 
+      {confirmCloseOpen && (
+        <div className="fixed inset-0 z-[70] bg-black/45 flex items-center justify-center px-4">
+          <div className="w-full max-w-sm rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 shadow-2xl p-4">
+            <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+              Unsaved changes
+            </p>
+            <p className="mt-1 text-xs text-gray-600 dark:text-gray-300">
+              You have unsaved drawing changes. Close without saving?
+            </p>
+            <div className="mt-4 flex items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setConfirmCloseOpen(false)}
+                className="inline-flex items-center px-3 py-1.5 rounded-md border border-gray-300 dark:border-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 text-xs font-semibold transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setConfirmCloseOpen(false);
+                  onClose();
+                }}
+                className="inline-flex items-center px-3 py-1.5 rounded-md border border-red-300 dark:border-red-700 text-red-700 dark:text-red-300 hover:bg-red-50 dark:hover:bg-red-900/30 text-xs font-semibold transition-colors cursor-pointer"
+              >
+                Close without saving
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="flex-1 min-h-0">
         <Excalidraw
           excalidrawAPI={(editorApi) => setApi(editorApi)}
@@ -290,11 +321,8 @@ export default function TopicDrawingPad({
               appState as unknown as Record<string, unknown>,
               files as unknown as Record<string, unknown>,
             );
-            if (!didReceiveInitialChangeRef.current) {
-              didReceiveInitialChangeRef.current = true;
-              if (!lastSavedContentKeyRef.current) {
-                lastSavedContentKeyRef.current = currentKey;
-              }
+            if (!lastSavedContentKeyRef.current) {
+              lastSavedContentKeyRef.current = currentKey;
               setDirty(false);
               return;
             }
