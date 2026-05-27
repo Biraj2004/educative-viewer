@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
-import { getSceneVersion, serializeAsJSON } from "@excalidraw/excalidraw";
+import { serializeAsJSON } from "@excalidraw/excalidraw";
 import type {
   ExcalidrawImperativeAPI,
   ExcalidrawInitialDataState,
@@ -44,15 +44,36 @@ function buildContentSignature(
   elements: readonly unknown[],
   files: Record<string, unknown>,
 ): string {
-  const sceneVersion = getSceneVersion(elements as never[]);
-  const filePart = Object.entries(files || {})
-    .map(([id, file]) => {
-      const record = file && typeof file === "object" ? (file as Record<string, unknown>) : {};
-      return `${id}:${String(record.version ?? "")}:${String(record.created ?? "")}`;
-    })
-    .sort()
-    .join("|");
-  return `${sceneVersion}::${filePart}`;
+  const normalizedElements = (Array.isArray(elements) ? elements : []).map((item) => {
+    const element = item && typeof item === "object" ? { ...(item as Record<string, unknown>) } : {};
+    delete element.version;
+    delete element.versionNonce;
+    delete element.updated;
+    return element;
+  });
+
+  const normalizedFiles = Object.fromEntries(
+    Object.entries(files || {})
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([id, value]) => {
+        const file = value && typeof value === "object" ? (value as Record<string, unknown>) : {};
+        return [
+          id,
+          {
+            id,
+            mimeType: file.mimeType ?? "",
+            dataURL: file.dataURL ?? "",
+            created: file.created ?? "",
+            size: file.size ?? "",
+          },
+        ];
+      }),
+  );
+
+  return JSON.stringify({
+    elements: normalizedElements,
+    files: normalizedFiles,
+  });
 }
 
 export default function TopicDrawingPad({
