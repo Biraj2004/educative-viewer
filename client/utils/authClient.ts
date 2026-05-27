@@ -240,12 +240,24 @@ export interface ViewerTopicNote {
   created_at?: string;
 }
 
+export interface ViewerDrawingScene {
+  elements: readonly unknown[];
+  appState: Record<string, unknown>;
+  files: Record<string, unknown>;
+}
+
+export interface ViewerDrawingNote {
+  scene: ViewerDrawingScene;
+  updated_at?: string;
+}
+
 export interface CourseViewerSettings {
   last_topic_index?: number;
   last_highlight_color?: "yellow" | "blue" | "green" | "pink" | "orange";
   bookmarks?: number[];
   highlights?: Record<string, ViewerHighlight[]>;
   topic_notes?: Record<string, ViewerTopicNote[]>;
+  drawing_notes?: Record<string, ViewerDrawingNote>;
 }
 
 export interface ViewerSettingsData {
@@ -604,6 +616,13 @@ export interface UpdateViewerCourseSettingsPayload {
   remove_topic_note?: {
     topic_index: number;
     note_id: string;
+  };
+  upsert_drawing_note?: {
+    topic_index: number;
+    scene: ViewerDrawingScene;
+  };
+  remove_drawing_note?: {
+    topic_index: number;
   };
   clear_highlights_topic_index?: number;
 }

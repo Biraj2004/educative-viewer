@@ -6,7 +6,16 @@ import { notFound } from "next/navigation";
 import TopicLayoutClient from "@/components/edu-viewer/TopicLayoutClient";
 import AppNavbar from "@/components/edu-viewer/AppNavbar";
 import UserMenu from "@/components/edu-viewer/UserMenu";
-import { getAuthToken, clearAuthToken, getProgress, getUser, getViewerSettings, type ViewerHighlight, type ViewerTopicNote } from "@/utils/authClient";
+import {
+  getAuthToken,
+  clearAuthToken,
+  getProgress,
+  getUser,
+  getViewerSettings,
+  type ViewerDrawingNote,
+  type ViewerHighlight,
+  type ViewerTopicNote,
+} from "@/utils/authClient";
 import { getBackendApiBase } from "@/utils/runtime-config";
 
 const BACKEND = getBackendApiBase();
@@ -88,6 +97,7 @@ export default function TopicDetailPage() {
   const [initialBookmarked, setInitialBookmarked] = useState<number[]>([]);
   const [initialHighlights, setInitialHighlights] = useState<Record<string, ViewerHighlight[]>>({});
   const [initialTopicNotes, setInitialTopicNotes] = useState<Record<string, ViewerTopicNote[]>>({});
+  const [initialDrawingNotes, setInitialDrawingNotes] = useState<Record<string, ViewerDrawingNote>>({});
   const [initialHighlightColor, setInitialHighlightColor] = useState<HighlightColor>("yellow");
   const [highlightsEnabled, setHighlightsEnabled] = useState(true);
   const [bookmarksEnabled, setBookmarksEnabled] = useState(true);
@@ -169,6 +179,11 @@ export default function TopicDetailPage() {
             setInitialTopicNotes(
               viewerCourse?.topic_notes && typeof viewerCourse.topic_notes === "object"
                 ? viewerCourse.topic_notes
+                : {}
+            );
+            setInitialDrawingNotes(
+              viewerCourse?.drawing_notes && typeof viewerCourse.drawing_notes === "object"
+                ? viewerCourse.drawing_notes
                 : {}
             );
             setLoading(false);
@@ -260,6 +275,7 @@ export default function TopicDetailPage() {
       initialBookmarked={initialBookmarked}
       initialHighlights={initialHighlights}
       initialTopicNotes={initialTopicNotes}
+      initialDrawingNotes={initialDrawingNotes}
       initialHighlightColor={initialHighlightColor}
       highlightsEnabled={highlightsEnabled}
       bookmarksEnabled={bookmarksEnabled}
