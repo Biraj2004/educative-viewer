@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
+import "@excalidraw/excalidraw/index.css";
 import { getTheme } from "@/utils/theme";
 import NavigationEvents from "@/components/edu-viewer/NavigationEvents";
 import NavProgressBar from "@/components/edu-viewer/NavProgressBar";

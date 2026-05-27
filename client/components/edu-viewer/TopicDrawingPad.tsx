@@ -2,13 +2,12 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
-import { getSceneVersion, serializeAsJSON } from "@excalidraw/excalidraw";
+import { serializeAsJSON } from "@excalidraw/excalidraw";
 import type {
   ExcalidrawImperativeAPI,
   ExcalidrawInitialDataState,
 } from "@excalidraw/excalidraw/types";
 import type { ViewerDrawingScene } from "@/utils/authClient";
-import "@excalidraw/excalidraw/index.css";
 
 const Excalidraw = dynamic(
   async () => (await import("@excalidraw/excalidraw")).Excalidraw,
@@ -44,15 +43,88 @@ function buildContentSignature(
   elements: readonly unknown[],
   files: Record<string, unknown>,
 ): string {
-  const sceneVersion = getSceneVersion(elements as never[]);
-  const filePart = Object.entries(files || {})
-    .map(([id, file]) => {
-      const record = file && typeof file === "object" ? (file as Record<string, unknown>) : {};
-      return `${id}:${String(record.version ?? "")}:${String(record.created ?? "")}`;
+  const normalizedElements = (Array.isArray(elements) ? elements : [])
+    .filter((item) => {
+      if (!item || typeof item !== "object") return false;
+      const element = item as Record<string, unknown>;
+      // Excalidraw uses transient selection elements during interaction.
+      if (element.type === "selection") return false;
+      // Deleted rows should not impact dirty check.
+      if (element.isDeleted === true) return false;
+      return true;
     })
-    .sort()
-    .join("|");
-  return `${sceneVersion}::${filePart}`;
+    .map((item) => {
+      const element = { ...(item as Record<string, unknown>) };
+      // Volatile runtime fields that change without semantic drawing edits.
+      delete element.version;
+      delete element.versionNonce;
+      delete element.updated;
+      return element;
+    });
+
+  const normalizedFiles = Object.fromEntries(
+    Object.entries(files || {})
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([id, value]) => {
+        const file = value && typeof value === "object" ? (value as Record<string, unknown>) : {};
+        return [
+          id,
+          {
+            id,
+            mimeType: file.mimeType ?? "",
+            dataURL: file.dataURL ?? "",
+            created: file.created ?? "",
+            size: file.size ?? "",
+          },
+        ];
+      }),
+  );
+
+  return JSON.stringify({
+    elements: normalizedElements,
+    files: normalizedFiles,
+  });
+}
+
+function contentSignatureFromSerialized(serialized: string): string {
+  try {
+    const parsed = JSON.parse(serialized) as {
+      elements?: readonly unknown[];
+      files?: Record<string, unknown>;
+    };
+    return buildContentSignature(
+      Array.isArray(parsed.elements) ? parsed.elements : [],
+      parsed.files && typeof parsed.files === "object" ? parsed.files : {},
+    );
+  } catch {
+    return "";
+  }
+}
+
+function buildCurrentContentKey(
+  api: ExcalidrawImperativeAPI | null,
+  fallbackElements: readonly unknown[],
+  fallbackAppState: Record<string, unknown>,
+  fallbackFiles: Record<string, unknown>,
+): string {
+  try {
+    if (api) {
+      const serialized = serializeForDatabase(
+        api.getSceneElements() as readonly unknown[],
+        api.getAppState() as unknown as Record<string, unknown>,
+        api.getFiles() as unknown as Record<string, unknown>,
+      );
+      return contentSignatureFromSerialized(serialized);
+    }
+    const serialized = serializeForDatabase(
+      fallbackElements,
+      fallbackAppState,
+      fallbackFiles,
+    );
+    return contentSignatureFromSerialized(serialized);
+  } catch {
+    return "";
+  }
 }
 
 export default function TopicDrawingPad({
@@ -107,17 +179,16 @@ export default function TopicDrawingPad({
         (initialData.appState ?? {}) as Record<string, unknown>,
         (initialData.files ?? {}) as Record<string, unknown>,
       );
-      const parsed = JSON.parse(serialized) as {
-        elements?: readonly unknown[];
-        files?: Record<string, unknown>;
-      };
-      lastSavedContentKeyRef.current = buildContentSignature(
-        Array.isArray(parsed.elements) ? parsed.elements : [],
-        parsed.files && typeof parsed.files === "object" ? parsed.files : {},
-      );
+      lastSavedContentKeyRef.current = contentSignatureFromSerialized(serialized);
     } catch {
       lastSavedContentKeyRef.current = "";
     }
+  }, [initialData]);
+
+  useEffect(() => {
+    didReceiveInitialChangeRef.current = false;
+    setDirty(false);
+    setSaveError(null);
   }, [initialData]);
 
   const handleSave = useCallback(async (): Promise<boolean> => {
@@ -125,11 +196,10 @@ export default function TopicDrawingPad({
     setLocalSaveBusy(true);
     setSaveError(null);
     try {
-      const serialized = serializeAsJSON(
-        api.getSceneElements(),
-        api.getAppState(),
-        api.getFiles(),
-        "database",
+      const serialized = serializeForDatabase(
+        api.getSceneElements() as readonly unknown[],
+        api.getAppState() as unknown as Record<string, unknown>,
+        api.getFiles() as unknown as Record<string, unknown>,
       );
       const parsed = JSON.parse(serialized) as {
         elements?: readonly unknown[];
@@ -142,14 +212,15 @@ export default function TopicDrawingPad({
         files: parsed.files && typeof parsed.files === "object" ? parsed.files : {},
       });
       await onSave(nextScene);
-      lastSavedContentKeyRef.current = buildContentSignature(
-        nextScene.elements,
-        nextScene.files,
-      );
+      lastSavedContentKeyRef.current = contentSignatureFromSerialized(serialized);
+      didReceiveInitialChangeRef.current = true;
       setDirty(false);
       return true;
-    } catch {
-      setSaveError("Could not save drawing notes. Please try again.");
+    } catch (err: unknown) {
+      const message = err instanceof Error && err.message
+        ? err.message
+        : "Could not save drawing notes. Please try again.";
+      setSaveError(message);
       return false;
     } finally {
       setLocalSaveBusy(false);
@@ -213,31 +284,20 @@ export default function TopicDrawingPad({
           excalidrawAPI={(editorApi) => setApi(editorApi)}
           initialData={initialData}
           onChange={(elements, appState, files) => {
-            let currentSerialized = "";
-            try {
-              currentSerialized = serializeForDatabase(
-                elements as readonly unknown[],
-                appState as unknown as Record<string, unknown>,
-                files as unknown as Record<string, unknown>,
-              );
-            } catch {
-              currentSerialized = "";
-            }
+            const currentKey = buildCurrentContentKey(
+              api,
+              elements as readonly unknown[],
+              appState as unknown as Record<string, unknown>,
+              files as unknown as Record<string, unknown>,
+            );
             if (!didReceiveInitialChangeRef.current) {
               didReceiveInitialChangeRef.current = true;
               if (!lastSavedContentKeyRef.current) {
-                lastSavedContentKeyRef.current = buildContentSignature(
-                  elements as readonly unknown[],
-                  files as unknown as Record<string, unknown>,
-                );
+                lastSavedContentKeyRef.current = currentKey;
               }
               setDirty(false);
               return;
             }
-            const currentKey = buildContentSignature(
-              elements as readonly unknown[],
-              files as unknown as Record<string, unknown>,
-            );
             setDirty(currentKey !== lastSavedContentKeyRef.current);
             if (saveError) setSaveError(null);
           }}
