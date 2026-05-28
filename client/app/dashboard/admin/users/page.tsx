@@ -338,24 +338,60 @@ function ResetPasswordModal({ user, onClose, onReset }: { user: AdminUser; onClo
   );
 }
 
-const CLEANUP_SCOPE_OPTIONS: { value: ReaderDataCleanupScope; label: string }[] = [
-  { value: "notes", label: "Notes" },
-  { value: "highlights", label: "Highlights" },
-  { value: "drawing", label: "Drawing Board" },
-  { value: "bookmarks", label: "Bookmarks" },
-  { value: "all", label: "All" },
+const CLEANUP_NON_ALL_KEYS: Array<Exclude<ReaderDataCleanupScope, "all">> = ["notes", "highlights", "drawing", "bookmarks"];
+const CLEANUP_SCOPE_OPTIONS: Array<{ key: ReaderDataCleanupScope; label: string; description: string }> = [
+  { key: "all", label: "All", description: "Clear bookmarks, highlights, notes, and drawings." },
+  { key: "notes", label: "Notes", description: "Topic notes and course notes." },
+  { key: "highlights", label: "Highlights", description: "Highlighted text and attached notes." },
+  { key: "drawing", label: "Drawing Board", description: "Saved drawing board canvases." },
+  { key: "bookmarks", label: "Bookmarks", description: "All bookmarks saved by the reader." },
 ];
 
+const createCleanupSelection = (): Record<ReaderDataCleanupScope, boolean> => ({
+  all: true,
+  notes: true,
+  highlights: true,
+  drawing: true,
+  bookmarks: true,
+});
+
+const toggleCleanupSelection = (
+  prev: Record<ReaderDataCleanupScope, boolean>,
+  key: ReaderDataCleanupScope,
+): Record<ReaderDataCleanupScope, boolean> => {
+  const next = { ...prev };
+  if (key === "all") {
+    const nextValue = !prev.all;
+    CLEANUP_SCOPE_OPTIONS.forEach((option) => {
+      next[option.key] = nextValue;
+    });
+    return next;
+  }
+  next[key] = !prev[key];
+  next.all = CLEANUP_NON_ALL_KEYS.every((scope) => next[scope]);
+  return next;
+};
+
+const getSelectedCleanupScopes = (selection: Record<ReaderDataCleanupScope, boolean>) =>
+  CLEANUP_NON_ALL_KEYS.filter((scope) => selection[scope]);
+
 function CleanupUserReaderDataModal({ user, onClose, onDone }: { user: AdminUser; onClose: () => void; onDone: () => void }) {
-  const [scope, setScope] = useState<ReaderDataCleanupScope>("all");
+  const [scopeSelection, setScopeSelection] = useState<Record<ReaderDataCleanupScope, boolean>>(createCleanupSelection);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const selectedScopes = getSelectedCleanupScopes(scopeSelection);
+  const selectedScopeCount = selectedScopes.length;
+  const useAll = selectedScopeCount === CLEANUP_NON_ALL_KEYS.length;
 
   async function handleCleanup() {
+    if (selectedScopeCount === 0) return;
     setLoading(true);
     setError("");
     try {
-      await adminCleanupUserReaderState(user.id, scope);
+      const scopesToRun: ReaderDataCleanupScope[] = useAll ? ["all"] : selectedScopes;
+      for (const nextScope of scopesToRun) {
+        await adminCleanupUserReaderState(user.id, nextScope);
+      }
       onDone();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to cleanup reader data");
@@ -370,16 +406,27 @@ function CleanupUserReaderDataModal({ user, onClose, onDone }: { user: AdminUser
       </div>
       <div>
         <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1.5">Cleanup Scope</label>
-        <select value={scope} onChange={(e) => setScope(e.target.value as ReaderDataCleanupScope)} className={inputCls}>
-          {CLEANUP_SCOPE_OPTIONS.map((opt) => (
-            <option key={opt.value} value={opt.value}>{opt.label}</option>
+        <div className="space-y-2">
+          {CLEANUP_SCOPE_OPTIONS.map((option) => (
+            <label key={option.key} className="flex items-start gap-3 rounded-lg border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-3">
+              <input
+                type="checkbox"
+                checked={scopeSelection[option.key]}
+                onChange={() => setScopeSelection((prev) => toggleCleanupSelection(prev, option.key))}
+                className="mt-0.5 h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+              />
+              <span>
+                <span className="block text-sm font-medium text-gray-900 dark:text-gray-100">{option.label}</span>
+                <span className="block text-xs text-gray-500 dark:text-gray-400">{option.description}</span>
+              </span>
+            </label>
           ))}
-        </select>
+        </div>
       </div>
       {error && <p className="text-xs text-red-600 dark:text-red-400">{error}</p>}
       <div className="flex gap-2 justify-end">
         <button type="button" onClick={onClose} className={btnGhost}>Cancel</button>
-        <button type="button" onClick={handleCleanup} disabled={loading} className={btnDanger}>
+        <button type="button" onClick={handleCleanup} disabled={loading || selectedScopeCount === 0} className={btnDanger}>
           {loading ? "Cleaning..." : "Cleanup"}
         </button>
       </div>
@@ -388,15 +435,22 @@ function CleanupUserReaderDataModal({ user, onClose, onDone }: { user: AdminUser
 }
 
 function GlobalCleanupReaderDataModal({ onClose, onDone }: { onClose: () => void; onDone: () => void }) {
-  const [scope, setScope] = useState<ReaderDataCleanupScope>("all");
+  const [scopeSelection, setScopeSelection] = useState<Record<ReaderDataCleanupScope, boolean>>(createCleanupSelection);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const selectedScopes = getSelectedCleanupScopes(scopeSelection);
+  const selectedScopeCount = selectedScopes.length;
+  const useAll = selectedScopeCount === CLEANUP_NON_ALL_KEYS.length;
 
   async function handleCleanup() {
+    if (selectedScopeCount === 0) return;
     setLoading(true);
     setError("");
     try {
-      await adminCleanupAllReaderState(scope);
+      const scopesToRun: ReaderDataCleanupScope[] = useAll ? ["all"] : selectedScopes;
+      for (const nextScope of scopesToRun) {
+        await adminCleanupAllReaderState(nextScope);
+      }
       onDone();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to cleanup reader data globally");
@@ -411,16 +465,27 @@ function GlobalCleanupReaderDataModal({ onClose, onDone }: { onClose: () => void
       </div>
       <div>
         <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1.5">Cleanup Scope</label>
-        <select value={scope} onChange={(e) => setScope(e.target.value as ReaderDataCleanupScope)} className={inputCls}>
-          {CLEANUP_SCOPE_OPTIONS.map((opt) => (
-            <option key={opt.value} value={opt.value}>{opt.label}</option>
+        <div className="space-y-2">
+          {CLEANUP_SCOPE_OPTIONS.map((option) => (
+            <label key={option.key} className="flex items-start gap-3 rounded-lg border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-3">
+              <input
+                type="checkbox"
+                checked={scopeSelection[option.key]}
+                onChange={() => setScopeSelection((prev) => toggleCleanupSelection(prev, option.key))}
+                className="mt-0.5 h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+              />
+              <span>
+                <span className="block text-sm font-medium text-gray-900 dark:text-gray-100">{option.label}</span>
+                <span className="block text-xs text-gray-500 dark:text-gray-400">{option.description}</span>
+              </span>
+            </label>
           ))}
-        </select>
+        </div>
       </div>
       {error && <p className="text-xs text-red-600 dark:text-red-400">{error}</p>}
       <div className="flex gap-2 justify-end">
         <button type="button" onClick={onClose} className={btnGhost}>Cancel</button>
-        <button type="button" onClick={handleCleanup} disabled={loading} className={btnDanger}>
+        <button type="button" onClick={handleCleanup} disabled={loading || selectedScopeCount === 0} className={btnDanger}>
           {loading ? "Cleaning..." : "Cleanup All"}
         </button>
       </div>

@@ -535,6 +535,33 @@ export default function CourseDetailPage() {
     }
   };
 
+  const handleRemoveBookmark = async (topicIndex: number) => {
+    if (readerBusy) return;
+    try {
+      await mutateViewerCourse({
+        course_id: courseId,
+        bookmark_topic_index: topicIndex,
+        bookmarked: false,
+      });
+    } catch (err) {
+      console.error("Failed to remove bookmark", err);
+    }
+  };
+
+  const handleClearAllBookmarks = async () => {
+    if (readerBusy || bookmarkedTopicIndices.size === 0) return;
+    setReaderBusy(true);
+    try {
+      await resetCourseProgress(courseId, ["bookmarks"]);
+      setViewerCourseState((prev) => ({ ...prev, bookmarks: [] }));
+      setBookmarkedTopicIndices(new Set<number>());
+    } catch (err) {
+      console.error("Failed to clear bookmarks", err);
+    } finally {
+      setReaderBusy(false);
+    }
+  };
+
   const getTopicNotesFromState = (state: CourseViewerSettings | null, topicIndex: number): ViewerTopicNote[] => {
     const rows = state?.topic_notes?.[String(topicIndex)];
     return Array.isArray(rows) ? rows : [];
@@ -1224,6 +1251,15 @@ export default function CourseDetailPage() {
                     {readerPanelMode === "highlightNotes" && "Highlights+Notes"}
                   </h2>
                   <div className="flex items-center gap-2">
+                    {readerPanelMode === "bookmarks" && (
+                      <button
+                        onClick={() => void handleClearAllBookmarks()}
+                        disabled={readerBusy || bookmarkedTopicIndices.size === 0}
+                        className="inline-flex items-center px-2 py-1 text-[11px] rounded border border-red-300 dark:border-red-700 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 disabled:opacity-45 disabled:cursor-not-allowed cursor-pointer"
+                      >
+                        Delete All
+                      </button>
+                    )}
                     {readerPanelMode === "highlightNotes" && (
                       <>
                         <button
@@ -1265,9 +1301,19 @@ export default function CourseDetailPage() {
                               : "#";
                             return (
                               <li key={topicIndex} className="rounded-lg border border-gray-200 dark:border-gray-800 p-3 bg-gray-50/70 dark:bg-gray-900/40">
-                                <a href={href} className="text-sm font-medium text-indigo-600 dark:text-indigo-300 hover:underline">
-                                  {topicMeta?.title ?? `Topic ${topicIndex + 1}`}
-                                </a>
+                                <div className="flex items-start justify-between gap-3">
+                                  <a href={href} className="text-sm font-medium text-indigo-600 dark:text-indigo-300 hover:underline">
+                                    {topicMeta?.title ?? `Topic ${topicIndex + 1}`}
+                                  </a>
+                                  <button
+                                    type="button"
+                                    onClick={() => void handleRemoveBookmark(topicIndex)}
+                                    disabled={readerBusy}
+                                    className="text-xs text-red-600 dark:text-red-400 hover:underline disabled:opacity-45 disabled:cursor-not-allowed cursor-pointer"
+                                  >
+                                    Delete
+                                  </button>
+                                </div>
                                 <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">Topic #{topicIndex + 1}</p>
                               </li>
                             );
