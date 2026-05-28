@@ -161,6 +161,7 @@ type ViewerHistoryEntry = {
   undo: ViewerHistoryCommand[];
   redo: ViewerHistoryCommand[];
 };
+const DRAWER_ANIM_MS = 220;
 
 const HIGHLIGHT_COLORS: ReadonlyArray<HighlightColor> = [
   "yellow",
@@ -259,9 +260,22 @@ export default function TopicLayoutClient({
   const [tocDrawerOpen, setTocDrawerOpen] = useState(false);
   const [highlightDrawerOpen, setHighlightDrawerOpen] = useState(false);
   const [drawingPadOpen, setDrawingPadOpen] = useState(false);
+  const [tocDrawerMounted, setTocDrawerMounted] = useState(false);
+  const [tocDrawerVisible, setTocDrawerVisible] = useState(false);
+  const [highlightDrawerMounted, setHighlightDrawerMounted] = useState(false);
+  const [highlightDrawerVisible, setHighlightDrawerVisible] = useState(false);
+  const [drawingPanelEverOpened, setDrawingPanelEverOpened] = useState(false);
+  const [drawingPanelVisible, setDrawingPanelVisible] = useState(false);
+  const [drawingPanelWidth, setDrawingPanelWidth] = useState(560);
+  const [desktopSidebarCollapsed, setDesktopSidebarCollapsed] = useState(false);
   const [headings, setHeadings] = useState<{ idx: number; text: string; level: number }[]>([]);
   const [activeHeadingIdx, setActiveHeadingIdx] = useState<number>(0);
   const contentRef = useRef<HTMLDivElement>(null);
+  const drawingResizeStateRef = useRef<{ active: boolean; startX: number; startWidth: number }>({
+    active: false,
+    startX: 0,
+    startWidth: 560,
+  });
 
   const [currentTopic, setCurrentTopic] = useState<TopicDetail>(topic);
   const [topicChanging, setTopicChanging] = useState(false);
@@ -2000,6 +2014,7 @@ export default function TopicLayoutClient({
     setDrawerOpen(false);
     setTocDrawerOpen(false);
     setHighlightDrawerOpen(false);
+    setDesktopSidebarCollapsed(true);
     setDrawingPadOpen(true);
   }, [drawingsEnabled]);
 
@@ -2042,6 +2057,87 @@ export default function TopicLayoutClient({
       setDrawingPadOpen(false);
     }
   }, [drawingsEnabled, drawingPadOpen]);
+
+  useEffect(() => {
+    if (tocDrawerOpen) {
+      setTocDrawerMounted(true);
+      setTocDrawerVisible(false);
+      const timeoutId = window.setTimeout(() => setTocDrawerVisible(true), 18);
+      return () => window.clearTimeout(timeoutId);
+    }
+    setTocDrawerVisible(false);
+    const timeoutId = window.setTimeout(() => setTocDrawerMounted(false), DRAWER_ANIM_MS);
+    return () => window.clearTimeout(timeoutId);
+  }, [tocDrawerOpen]);
+
+  useEffect(() => {
+    if (highlightDrawerOpen) {
+      setHighlightDrawerMounted(true);
+      setHighlightDrawerVisible(false);
+      const timeoutId = window.setTimeout(() => setHighlightDrawerVisible(true), 18);
+      return () => window.clearTimeout(timeoutId);
+    }
+    setHighlightDrawerVisible(false);
+    const timeoutId = window.setTimeout(() => setHighlightDrawerMounted(false), DRAWER_ANIM_MS);
+    return () => window.clearTimeout(timeoutId);
+  }, [highlightDrawerOpen]);
+
+  useEffect(() => {
+    if (drawingPadOpen) {
+      setDrawingPanelEverOpened(true);
+      setDrawingPanelVisible(false);
+      const timeoutId = window.setTimeout(() => setDrawingPanelVisible(true), 18);
+      return () => window.clearTimeout(timeoutId);
+    }
+    setDrawingPanelVisible(false);
+  }, [drawingPadOpen]);
+
+  const clampDrawingPanelWidth = useCallback((next: number) => {
+    if (typeof window === "undefined") return 560;
+    const max = Math.max(320, window.innerWidth - 24);
+    const min = Math.min(360, max);
+    return Math.max(min, Math.min(next, max));
+  }, []);
+
+  useEffect(() => {
+    if (!drawingPadOpen) return;
+    setDrawingPanelWidth((prev) => clampDrawingPanelWidth(prev));
+    const onResize = () => {
+      setDrawingPanelWidth((prev) => clampDrawingPanelWidth(prev));
+    };
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, [clampDrawingPanelWidth, drawingPadOpen]);
+
+  useEffect(() => {
+    const onPointerMove = (e: PointerEvent) => {
+      const state = drawingResizeStateRef.current;
+      if (!state.active) return;
+      const delta = state.startX - e.clientX;
+      setDrawingPanelWidth(clampDrawingPanelWidth(state.startWidth + delta));
+    };
+    const onPointerUp = () => {
+      drawingResizeStateRef.current.active = false;
+    };
+    window.addEventListener("pointermove", onPointerMove);
+    window.addEventListener("pointerup", onPointerUp);
+    return () => {
+      window.removeEventListener("pointermove", onPointerMove);
+      window.removeEventListener("pointerup", onPointerUp);
+    };
+  }, [clampDrawingPanelWidth]);
+
+  const handleStartDrawingResize = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    drawingResizeStateRef.current = {
+      active: true,
+      startX: e.clientX,
+      startWidth: drawingPanelWidth,
+    };
+  }, [drawingPanelWidth]);
+  const contentShiftStyle = drawingPadOpen
+    ? { marginRight: `${drawingPanelWidth}px` }
+    : undefined;
 
   // Track reading progress bar.
   useEffect(() => {
@@ -2158,12 +2254,17 @@ export default function TopicLayoutClient({
             completedTopicIndices={completed}
             bookmarkedTopicIndices={bookmarked}
             fromPath={validFromPath}
+            isCollapsed={desktopSidebarCollapsed}
+            onToggleCollapsed={() => setDesktopSidebarCollapsed((prev) => !prev)}
             onTopicClick={(href, destIdx) => handleTopicNav(href, destIdx)}
           />
         )}
 
         {/* Main content — natural page scroll */}
-        <main className="flex-1 min-w-0">
+        <main
+          className="flex-1 min-w-0 transition-[margin-right] duration-200"
+          style={contentShiftStyle}
+        >
 
           {/* Estimated Reading Time */}
           <div className="max-w-6xl mx-auto px-6 pt-8 pb-2">
@@ -2330,10 +2431,13 @@ export default function TopicLayoutClient({
       )}
 
       {/* Slide-out TOC Drawer */}
-      {tocDrawerOpen && (
-        <div className="fixed inset-x-0 bottom-0 top-14 z-40">
-          <div className="absolute inset-0 bg-black/40" onClick={() => setTocDrawerOpen(false)} />
-          <div className="absolute right-0 top-0 bottom-0 w-80 bg-white dark:bg-gray-900 border-l border-gray-200 dark:border-gray-800 shadow-2xl flex flex-col">
+      {tocDrawerMounted && (
+        <div className={`fixed inset-x-0 bottom-0 top-14 z-40 transition-opacity duration-200 ${tocDrawerVisible ? "pointer-events-auto" : "pointer-events-none"}`}>
+          <div
+            className={`absolute inset-0 bg-black/40 transition-opacity duration-200 ${tocDrawerVisible ? "opacity-100" : "opacity-0"}`}
+            onClick={() => setTocDrawerOpen(false)}
+          />
+          <div className={`absolute right-0 top-0 bottom-0 w-80 bg-white dark:bg-gray-900 border-l border-gray-200 dark:border-gray-800 shadow-2xl flex flex-col transform-gpu will-change-transform transition-transform duration-300 ease-out ${tocDrawerVisible ? "translate-x-0" : "translate-x-full"}`}>
             <div className="flex items-center justify-between px-6 py-5 border-b border-gray-200 dark:border-gray-800 shrink-0">
               <h2 className="text-sm font-bold text-gray-900 dark:text-gray-100 uppercase tracking-wider">On this page</h2>
               <button onClick={() => setTocDrawerOpen(false)} className="p-1 text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 cursor-pointer">
@@ -2413,10 +2517,13 @@ export default function TopicLayoutClient({
         </div>
       )}
 
-      {notesDrawerEnabled && highlightDrawerOpen && (
-        <div className="fixed inset-x-0 bottom-0 top-14 z-40">
-          <div className="absolute inset-0 bg-black/40" onClick={() => setHighlightDrawerOpen(false)} />
-          <div className="absolute right-0 top-0 bottom-0 w-[24rem] bg-white dark:bg-gray-900 border-l border-gray-200 dark:border-gray-800 shadow-2xl flex flex-col">
+      {notesDrawerEnabled && highlightDrawerMounted && (
+        <div className={`fixed inset-x-0 bottom-0 top-14 z-40 transition-opacity duration-200 ${highlightDrawerVisible ? "pointer-events-auto" : "pointer-events-none"}`}>
+          <div
+            className={`absolute inset-0 bg-black/40 transition-opacity duration-200 ${highlightDrawerVisible ? "opacity-100" : "opacity-0"}`}
+            onClick={() => setHighlightDrawerOpen(false)}
+          />
+          <div className={`absolute right-0 top-0 bottom-0 w-[24rem] bg-white dark:bg-gray-900 border-l border-gray-200 dark:border-gray-800 shadow-2xl flex flex-col transform-gpu will-change-transform transition-transform duration-300 ease-out ${highlightDrawerVisible ? "translate-x-0" : "translate-x-full"}`}>
             <div className="flex items-center justify-between px-6 py-5 border-b border-gray-200 dark:border-gray-800 shrink-0">
               <h2 className="text-sm font-bold text-gray-900 dark:text-gray-100 uppercase tracking-wider">
                 {highlightsEnabled ? "Highlights & Notes" : "Notes"}
@@ -2687,14 +2794,28 @@ export default function TopicLayoutClient({
         </div>
       )}
 
-      {drawingsEnabled && drawingPadOpen && (
-        <TopicDrawingPad
-          topicTitle={currentTopic.topic_name}
-          initialScene={currentTopicDrawing?.scene ?? null}
-          saveBusy={drawingSaveBusy}
-          onSave={handleSaveDrawingScene}
-          onClose={handleCloseDrawingPad}
-        />
+      {drawingsEnabled && drawingPanelEverOpened && (
+        <div
+          className={`fixed right-0 top-14 bottom-0 z-50 border-l border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-950 shadow-2xl transform-gpu will-change-transform transition-all duration-300 ease-out ${drawingPanelVisible ? "translate-x-0 opacity-100 pointer-events-auto" : "translate-x-full opacity-95 pointer-events-none"}`}
+          style={{ width: `${drawingPanelWidth}px` }}
+        >
+          <div
+            role="separator"
+            aria-orientation="vertical"
+            aria-label="Resize drawing panel"
+            onPointerDown={handleStartDrawingResize}
+            className="absolute left-0 top-0 h-full w-2 -translate-x-1/2 cursor-col-resize bg-transparent z-10"
+          >
+            <div className="mx-auto mt-8 h-12 w-1 rounded-full bg-gray-300 dark:bg-gray-700" />
+          </div>
+          <TopicDrawingPad
+            topicTitle={currentTopic.topic_name}
+            initialScene={currentTopicDrawing?.scene ?? null}
+            saveBusy={drawingSaveBusy}
+            onSave={handleSaveDrawingScene}
+            onClose={handleCloseDrawingPad}
+          />
+        </div>
       )}
 
       {highlightsEnabled && selectionAction.visible && selectedText && selectedOffsetsRef.current && (

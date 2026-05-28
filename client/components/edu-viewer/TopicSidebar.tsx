@@ -29,6 +29,10 @@ interface TopicSidebarProps {
     completedTopicIndices?: Set<number>;
     bookmarkedTopicIndices?: Set<number>;
     asideClassName?: string;
+    /** Controlled collapsed state (desktop only usage). */
+    isCollapsed?: boolean;
+    /** Controlled collapse toggle handler. */
+    onToggleCollapsed?: () => void;
     onClose?: () => void;
     /** When provided, clicks on topic links are intercepted for in-page navigation */
     onTopicClick?: (href: string, topicIndex: number) => void;
@@ -44,6 +48,8 @@ export default function TopicSidebar({
     completedTopicIndices,
     bookmarkedTopicIndices,
     asideClassName,
+    isCollapsed: controlledCollapsed,
+    onToggleCollapsed,
     onClose,
     onTopicClick,
 }: TopicSidebarProps) {
@@ -56,7 +62,8 @@ export default function TopicSidebar({
         return validFromPath ? `${base}?from=${encodeURIComponent(validFromPath)}` : base;
     };
 
-    const [isCollapsed, setIsCollapsed] = useState(false);
+    const [localCollapsed, setLocalCollapsed] = useState(false);
+    const isCollapsed = typeof controlledCollapsed === "boolean" ? controlledCollapsed : localCollapsed;
     const [q, setQ] = useState("");
     const normalizedQ = q.trim().toLowerCase();
 
@@ -92,7 +99,13 @@ export default function TopicSidebar({
             
             {/* Toggle Button on the border line */}
             <button 
-                onClick={() => setIsCollapsed(!isCollapsed)}
+                onClick={() => {
+                    if (onToggleCollapsed) {
+                        onToggleCollapsed();
+                        return;
+                    }
+                    setLocalCollapsed(!isCollapsed);
+                }}
                 className="absolute top-1/2 -right-3.5 w-7 h-7 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-full flex items-center justify-center shadow-sm z-50 text-gray-500 hover:text-indigo-600 cursor-pointer transform -translate-y-1/2 hidden lg:flex"
             >
                 {isCollapsed ? (

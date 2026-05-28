@@ -241,7 +241,7 @@ export default function TopicDrawingPad({
   const busy = saveBusy || localSaveBusy;
 
   return (
-    <div className="fixed inset-0 z-50 bg-white dark:bg-gray-950 flex flex-col">
+    <div className="h-full bg-white dark:bg-gray-950 flex flex-col">
       <div className="h-14 px-4 border-b border-gray-200 dark:border-gray-800 bg-white/95 dark:bg-gray-950/95 backdrop-blur flex items-center justify-between gap-3">
         <div className="min-w-0">
           <p className="text-sm font-semibold text-gray-900 dark:text-gray-100 truncate">
@@ -283,7 +283,7 @@ export default function TopicDrawingPad({
       )}
 
       {confirmCloseOpen && (
-        <div className="fixed inset-0 z-[70] bg-black/45 flex items-center justify-center px-4">
+        <div className="absolute inset-0 z-[70] bg-black/45 flex items-center justify-center px-4">
           <div className="w-full max-w-sm rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 shadow-2xl p-4">
             <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">
               Unsaved changes
