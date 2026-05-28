@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
-import { useHandleLibrary } from "@excalidraw/excalidraw";
 import type {
   ExcalidrawImperativeAPI,
   ExcalidrawInitialDataState,
@@ -11,6 +10,10 @@ import type { ViewerDrawingScene } from "@/utils/authClient";
 
 const Excalidraw = dynamic(
   async () => (await import("@excalidraw/excalidraw")).Excalidraw,
+  { ssr: false }
+);
+const ExcalidrawLibraryHandler = dynamic(
+  async () => (await import("./ExcalidrawLibraryHandler")).default,
   { ssr: false }
 );
 
@@ -151,11 +154,6 @@ export default function TopicDrawingPad({
     if (typeof window === "undefined") return undefined;
     return `${window.location.origin}${window.location.pathname}${window.location.search}`;
   }, []);
-
-  // Official handler for `#addLibrary=...&token=...` return flow.
-  useHandleLibrary({
-    excalidrawAPI: api,
-  });
 
   const initialData = useMemo<ExcalidrawInitialDataState | undefined>(() => {
     const rawAppState =
@@ -299,6 +297,7 @@ export default function TopicDrawingPad({
 
   return (
     <div className="h-full bg-white dark:bg-gray-950 flex flex-col">
+      <ExcalidrawLibraryHandler excalidrawAPI={api} />
       <div className="h-14 px-4 border-b border-gray-200 dark:border-gray-800 bg-white/95 dark:bg-gray-950/95 backdrop-blur flex items-center justify-between gap-3">
         <div className="min-w-0">
           <p className="text-sm font-semibold text-gray-900 dark:text-gray-100 truncate">
