@@ -54,7 +54,10 @@ export default async function RootLayout({
       className={theme === "dark" ? "dark" : ""}
       suppressHydrationWarning
     >
-      <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
+      <body
+        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
+        suppressHydrationWarning
+      >
         <script id="ev-runtime-config" dangerouslySetInnerHTML={{ __html: runtimeConfigScript }} />
         <AuthFlowGuard />
         <NavigationEvents />

@@ -21,12 +21,8 @@ export function readSavedTheme(): "dark" | "light" | null {
 
 export default function DarkModeToggle() {
   const { user } = useAuth();
-  const [isDark, setIsDark] = useState(() => {
-    if (typeof document !== "undefined") {
-      return document.documentElement.classList.contains("dark");
-    }
-    return false;
-  });
+  // Keep first render deterministic for SSR hydration; sync actual DOM theme after mount.
+  const [isDark, setIsDark] = useState(false);
 
   const syncFromDom = () => {
     const domDark = document.documentElement.classList.contains("dark");
