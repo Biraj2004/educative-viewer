@@ -259,7 +259,6 @@ export interface ViewerDrawingNote {
 }
 
 export interface CourseViewerSettings {
-  last_topic_index?: number;
   last_highlight_color?: "yellow" | "blue" | "green" | "pink" | "orange";
   bookmarks?: number[];
   highlights?: Record<string, ViewerHighlight[]>;
@@ -542,10 +541,20 @@ export async function recordTopicVisit(
   });
 }
 
-export async function resetCourseProgress(courseId: number): Promise<void> {
+export type CourseResetScope = "progress" | "bookmarks" | "highlights" | "notes" | "drawing";
+
+export async function resetCourseProgress(
+  courseId: number,
+  scopes: CourseResetScope[] = ["progress"],
+): Promise<void> {
+  const allowed: CourseResetScope[] = ["progress", "bookmarks", "highlights", "notes", "drawing"];
+  const normalizedScopes = Array.from(new Set(scopes)).filter(
+    (scope): scope is CourseResetScope => allowed.includes(scope),
+  );
+  if (normalizedScopes.length === 0) return;
   await apiFetch(`${getAPI()}/progress/course`, {
     method: "DELETE",
-    body: JSON.stringify({ course_id: courseId }),
+    body: JSON.stringify({ course_id: courseId, scopes: normalizedScopes }),
   });
 }
 
@@ -642,7 +651,6 @@ export async function getViewerCourseSettings(
 
 export interface UpdateViewerCourseSettingsPayload {
   course_id: number;
-  last_topic_index?: number;
   last_highlight_color?: "yellow" | "blue" | "green" | "pink" | "orange";
   bookmark_topic_index?: number;
   bookmarked?: boolean;
@@ -709,64 +717,29 @@ export async function updateViewerCourseSettings(
   const token = getAuthToken();
   if (!token) return null;
   const includeCourse = options?.includeCourse !== false;
-  const payloadKeys = Object.keys(payload);
-  const isOnlyLastTopicUpdate = payloadKeys.length === 2
-    && payloadKeys.includes("course_id")
-    && payloadKeys.includes("last_topic_index");
-  const lastTopicIndex = typeof payload.last_topic_index === "number"
-    ? payload.last_topic_index
-    : undefined;
-  const syncKey = isOnlyLastTopicUpdate && lastTopicIndex !== undefined
-    ? `last-topic:${payload.course_id}`
-    : null;
-  if (syncKey && typeof window !== "undefined" && lastTopicIndex !== undefined) {
-    const inflightMap = (window as Window & { __evLastTopicSyncInflight?: Record<string, number> }).__evLastTopicSyncInflight ?? {};
-    if (inflightMap[syncKey] === lastTopicIndex) {
-      return null;
-    }
-    const syncedMap = (window as Window & { __evLastTopicSynced?: Record<string, number> }).__evLastTopicSynced ?? {};
-    if (syncedMap[syncKey] === lastTopicIndex) {
-      return null;
-    }
-    inflightMap[syncKey] = lastTopicIndex;
-    (window as Window & { __evLastTopicSyncInflight?: Record<string, number> }).__evLastTopicSyncInflight = inflightMap;
-  }
-  try {
-    const res = await fetch(
-      `${getAPI()}/reader-state/course?include_course=${includeCourse ? "1" : "0"}`,
-      {
+  const res = await fetch(
+    `${getAPI()}/reader-state/course?include_course=${includeCourse ? "1" : "0"}`,
+    {
       method: "PUT",
       headers: {
         "Content-Type": "application/json",
         Authorization: `Bearer ${token}`,
       },
       body: JSON.stringify(payload),
-      },
-    );
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) {
-      if (res.status === 401) {
-        await _handleUnauthorized();
-      }
-      if (res.status === 403) {
-        await _handleForbidden(data?.error ?? data?.message);
-      }
-      throw new ApiError(data?.error ?? `Request failed (${res.status})`, res.status);
+    },
+  );
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    if (res.status === 401) {
+      await _handleUnauthorized();
     }
-    if (syncKey && lastTopicIndex !== undefined && typeof window !== "undefined") {
-      const syncedMap = (window as Window & { __evLastTopicSynced?: Record<string, number> }).__evLastTopicSynced ?? {};
-      syncedMap[syncKey] = lastTopicIndex;
-      (window as Window & { __evLastTopicSynced?: Record<string, number> }).__evLastTopicSynced = syncedMap;
+    if (res.status === 403) {
+      await _handleForbidden(data?.error ?? data?.message);
     }
-    if (!includeCourse) return null;
-    return (data?.course as CourseViewerSettings) ?? null;
-  } finally {
-    if (syncKey && typeof window !== "undefined") {
-      const inflightMap = (window as Window & { __evLastTopicSyncInflight?: Record<string, number> }).__evLastTopicSyncInflight ?? {};
-      delete inflightMap[syncKey];
-      (window as Window & { __evLastTopicSyncInflight?: Record<string, number> }).__evLastTopicSyncInflight = inflightMap;
-    }
+    throw new ApiError(data?.error ?? `Request failed (${res.status})`, res.status);
   }
+  if (!includeCourse) return null;
+  return (data?.course as CourseViewerSettings) ?? null;
 }
 
 // ─── Internal helper ──────────────────────────────────────────────────────────

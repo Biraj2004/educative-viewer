@@ -29,6 +29,10 @@ function safeFromPath(path: string | null): string | null {
   return path;
 }
 
+function getLastVisitedStorageKey(courseId: number): string {
+  return `ev:last-visited-topic:${courseId}`;
+}
+
 interface Component {
   type: string;
   content: Record<string, unknown>;
@@ -107,7 +111,8 @@ export default function TopicDetailPage() {
   const [missing, setMissing] = useState(false);
 
   useEffect(() => {
-    if (isNaN(courseId) || isNaN(topicIdx)) { setMissing(true); setLoading(false); return; } // eslint-disable-line
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (isNaN(courseId) || isNaN(topicIdx)) { setMissing(true); setLoading(false); return; }
     let cancelled = false;
     const basePath = `/dashboard/courses/${routeId}/${routeSlug}/topics/${routeTopicIndex}/${routeTopicSlug}`;
     const nextPath = fromPath ? `${basePath}?from=${encodeURIComponent(fromPath)}` : basePath;
@@ -216,6 +221,17 @@ export default function TopicDetailPage() {
       cancelled = true;
     };
   }, [courseId, topicIdx, routeId, routeSlug, routeTopicIndex, routeTopicSlug, router, fromPath]);
+
+  useEffect(() => {
+    if (isNaN(courseId) || isNaN(topicIdx)) return;
+    if (typeof window !== "undefined") {
+      try {
+        window.localStorage.setItem(getLastVisitedStorageKey(courseId), String(topicIdx));
+      } catch {
+        // ignore storage errors
+      }
+    }
+  }, [courseId, topicIdx]);
 
   if (loading) {
     return (

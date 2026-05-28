@@ -35,6 +35,7 @@ MAX_COURSE_NOTES_PER_COURSE = 300
 MAX_COURSE_NOTE_TEXT_LEN = 1200
 MAX_DRAWING_SCENE_JSON_LEN = 1_500_000
 ALLOWED_HIGHLIGHT_COLORS: set[str] = {"yellow", "blue", "green", "pink", "orange"}
+RESET_SCOPES: set[str] = {"progress", "bookmarks", "highlights", "notes", "drawing"}
 
 
 def _normalize_highlight_color(value: Any) -> str:
@@ -370,8 +371,6 @@ def _normalize_course_reader_state(raw_course_state: Any) -> dict[str, Any]:
     drawing_note = _clean_drawing_note(raw_course_state.get("drawing_note"))
     if drawing_note is not None:
         normalized_course_state["drawing_note"] = drawing_note
-    if "last_topic_index" in raw_course_state:
-        normalized_course_state["last_topic_index"] = _coerce_non_negative_int(raw_course_state.get("last_topic_index"))
     if "last_highlight_color" in raw_course_state:
         normalized_course_state["last_highlight_color"] = _normalize_highlight_color(
             raw_course_state.get("last_highlight_color")
@@ -930,8 +929,6 @@ def create_auth_blueprint(auth_service: AuthService, db_manager: DBManager) -> B
             course_notes = _clean_course_notes_list(course_state.get("course_notes"))
             drawing_note = _clean_drawing_note(course_state.get("drawing_note"))
 
-            if "last_topic_index" in body:
-                course_state["last_topic_index"] = _to_int(body.get("last_topic_index"), "last_topic_index")
             if "last_highlight_color" in body:
                 course_state["last_highlight_color"] = _normalize_highlight_color(body.get("last_highlight_color"))
 
@@ -1421,19 +1418,61 @@ def create_auth_blueprint(auth_service: AuthService, db_manager: DBManager) -> B
         course_id = data.get("course_id")
         if course_id is None:
             abort(400, description="course_id is required")
+        course_id_int = _to_int(course_id, "course_id")
+        raw_scopes = data.get("scopes")
+        if raw_scopes is None:
+            scopes = {"progress"}
+        else:
+            if not isinstance(raw_scopes, list):
+                abort(400, description="scopes must be an array")
+            scopes = {
+                str(scope).strip().lower()
+                for scope in raw_scopes
+                if str(scope).strip()
+            }
+            if not scopes:
+                abort(400, description="At least one reset scope is required")
+            invalid_scopes = [scope for scope in scopes if scope not in RESET_SCOPES]
+            if invalid_scopes:
+                abort(400, description=f"Unsupported reset scope(s): {', '.join(invalid_scopes)}")
+        now_iso = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
 
         conn = db_manager.get_auth_connection()
         try:
-            execute(
-                conn,
-                "DELETE FROM user_progress WHERE user_id = :user_id AND course_id = :course_id",
-                {"user_id": user["id"], "course_id": int(course_id)},
-            )
+            user_id_int = int(user["id"])
+            if "progress" in scopes:
+                execute(
+                    conn,
+                    "DELETE FROM user_progress WHERE user_id = :user_id AND course_id = :course_id",
+                    {"user_id": user_id_int, "course_id": course_id_int},
+                )
+
+            if {"bookmarks", "highlights", "notes", "drawing"} & scopes:
+                course_state = _fetch_course_reader_state(conn, user_id_int, course_id_int)
+                if isinstance(course_state, dict) and course_state:
+                    if "bookmarks" in scopes:
+                        course_state["bookmarks"] = []
+                    if "highlights" in scopes:
+                        course_state["highlights"] = {}
+                    if "notes" in scopes:
+                        course_state["topic_notes"] = {}
+                        course_state["course_notes"] = []
+                    if "drawing" in scopes:
+                        course_state.pop("drawing_note", None)
+
+                    _upsert_course_reader_state(
+                        conn=conn,
+                        user_id=user_id_int,
+                        course_id=course_id_int,
+                        state=course_state,
+                        now_iso=now_iso,
+                        is_integrity_error=db_manager.auth_backend.is_integrity_error,
+                    )
             conn.commit()
         finally:
             conn.close()
 
-        return jsonify({"ok": True, "message": "Course progress has been reset"}), 200
+        return jsonify({"ok": True, "scopes": sorted(scopes)}), 200
 
     @bp.route("/signup/rollback", methods=["POST"])
     def auth_signup_rollback():

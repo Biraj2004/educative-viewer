@@ -17,6 +17,7 @@ import {
   updateViewerCourseSettings,
 } from "@/utils/authClient";
 import type {
+  CourseResetScope,
   ProgressData,
   CourseViewerSettings,
   ViewerCourseNote,
@@ -37,8 +38,40 @@ function safeFromPath(path: string | null): string | null {
   return path;
 }
 
+function getLastVisitedStorageKey(courseId: number): string {
+  return `ev:last-visited-topic:${courseId}`;
+}
+
+function readLastVisitedTopicFromStorage(courseId: number): number | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.localStorage.getItem(getLastVisitedStorageKey(courseId));
+    if (raw == null || raw.trim() === "") return null;
+    const parsed = Number(raw);
+    return Number.isFinite(parsed) && parsed >= 0 ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+function clearLastVisitedTopicFromStorage(courseId: number): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.removeItem(getLastVisitedStorageKey(courseId));
+  } catch {
+    // ignore storage errors
+  }
+}
+
 type ReaderPanelMode = "bookmarks" | "highlightNotes" | "drawing";
 const READER_PANEL_ANIM_MS = 220;
+const RESET_SCOPE_OPTIONS: Array<{ key: CourseResetScope; label: string; description: string }> = [
+  { key: "progress", label: "Progress", description: "Completed topics and course progress." },
+  { key: "bookmarks", label: "Bookmarks", description: "All bookmarks saved in this course." },
+  { key: "highlights", label: "Highlights", description: "All highlighted text and attached notes." },
+  { key: "notes", label: "Notes", description: "Topic notes and course-level notes." },
+  { key: "drawing", label: "Drawing Board", description: "Saved drawing board canvas for this course." },
+];
 
 type NoteHistoryEntry = {
   undo: () => Promise<boolean>;
@@ -111,7 +144,14 @@ export default function CourseDetailPage() {
   const [loading, setLoading] = useState(true);
   const [missing, setMissing] = useState(false);
   const [resetting, setResetting] = useState(false);
-  const [showConfirmReset, setShowConfirmReset] = useState(false);
+  const [showResetDialog, setShowResetDialog] = useState(false);
+  const [resetScopeSelection, setResetScopeSelection] = useState<Record<CourseResetScope, boolean>>({
+    progress: true,
+    bookmarks: true,
+    highlights: true,
+    notes: true,
+    drawing: true,
+  });
   const panelCloseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const readerResizeStateRef = useRef<{ active: boolean; startX: number; startWidth: number }>({
     active: false,
@@ -175,12 +215,7 @@ export default function CourseDetailPage() {
             setDrawingsEnabled(viewerCoursePayload.features.drawings_enabled !== false);
             setSearchEnabled(viewerCoursePayload.features.search_enabled !== false);
             setViewerCourseState(viewerCourse && typeof viewerCourse === "object" ? viewerCourse : {});
-            const rawLastVisited = viewerCourse?.last_topic_index;
-            setLastVisitedTopicIndex(
-              typeof rawLastVisited === "number" && Number.isFinite(rawLastVisited)
-                ? rawLastVisited
-                : null
-            );
+            setLastVisitedTopicIndex(readLastVisitedTopicFromStorage(courseId));
             const rawBookmarks = viewerCourse?.bookmarks;
             setBookmarkedTopicIndices(
               new Set(
@@ -324,12 +359,7 @@ export default function CourseDetailPage() {
           : []
       )
     );
-    const rawLastVisited = safe.last_topic_index;
-    setLastVisitedTopicIndex(
-      typeof rawLastVisited === "number" && Number.isFinite(rawLastVisited)
-        ? rawLastVisited
-        : null
-    );
+    setLastVisitedTopicIndex(readLastVisitedTopicFromStorage(courseId));
   };
 
   const mutateViewerCourse = async (payload: Parameters<typeof updateViewerCourseSettings>[0]) => {
@@ -377,24 +407,61 @@ export default function CourseDetailPage() {
   };
 
   const handleResetProgress = async () => {
-    if (!showConfirmReset) {
-      setShowConfirmReset(true);
-      return;
-    }
-    
+    const selectedScopes = RESET_SCOPE_OPTIONS
+      .filter(({ key }) => resetScopeSelection[key])
+      .map(({ key }) => key);
+    if (selectedScopes.length === 0) return;
     setResetting(true);
     try {
-      await resetCourseProgress(courseId);
-      setProgress(p => {
-        const next = { ...p.completed };
-        delete next[String(courseId)];
-        return { ...p, completed: next };
-      });
+      await resetCourseProgress(courseId, selectedScopes);
+      if (selectedScopes.includes("progress")) {
+        setProgress(p => {
+          const next = { ...p.completed };
+          delete next[String(courseId)];
+          return { ...p, completed: next };
+        });
+        setLastVisitedTopicIndex(null);
+        clearLastVisitedTopicFromStorage(courseId);
+      }
+      if (selectedScopes.some((scope) => ["bookmarks", "highlights", "notes", "drawing"].includes(scope))) {
+        setViewerCourseState((prev) => {
+          const next = { ...(prev ?? {}) };
+          if (selectedScopes.includes("bookmarks")) next.bookmarks = [];
+          if (selectedScopes.includes("highlights")) next.highlights = {};
+          if (selectedScopes.includes("notes")) {
+            next.topic_notes = {};
+            next.course_notes = [];
+          }
+          if (selectedScopes.includes("drawing")) delete next.drawing_note;
+          return next;
+        });
+      }
+      if (selectedScopes.includes("bookmarks")) {
+        setBookmarkedTopicIndices(new Set<number>());
+      }
+      if (selectedScopes.includes("notes")) {
+        setCourseAddOpen(false);
+        setCourseAddDraft("");
+        setTopicAddOpenByTopic({});
+        setTopicAddDraftByTopic({});
+        setTopicNoteDrafts({});
+        setTopicNoteEditOpen({});
+        setCourseNoteDrafts({});
+        setCourseNoteEditOpen({});
+      }
+      if (selectedScopes.includes("highlights")) {
+        setHighlightNoteDrafts({});
+        setHighlightNoteEditOpen({});
+      }
+      if (selectedScopes.includes("notes") || selectedScopes.includes("highlights")) {
+        setNoteUndoStack([]);
+        setNoteRedoStack([]);
+      }
+      setShowResetDialog(false);
     } catch (err) {
       console.error("Failed to reset progress", err);
     } finally {
       setResetting(false);
-      setShowConfirmReset(false);
     }
   };
 
@@ -435,7 +502,7 @@ export default function CourseDetailPage() {
   const handleSaveCourseDrawing = async (scene: ViewerDrawingScene) => {
     setCourseDrawingSaveBusy(true);
     try {
-      const next = await updateViewerCourseSettings({
+      await updateViewerCourseSettings({
         course_id: courseId,
         upsert_course_drawing_note: { scene },
       }, { includeCourse: false });
@@ -848,6 +915,10 @@ export default function CourseDetailPage() {
       rows: highlightRowsByKey.get(topicKey) ?? [],
     }));
   const notesDrawerEnabled = highlightsEnabled || notesEnabled;
+  const selectedResetScopeCount = RESET_SCOPE_OPTIONS.reduce(
+    (count, option) => count + (resetScopeSelection[option.key] ? 1 : 0),
+    0,
+  );
   const readerContentShiftStyle = readerPanelMounted
     ? { marginRight: `${readerPanelWidth}px` }
     : undefined;
@@ -907,37 +978,40 @@ export default function CourseDetailPage() {
                 Drawing Board
               </button>
             )}
-            {completedIds.length > 0 && (
-              <button
-                onClick={handleResetProgress}
-                disabled={resetting}
-                className={[
-                  "shrink-0 inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border text-xs font-semibold transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed",
-                  showConfirmReset
-                    ? "border-red-500 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/40"
-                    : "border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
-                ].join(" ")}
-                onMouseLeave={() => setShowConfirmReset(false)}
-              >
-                {resetting ? (
-                  <div className="w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin" />
-                ) : showConfirmReset ? (
-                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                  </svg>
-                ) : (
-                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                  </svg>
-                )}
-                {showConfirmReset ? "Confirm Reset" : "Reset progress"}
-              </button>
-            )}
+            <button
+              onClick={() => setShowResetDialog(true)}
+              disabled={resetting}
+              className="shrink-0 inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border border-red-300 dark:border-red-700 bg-red-50/70 dark:bg-red-900/20 text-xs font-semibold text-red-700 dark:text-red-300 hover:bg-red-100 dark:hover:bg-red-900/40 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {resetting ? (
+                <div className="w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin" />
+              ) : (
+                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+              )}
+              Reset Data
+            </button>
           </div>
         </div>
       </div>
       {!readerPanelMounted && (
       <div className="hidden lg:flex fixed right-0 top-1/2 -translate-y-1/2 z-40 flex-col items-end gap-1.5 transition-[margin-right] duration-200" style={readerContentShiftStyle}>
+        <button
+          onClick={() => setShowResetDialog(true)}
+          disabled={resetting}
+          className="flex flex-col items-center gap-1 bg-red-50 dark:bg-red-900/20 border border-red-300 dark:border-red-700 border-r-0 rounded-l-xl px-2 py-3 shadow-md text-red-600 dark:text-red-300 hover:bg-red-100 dark:hover:bg-red-900/35 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+          title="Reset Course Data"
+        >
+          {resetting ? (
+            <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
+          ) : (
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+          )}
+          <span className="text-[9px] font-semibold uppercase tracking-wide [writing-mode:vertical-rl] rotate-180">RESET</span>
+        </button>
         {bookmarksEnabled && (
           <button
             onClick={() => openReaderPanel("bookmarks")}
@@ -975,35 +1049,24 @@ export default function CourseDetailPage() {
             <span className="text-[9px] font-semibold uppercase tracking-wide [writing-mode:vertical-rl] rotate-180">DRAW</span>
           </button>
         )}
-        {completedIds.length > 0 && (
-          <button
-            onClick={handleResetProgress}
-            disabled={resetting}
-            onMouseLeave={() => setShowConfirmReset(false)}
-            className={[
-              "flex flex-col items-center gap-1 border border-r-0 rounded-l-xl px-2 py-3 shadow-md text-gray-500 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed",
-              showConfirmReset
-                ? "bg-red-50 dark:bg-red-900/20 border-red-500 text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/40"
-                : "bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 hover:text-red-600 dark:hover:text-red-400"
-            ].join(" ")}
-            title={showConfirmReset ? "Confirm Reset" : "Reset progress"}
-          >
-            {resetting ? (
-              <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
-            ) : (
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-              </svg>
-            )}
-            <span className="text-[9px] font-semibold uppercase tracking-wide [writing-mode:vertical-rl] rotate-180">
-              {showConfirmReset ? "CONFIRM" : "RESET"}
-            </span>
-          </button>
-        )}
       </div>
       )}
       {!readerPanelMounted && (
         <div className="lg:hidden fixed right-3 bottom-4 z-40 flex flex-col items-end gap-2">
+          <button
+            onClick={() => setShowResetDialog(true)}
+            disabled={resetting}
+            className="inline-flex items-center gap-2 px-3 py-2 rounded-full border border-red-300 dark:border-red-700 bg-red-50 dark:bg-red-900/20 shadow-md text-xs font-semibold text-red-700 dark:text-red-300 hover:bg-red-100 dark:hover:bg-red-900/35 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {resetting ? (
+              <div className="w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin" />
+            ) : (
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              </svg>
+            )}
+            <span>Reset Data</span>
+          </button>
           {bookmarksEnabled && (
             <button
               onClick={() => openReaderPanel("bookmarks")}
@@ -1038,27 +1101,6 @@ export default function CourseDetailPage() {
               <span>Draw</span>
             </button>
           )}
-          {completedIds.length > 0 && (
-            <button
-              onClick={handleResetProgress}
-              disabled={resetting}
-              className={[
-                "inline-flex items-center gap-2 px-3 py-2 rounded-full border shadow-md text-xs font-semibold transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed",
-                showConfirmReset
-                  ? "border-red-500 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/40"
-                  : "bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:text-red-600 dark:hover:text-red-400"
-              ].join(" ")}
-            >
-              <span>{showConfirmReset ? "Confirm" : "Reset"}</span>
-              {resetting ? (
-                <div className="w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin" />
-              ) : (
-                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                </svg>
-              )}
-            </button>
-          )}
         </div>
       )}
       <div className="max-w-5xl mx-auto px-6 py-8 transition-[margin-right] duration-200" style={readerContentShiftStyle}>
@@ -1073,6 +1115,78 @@ export default function CourseDetailPage() {
           searchEnabled={searchEnabled}
         />
       </div>
+
+      {showResetDialog && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center px-4">
+          <div className="absolute inset-0 bg-black/60" onClick={() => !resetting && setShowResetDialog(false)} />
+          <div className="relative w-full max-w-xl rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 shadow-2xl">
+            <div className="flex items-center justify-between gap-3 px-5 py-4 border-b border-gray-200 dark:border-gray-800">
+              <div>
+                <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">Reset Course Data</h3>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                  Choose what to clear for this course.
+                </p>
+              </div>
+              <button
+                onClick={() => setShowResetDialog(false)}
+                disabled={resetting}
+                className="p-1 text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 disabled:opacity-45 cursor-pointer"
+                aria-label="Close reset dialog"
+              >
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <div className="px-5 py-4 space-y-2">
+              {RESET_SCOPE_OPTIONS.map((option) => (
+                <label
+                  key={option.key}
+                  className="flex items-start gap-3 rounded-lg border border-gray-200 dark:border-gray-800 bg-gray-50/80 dark:bg-gray-950/50 px-3 py-2.5 cursor-pointer"
+                >
+                  <input
+                    type="checkbox"
+                    checked={resetScopeSelection[option.key]}
+                    onChange={() => {
+                      setResetScopeSelection((prev) => ({
+                        ...prev,
+                        [option.key]: !prev[option.key],
+                      }));
+                    }}
+                    className="mt-0.5 h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                  />
+                  <span>
+                    <span className="block text-sm font-medium text-gray-900 dark:text-gray-100">{option.label}</span>
+                    <span className="block text-xs text-gray-500 dark:text-gray-400">{option.description}</span>
+                  </span>
+                </label>
+              ))}
+            </div>
+            <div className="px-5 py-4 border-t border-gray-200 dark:border-gray-800 flex items-center justify-between gap-2">
+              <p className="text-xs text-gray-500 dark:text-gray-400">
+                {selectedResetScopeCount} item{selectedResetScopeCount === 1 ? "" : "s"} selected
+              </p>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setShowResetDialog(false)}
+                  disabled={resetting}
+                  className="inline-flex items-center px-3 py-1.5 rounded-md border border-gray-200 dark:border-gray-700 text-xs font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 disabled:opacity-45 cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleResetProgress}
+                  disabled={resetting || selectedResetScopeCount === 0}
+                  className="inline-flex items-center gap-2 px-3 py-1.5 rounded-md border border-red-400 dark:border-red-700 bg-red-50 dark:bg-red-900/30 text-xs font-semibold text-red-700 dark:text-red-300 hover:bg-red-100 dark:hover:bg-red-900/40 disabled:opacity-45 disabled:cursor-not-allowed cursor-pointer"
+                >
+                  {resetting && <div className="w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin" />}
+                  Reset Selected
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {readerPanelMounted && (
         <div className={`fixed inset-x-0 bottom-0 top-14 z-50 transition-opacity duration-200 ${readerPanelVisible ? "pointer-events-auto" : "pointer-events-none"}`}>
