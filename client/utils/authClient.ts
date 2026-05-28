@@ -238,6 +238,14 @@ export interface ViewerTopicNote {
   id: string;
   text: string;
   created_at?: string;
+  updated_at?: string;
+}
+
+export interface ViewerCourseNote {
+  id: string;
+  text: string;
+  created_at?: string;
+  updated_at?: string;
 }
 
 export interface ViewerDrawingScene {
@@ -257,6 +265,8 @@ export interface CourseViewerSettings {
   bookmarks?: number[];
   highlights?: Record<string, ViewerHighlight[]>;
   topic_notes?: Record<string, ViewerTopicNote[]>;
+  course_notes?: ViewerCourseNote[];
+  drawing_note?: ViewerDrawingNote;
   drawing_notes?: Record<string, ViewerDrawingNote>;
 }
 
@@ -689,13 +699,32 @@ export interface UpdateViewerCourseSettingsPayload {
     topic_index: number;
     note_id: string;
   };
+  update_topic_note?: {
+    topic_index: number;
+    note_id: string;
+    text: string;
+  };
+  add_course_note?: {
+    text: string;
+  };
+  update_course_note?: {
+    note_id: string;
+    text: string;
+  };
+  remove_course_note?: {
+    note_id: string;
+  };
   upsert_drawing_note?: {
     topic_index: number;
+    scene: ViewerDrawingScene;
+  };
+  upsert_course_drawing_note?: {
     scene: ViewerDrawingScene;
   };
   remove_drawing_note?: {
     topic_index: number;
   };
+  remove_course_drawing_note?: Record<string, never>;
   clear_highlights_topic_index?: number;
 }
 

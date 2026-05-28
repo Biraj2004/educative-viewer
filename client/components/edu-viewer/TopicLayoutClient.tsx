@@ -140,7 +140,7 @@ interface Props {
   initialBookmarked?: number[];
   initialHighlights?: Record<string, ViewerHighlight[]>;
   initialTopicNotes?: Record<string, ViewerTopicNote[]>;
-  initialDrawingNotes?: Record<string, ViewerDrawingNote>;
+  initialDrawingNote?: ViewerDrawingNote | null;
   initialHighlightColor?: HighlightColor;
   highlightsEnabled?: boolean;
   bookmarksEnabled?: boolean;
@@ -248,7 +248,7 @@ export default function TopicLayoutClient({
   initialBookmarked = [],
   initialHighlights = {},
   initialTopicNotes = {},
-  initialDrawingNotes = {},
+  initialDrawingNote = null,
   initialHighlightColor = "yellow",
   highlightsEnabled = true,
   bookmarksEnabled = true,
@@ -266,7 +266,10 @@ export default function TopicLayoutClient({
   const [highlightDrawerVisible, setHighlightDrawerVisible] = useState(false);
   const [drawingPanelEverOpened, setDrawingPanelEverOpened] = useState(false);
   const [drawingPanelVisible, setDrawingPanelVisible] = useState(false);
-  const [drawingPanelWidth, setDrawingPanelWidth] = useState(560);
+  const [drawingPanelWidth, setDrawingPanelWidth] = useState(() => {
+    if (typeof window === "undefined") return 560;
+    return Math.max(360, Math.floor(window.innerWidth * 0.5));
+  });
   const [desktopSidebarCollapsed, setDesktopSidebarCollapsed] = useState(false);
   const [headings, setHeadings] = useState<{ idx: number; text: string; level: number }[]>([]);
   const [activeHeadingIdx, setActiveHeadingIdx] = useState<number>(0);
@@ -287,8 +290,8 @@ export default function TopicLayoutClient({
   const [topicNotesByTopic, setTopicNotesByTopic] = useState<Record<string, ViewerTopicNote[]>>(
     () => initialTopicNotes
   );
-  const [drawingNotesByTopic, setDrawingNotesByTopic] = useState<Record<string, ViewerDrawingNote>>(
-    () => initialDrawingNotes
+  const [courseDrawingNote, setCourseDrawingNote] = useState<ViewerDrawingNote | null>(
+    () => initialDrawingNote
   );
   const [drawingSaveBusy, setDrawingSaveBusy] = useState(false);
   const [selectedText, setSelectedText] = useState("");
@@ -335,9 +338,9 @@ export default function TopicLayoutClient({
     () => topicNotesByTopic[currentTopicKey] ?? [],
     [currentTopicKey, topicNotesByTopic]
   );
-  const currentTopicDrawing = React.useMemo(
-    () => drawingNotesByTopic[currentTopicKey] ?? null,
-    [currentTopicKey, drawingNotesByTopic]
+  const currentCourseDrawing = React.useMemo(
+    () => courseDrawingNote,
+    [courseDrawingNote]
   );
   const notesDrawerEnabled = highlightsEnabled || notesEnabled;
   const highlightsByTopicRef = useRef(highlightsByTopic);
@@ -424,9 +427,9 @@ export default function TopicLayoutClient({
     if (topicNotes && typeof topicNotes === "object") {
       setTopicNotesByTopic(topicNotes);
     }
-    const drawingNotes = courseState?.drawing_notes;
-    if (drawingNotes && typeof drawingNotes === "object") {
-      setDrawingNotesByTopic(drawingNotes);
+    const drawingNote = courseState?.drawing_note;
+    if (drawingNote && typeof drawingNote === "object") {
+      setCourseDrawingNote(drawingNote);
     }
   }, []);
 
@@ -2011,6 +2014,10 @@ export default function TopicLayoutClient({
 
   const handleOpenDrawingPad = useCallback(() => {
     if (!drawingsEnabled) return;
+    const max = Math.max(320, window.innerWidth - 24);
+    const min = Math.min(360, max);
+    const target = window.innerWidth * 0.5;
+    setDrawingPanelWidth(Math.max(min, Math.min(target, max)));
     setDrawerOpen(false);
     setTocDrawerOpen(false);
     setHighlightDrawerOpen(false);
@@ -2031,26 +2038,22 @@ export default function TopicLayoutClient({
     try {
       const courseState = await updateViewerCourseSettings({
         course_id: courseId,
-        upsert_drawing_note: {
-          topic_index: currentTopic.topic_index,
+        upsert_course_drawing_note: {
           scene,
         },
       });
-      if (courseState?.drawing_notes && typeof courseState.drawing_notes === "object") {
-        setDrawingNotesByTopic(courseState.drawing_notes);
+      if (courseState?.drawing_note && typeof courseState.drawing_note === "object") {
+        setCourseDrawingNote(courseState.drawing_note);
       } else {
-        setDrawingNotesByTopic((prev) => ({
-          ...prev,
-          [currentTopicKey]: {
-            scene,
-            updated_at: new Date().toISOString(),
-          },
-        }));
+        setCourseDrawingNote({
+          scene,
+          updated_at: new Date().toISOString(),
+        });
       }
     } finally {
       setDrawingSaveBusy(false);
     }
-  }, [courseId, currentTopic.topic_index, currentTopicKey, drawingsEnabled]);
+  }, [courseId, drawingsEnabled]);
 
   useEffect(() => {
     if (!drawingsEnabled && drawingPadOpen) {
@@ -2463,20 +2466,6 @@ export default function TopicLayoutClient({
                   </button>
                 </div>
               )}
-              {drawingsEnabled && (
-                <div className="mb-5">
-                  <button
-                    onClick={handleOpenDrawingPad}
-                    className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-[11px] uppercase tracking-wider font-semibold border shadow-sm bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:text-sky-700 dark:hover:text-sky-300 hover:border-sky-300 dark:hover:border-sky-700 transition-colors cursor-pointer"
-                  >
-                    <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
-                      <path d="M12 20h9" />
-                      <path d="m16.5 3.5 4 4L7 21H3v-4L16.5 3.5Z" />
-                    </svg>
-                    <span>Drawing Notes</span>
-                  </button>
-                </div>
-              )}
               {headings.length === 0 ? (
                 <p className="text-sm text-gray-500">No headings detected yet.</p>
               ) : (
@@ -2796,8 +2785,12 @@ export default function TopicLayoutClient({
 
       {drawingsEnabled && drawingPanelEverOpened && (
         <div
-          className={`fixed right-0 top-14 bottom-0 z-50 border-l border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-950 shadow-2xl transform-gpu will-change-transform transition-all duration-300 ease-out ${drawingPanelVisible ? "translate-x-0 opacity-100 pointer-events-auto" : "translate-x-full opacity-95 pointer-events-none"}`}
-          style={{ width: `${drawingPanelWidth}px` }}
+          className={`fixed top-14 bottom-0 z-50 border-l border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-950 shadow-2xl will-change-[right,opacity] transition-[right,opacity] duration-300 ease-out ${drawingPanelVisible ? "pointer-events-auto" : "pointer-events-none"}`}
+          style={{
+            width: `${drawingPanelWidth}px`,
+            right: drawingPanelVisible ? 0 : -drawingPanelWidth,
+            opacity: drawingPanelVisible ? 1 : 0.96,
+          }}
         >
           <div
             role="separator"
@@ -2810,7 +2803,7 @@ export default function TopicLayoutClient({
           </div>
           <TopicDrawingPad
             topicTitle={currentTopic.topic_name}
-            initialScene={currentTopicDrawing?.scene ?? null}
+            initialScene={currentCourseDrawing?.scene ?? null}
             saveBusy={drawingSaveBusy}
             onSave={handleSaveDrawingScene}
             onClose={handleCloseDrawingPad}

@@ -97,7 +97,7 @@ export default function TopicDetailPage() {
   const [initialBookmarked, setInitialBookmarked] = useState<number[]>([]);
   const [initialHighlights, setInitialHighlights] = useState<Record<string, ViewerHighlight[]>>({});
   const [initialTopicNotes, setInitialTopicNotes] = useState<Record<string, ViewerTopicNote[]>>({});
-  const [initialDrawingNotes, setInitialDrawingNotes] = useState<Record<string, ViewerDrawingNote>>({});
+  const [initialDrawingNote, setInitialDrawingNote] = useState<ViewerDrawingNote | null>(null);
   const [initialHighlightColor, setInitialHighlightColor] = useState<HighlightColor>("yellow");
   const [highlightsEnabled, setHighlightsEnabled] = useState(true);
   const [bookmarksEnabled, setBookmarksEnabled] = useState(true);
@@ -182,10 +182,10 @@ export default function TopicDetailPage() {
                 ? viewerCourse.topic_notes
                 : {}
             );
-            setInitialDrawingNotes(
-              viewerCourse?.drawing_notes && typeof viewerCourse.drawing_notes === "object"
-                ? viewerCourse.drawing_notes
-                : {}
+            setInitialDrawingNote(
+              viewerCourse?.drawing_note && typeof viewerCourse.drawing_note === "object"
+                ? viewerCourse.drawing_note
+                : null
             );
             setLoading(false);
           })
@@ -276,7 +276,7 @@ export default function TopicDetailPage() {
       initialBookmarked={initialBookmarked}
       initialHighlights={initialHighlights}
       initialTopicNotes={initialTopicNotes}
-      initialDrawingNotes={initialDrawingNotes}
+      initialDrawingNote={initialDrawingNote}
       initialHighlightColor={initialHighlightColor}
       highlightsEnabled={highlightsEnabled}
       bookmarksEnabled={bookmarksEnabled}

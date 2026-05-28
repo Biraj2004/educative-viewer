@@ -31,6 +31,8 @@ MAX_HIGHLIGHT_NOTE_LEN = 800
 MAX_TOPIC_NOTES_PER_TOPIC = 100
 MAX_TOPIC_NOTES_PER_COURSE = 800
 MAX_TOPIC_NOTE_TEXT_LEN = 1200
+MAX_COURSE_NOTES_PER_COURSE = 300
+MAX_COURSE_NOTE_TEXT_LEN = 1200
 MAX_DRAWING_NOTES_PER_COURSE = 500
 MAX_DRAWING_SCENE_JSON_LEN = 1_500_000
 ALLOWED_HIGHLIGHT_COLORS: set[str] = {"yellow", "blue", "green", "pink", "orange"}
@@ -209,6 +211,37 @@ def _clean_topic_notes_map(value: Any) -> dict[str, list[dict[str, Any]]]:
     return cleaned
 
 
+def _clean_course_notes_list(value: Any) -> list[dict[str, Any]]:
+    if not isinstance(value, list):
+        return []
+    rows: list[dict[str, Any]] = []
+    seen_ids: set[str] = set()
+    seen_texts: set[str] = set()
+    for item in value:
+        if not isinstance(item, dict):
+            continue
+        text = str(item.get("text", "")).strip()
+        if not text:
+            continue
+        note_id = str(item.get("id", "") or uuid.uuid4().hex)
+        if note_id in seen_ids:
+            continue
+        normalized = _normalize_highlight_text_key(text)
+        if normalized in seen_texts:
+            continue
+        seen_ids.add(note_id)
+        seen_texts.add(normalized)
+        rows.append(
+            {
+                "id": note_id,
+                "text": text[:MAX_COURSE_NOTE_TEXT_LEN],
+                "created_at": str(item.get("created_at", "") or ""),
+                "updated_at": str(item.get("updated_at", "") or ""),
+            }
+        )
+    return rows[-MAX_COURSE_NOTES_PER_COURSE:]
+
+
 def _clean_drawing_scene(value: Any) -> dict[str, Any] | None:
     if not isinstance(value, dict):
         return None
@@ -278,6 +311,18 @@ def _clean_drawing_notes_map(value: Any) -> dict[str, dict[str, Any]]:
     return {topic_key: payload for topic_key, payload in keep}
 
 
+def _clean_drawing_note(value: Any) -> dict[str, Any] | None:
+    if not isinstance(value, dict):
+        return None
+    scene = _clean_drawing_scene(value.get("scene"))
+    if scene is None:
+        return None
+    return {
+        "scene": scene,
+        "updated_at": str(value.get("updated_at", "") or "")[:40],
+    }
+
+
 def _strip_highlights_from_settings(settings: dict[str, Any]) -> dict[str, Any]:
     courses = settings.get("courses")
     if not isinstance(courses, dict):
@@ -329,12 +374,20 @@ def _filter_settings_by_features(
                                 item.pop("note", None)
         if not notes_enabled:
             course_state.pop("topic_notes", None)
+            course_state.pop("course_notes", None)
         else:
             course_state["topic_notes"] = _clean_topic_notes_map(course_state.get("topic_notes"))
+            course_state["course_notes"] = _clean_course_notes_list(course_state.get("course_notes"))
         if not drawings_enabled:
             course_state.pop("drawing_notes", None)
+            course_state.pop("drawing_note", None)
         else:
             course_state["drawing_notes"] = _clean_drawing_notes_map(course_state.get("drawing_notes"))
+            drawing_note = _clean_drawing_note(course_state.get("drawing_note"))
+            if drawing_note is not None:
+                course_state["drawing_note"] = drawing_note
+            else:
+                course_state.pop("drawing_note", None)
     return settings
 
 
@@ -354,12 +407,20 @@ def _filter_course_state_by_features(
         filtered.pop("highlights", None)
     if not notes_enabled:
         filtered.pop("topic_notes", None)
+        filtered.pop("course_notes", None)
     else:
         filtered["topic_notes"] = _clean_topic_notes_map(filtered.get("topic_notes"))
+        filtered["course_notes"] = _clean_course_notes_list(filtered.get("course_notes"))
     if not drawings_enabled:
         filtered.pop("drawing_notes", None)
+        filtered.pop("drawing_note", None)
     else:
         filtered["drawing_notes"] = _clean_drawing_notes_map(filtered.get("drawing_notes"))
+        drawing_note = _clean_drawing_note(filtered.get("drawing_note"))
+        if drawing_note is not None:
+            filtered["drawing_note"] = drawing_note
+        else:
+            filtered.pop("drawing_note", None)
 
     if not highlights_enabled:
         return filtered
@@ -829,8 +890,12 @@ def create_auth_blueprint(auth_service: AuthService, db_manager: DBManager) -> B
             "bookmarks": _clean_topic_list(raw_course_state.get("bookmarks"))[-MAX_BOOKMARKS_PER_COURSE:],
             "highlights": _clean_highlights_map(raw_course_state.get("highlights")),
             "topic_notes": _clean_topic_notes_map(raw_course_state.get("topic_notes")),
+            "course_notes": _clean_course_notes_list(raw_course_state.get("course_notes")),
             "drawing_notes": _clean_drawing_notes_map(raw_course_state.get("drawing_notes")),
         }
+        drawing_note = _clean_drawing_note(raw_course_state.get("drawing_note"))
+        if drawing_note is not None:
+            normalized_course_state["drawing_note"] = drawing_note
         if "last_topic_index" in raw_course_state:
             normalized_course_state["last_topic_index"] = _coerce_non_negative_int(
                 raw_course_state.get("last_topic_index")
@@ -915,7 +980,9 @@ def create_auth_blueprint(auth_service: AuthService, db_manager: DBManager) -> B
             bookmarks = _clean_topic_list(course_state.get("bookmarks"))
             highlights = _clean_highlights_map(course_state.get("highlights"))
             topic_notes = _clean_topic_notes_map(course_state.get("topic_notes"))
+            course_notes = _clean_course_notes_list(course_state.get("course_notes"))
             drawing_notes = _clean_drawing_notes_map(course_state.get("drawing_notes"))
+            drawing_note = _clean_drawing_note(course_state.get("drawing_note"))
 
             if "last_topic_index" in body:
                 course_state["last_topic_index"] = _to_int(body.get("last_topic_index"), "last_topic_index")
@@ -1218,6 +1285,99 @@ def create_auth_blueprint(auth_service: AuthService, db_manager: DBManager) -> B
                     topic_notes.pop(topic_key, None)
                 course_state["topic_notes"] = topic_notes
 
+            update_topic_note = body.get("update_topic_note")
+            if update_topic_note is not None:
+                if not notes_enabled:
+                    abort(403, description="Notes are disabled by administrator")
+                if not isinstance(update_topic_note, dict):
+                    abort(400, description="update_topic_note must be an object")
+                topic_index = _to_int(update_topic_note.get("topic_index"), "update_topic_note.topic_index")
+                note_id = str(update_topic_note.get("note_id", "")).strip()
+                if not note_id:
+                    abort(400, description="update_topic_note.note_id is required")
+                text = str(update_topic_note.get("text", "") or "").strip()
+                if not text:
+                    abort(400, description="update_topic_note.text is required")
+                topic_key = str(topic_index)
+                rows = [item for item in topic_notes.get(topic_key, []) if isinstance(item, dict)]
+                updated = False
+                for row in rows:
+                    if str(row.get("id", "")).strip() == note_id:
+                        row["text"] = text[:MAX_TOPIC_NOTE_TEXT_LEN]
+                        row["updated_at"] = now_iso
+                        updated = True
+                        break
+                if not updated:
+                    abort(404, description="Topic note not found for update")
+                topic_notes[topic_key] = rows
+                course_state["topic_notes"] = topic_notes
+
+            add_course_note = body.get("add_course_note")
+            if add_course_note is not None:
+                if not notes_enabled:
+                    abort(403, description="Notes are disabled by administrator")
+                if not isinstance(add_course_note, dict):
+                    abort(400, description="add_course_note must be an object")
+                text = str(add_course_note.get("text", "") or "").strip()
+                if not text:
+                    abort(400, description="add_course_note.text is required")
+                normalized_text = _normalize_highlight_text_key(text)
+                duplicate = any(
+                    _normalize_highlight_text_key(item.get("text")) == normalized_text
+                    for item in course_notes
+                    if isinstance(item, dict)
+                )
+                if not duplicate:
+                    course_notes.append(
+                        {
+                            "id": uuid.uuid4().hex,
+                            "text": text[:MAX_COURSE_NOTE_TEXT_LEN],
+                            "created_at": now_iso,
+                            "updated_at": now_iso,
+                        }
+                    )
+                course_notes = _clean_course_notes_list(course_notes)
+                course_state["course_notes"] = course_notes
+
+            update_course_note = body.get("update_course_note")
+            if update_course_note is not None:
+                if not notes_enabled:
+                    abort(403, description="Notes are disabled by administrator")
+                if not isinstance(update_course_note, dict):
+                    abort(400, description="update_course_note must be an object")
+                note_id = str(update_course_note.get("note_id", "")).strip()
+                if not note_id:
+                    abort(400, description="update_course_note.note_id is required")
+                text = str(update_course_note.get("text", "") or "").strip()
+                if not text:
+                    abort(400, description="update_course_note.text is required")
+                updated = False
+                for row in course_notes:
+                    if str(row.get("id", "")).strip() == note_id:
+                        row["text"] = text[:MAX_COURSE_NOTE_TEXT_LEN]
+                        row["updated_at"] = now_iso
+                        updated = True
+                        break
+                if not updated:
+                    abort(404, description="Course note not found for update")
+                course_notes = _clean_course_notes_list(course_notes)
+                course_state["course_notes"] = course_notes
+
+            remove_course_note = body.get("remove_course_note")
+            if remove_course_note is not None:
+                if not notes_enabled:
+                    abort(403, description="Notes are disabled by administrator")
+                if not isinstance(remove_course_note, dict):
+                    abort(400, description="remove_course_note must be an object")
+                note_id = str(remove_course_note.get("note_id", "")).strip()
+                if not note_id:
+                    abort(400, description="remove_course_note.note_id is required")
+                course_notes = [
+                    row for row in course_notes
+                    if str(row.get("id", "")).strip() != note_id
+                ]
+                course_state["course_notes"] = course_notes
+
             upsert_drawing_note = body.get("upsert_drawing_note")
             if upsert_drawing_note is not None:
                 if not drawings_enabled:
@@ -1236,6 +1396,21 @@ def create_auth_blueprint(auth_service: AuthService, db_manager: DBManager) -> B
                 drawing_notes = _clean_drawing_notes_map(drawing_notes)
                 course_state["drawing_notes"] = drawing_notes
 
+            upsert_course_drawing_note = body.get("upsert_course_drawing_note")
+            if upsert_course_drawing_note is not None:
+                if not drawings_enabled:
+                    abort(403, description="Drawing notes are disabled by administrator")
+                if not isinstance(upsert_course_drawing_note, dict):
+                    abort(400, description="upsert_course_drawing_note must be an object")
+                scene = _clean_drawing_scene(upsert_course_drawing_note.get("scene"))
+                if scene is None:
+                    abort(400, description="upsert_course_drawing_note.scene is invalid or too large")
+                drawing_note = {
+                    "scene": scene,
+                    "updated_at": now_iso,
+                }
+                course_state["drawing_note"] = drawing_note
+
             remove_drawing_note = body.get("remove_drawing_note")
             if remove_drawing_note is not None:
                 if not drawings_enabled:
@@ -1246,14 +1421,27 @@ def create_auth_blueprint(auth_service: AuthService, db_manager: DBManager) -> B
                 drawing_notes.pop(str(topic_index), None)
                 course_state["drawing_notes"] = drawing_notes
 
+            remove_course_drawing_note = body.get("remove_course_drawing_note")
+            if remove_course_drawing_note is not None:
+                if not drawings_enabled:
+                    abort(403, description="Drawing notes are disabled by administrator")
+                if not isinstance(remove_course_drawing_note, dict):
+                    abort(400, description="remove_course_drawing_note must be an object")
+                drawing_note = None
+                course_state.pop("drawing_note", None)
+
             if "bookmarks" not in course_state:
                 course_state["bookmarks"] = bookmarks[-MAX_BOOKMARKS_PER_COURSE:]
             if "highlights" not in course_state:
                 course_state["highlights"] = highlights
             if "topic_notes" not in course_state:
                 course_state["topic_notes"] = topic_notes
+            if "course_notes" not in course_state:
+                course_state["course_notes"] = course_notes
             if "drawing_notes" not in course_state:
                 course_state["drawing_notes"] = drawing_notes
+            if "drawing_note" not in course_state and drawing_note is not None:
+                course_state["drawing_note"] = drawing_note
 
             courses[course_key] = course_state
             settings_json = json.dumps(settings, separators=(",", ":"))
