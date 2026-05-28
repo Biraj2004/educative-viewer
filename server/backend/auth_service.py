@@ -237,9 +237,23 @@ class AuthService:
 
     @staticmethod
     def get_client_ip() -> str | None:
-        forwarded = request.headers.get("X-Forwarded-For")
+        # Preferred headers when behind Cloudflare Worker + gateway.
+        for header_name in ("X-Client-IP", "CF-Connecting-IP"):
+            value = (request.headers.get(header_name) or "").strip()
+            if value:
+                return value
+
+        # Fallback to first client entry in XFF chain.
+        forwarded = (request.headers.get("X-Forwarded-For") or "").strip()
         if forwarded:
-            return forwarded.split(",")[0].strip()
+            first = forwarded.split(",")[0].strip()
+            if first:
+                return first
+
+        # Last resort.
+        real_ip = (request.headers.get("X-Real-IP") or "").strip()
+        if real_ip:
+            return real_ip
         return request.remote_addr
 
     def check_ip_restriction(self, conn: Any, user: dict[str, Any], client_ip: str | None) -> None:
