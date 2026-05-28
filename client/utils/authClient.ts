@@ -267,7 +267,6 @@ export interface CourseViewerSettings {
   topic_notes?: Record<string, ViewerTopicNote[]>;
   course_notes?: ViewerCourseNote[];
   drawing_note?: ViewerDrawingNote;
-  drawing_notes?: Record<string, ViewerDrawingNote>;
 }
 
 export interface ViewerSettingsData {
@@ -714,15 +713,8 @@ export interface UpdateViewerCourseSettingsPayload {
   remove_course_note?: {
     note_id: string;
   };
-  upsert_drawing_note?: {
-    topic_index: number;
-    scene: ViewerDrawingScene;
-  };
   upsert_course_drawing_note?: {
     scene: ViewerDrawingScene;
-  };
-  remove_drawing_note?: {
-    topic_index: number;
   };
   remove_course_drawing_note?: Record<string, never>;
   clear_highlights_topic_index?: number;

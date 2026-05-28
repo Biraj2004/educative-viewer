@@ -33,7 +33,6 @@ MAX_TOPIC_NOTES_PER_COURSE = 800
 MAX_TOPIC_NOTE_TEXT_LEN = 1200
 MAX_COURSE_NOTES_PER_COURSE = 300
 MAX_COURSE_NOTE_TEXT_LEN = 1200
-MAX_DRAWING_NOTES_PER_COURSE = 500
 MAX_DRAWING_SCENE_JSON_LEN = 1_500_000
 ALLOWED_HIGHLIGHT_COLORS: set[str] = {"yellow", "blue", "green", "pink", "orange"}
 
@@ -283,34 +282,6 @@ def _clean_drawing_scene(value: Any) -> dict[str, Any] | None:
     return None
 
 
-def _clean_drawing_notes_map(value: Any) -> dict[str, dict[str, Any]]:
-    if not isinstance(value, dict):
-        return {}
-    cleaned: dict[str, dict[str, Any]] = {}
-    for topic_key, item in value.items():
-        if not isinstance(topic_key, str):
-            continue
-        if not isinstance(item, dict):
-            continue
-        scene = _clean_drawing_scene(item.get("scene"))
-        if scene is None:
-            continue
-        cleaned[topic_key] = {
-            "scene": scene,
-            "updated_at": str(item.get("updated_at", "") or "")[:40],
-        }
-
-    if len(cleaned) <= MAX_DRAWING_NOTES_PER_COURSE:
-        return cleaned
-
-    sorted_items = sorted(
-        cleaned.items(),
-        key=lambda pair: str(pair[1].get("updated_at", "")),
-    )
-    keep = sorted_items[-MAX_DRAWING_NOTES_PER_COURSE:]
-    return {topic_key: payload for topic_key, payload in keep}
-
-
 def _clean_drawing_note(value: Any) -> dict[str, Any] | None:
     if not isinstance(value, dict):
         return None
@@ -379,10 +350,8 @@ def _filter_settings_by_features(
             course_state["topic_notes"] = _clean_topic_notes_map(course_state.get("topic_notes"))
             course_state["course_notes"] = _clean_course_notes_list(course_state.get("course_notes"))
         if not drawings_enabled:
-            course_state.pop("drawing_notes", None)
             course_state.pop("drawing_note", None)
         else:
-            course_state["drawing_notes"] = _clean_drawing_notes_map(course_state.get("drawing_notes"))
             drawing_note = _clean_drawing_note(course_state.get("drawing_note"))
             if drawing_note is not None:
                 course_state["drawing_note"] = drawing_note
@@ -412,10 +381,8 @@ def _filter_course_state_by_features(
         filtered["topic_notes"] = _clean_topic_notes_map(filtered.get("topic_notes"))
         filtered["course_notes"] = _clean_course_notes_list(filtered.get("course_notes"))
     if not drawings_enabled:
-        filtered.pop("drawing_notes", None)
         filtered.pop("drawing_note", None)
     else:
-        filtered["drawing_notes"] = _clean_drawing_notes_map(filtered.get("drawing_notes"))
         drawing_note = _clean_drawing_note(filtered.get("drawing_note"))
         if drawing_note is not None:
             filtered["drawing_note"] = drawing_note
@@ -891,7 +858,6 @@ def create_auth_blueprint(auth_service: AuthService, db_manager: DBManager) -> B
             "highlights": _clean_highlights_map(raw_course_state.get("highlights")),
             "topic_notes": _clean_topic_notes_map(raw_course_state.get("topic_notes")),
             "course_notes": _clean_course_notes_list(raw_course_state.get("course_notes")),
-            "drawing_notes": _clean_drawing_notes_map(raw_course_state.get("drawing_notes")),
         }
         drawing_note = _clean_drawing_note(raw_course_state.get("drawing_note"))
         if drawing_note is not None:
@@ -925,14 +891,6 @@ def create_auth_blueprint(auth_service: AuthService, db_manager: DBManager) -> B
                 if isinstance(note_rows, list) and note_rows:
                     topic_notes[topic_key] = note_rows
             filtered_course_state["topic_notes"] = topic_notes
-
-            topic_drawing_notes: dict[str, dict[str, Any]] = {}
-            all_drawing_notes = filtered_course_state.get("drawing_notes")
-            if isinstance(all_drawing_notes, dict):
-                drawing_row = all_drawing_notes.get(topic_key)
-                if isinstance(drawing_row, dict):
-                    topic_drawing_notes[topic_key] = drawing_row
-            filtered_course_state["drawing_notes"] = topic_drawing_notes
 
         return jsonify(
             {
@@ -981,7 +939,6 @@ def create_auth_blueprint(auth_service: AuthService, db_manager: DBManager) -> B
             highlights = _clean_highlights_map(course_state.get("highlights"))
             topic_notes = _clean_topic_notes_map(course_state.get("topic_notes"))
             course_notes = _clean_course_notes_list(course_state.get("course_notes"))
-            drawing_notes = _clean_drawing_notes_map(course_state.get("drawing_notes"))
             drawing_note = _clean_drawing_note(course_state.get("drawing_note"))
 
             if "last_topic_index" in body:
@@ -1378,24 +1335,6 @@ def create_auth_blueprint(auth_service: AuthService, db_manager: DBManager) -> B
                 ]
                 course_state["course_notes"] = course_notes
 
-            upsert_drawing_note = body.get("upsert_drawing_note")
-            if upsert_drawing_note is not None:
-                if not drawings_enabled:
-                    abort(403, description="Drawing notes are disabled by administrator")
-                if not isinstance(upsert_drawing_note, dict):
-                    abort(400, description="upsert_drawing_note must be an object")
-                topic_index = _to_int(upsert_drawing_note.get("topic_index"), "upsert_drawing_note.topic_index")
-                scene = _clean_drawing_scene(upsert_drawing_note.get("scene"))
-                if scene is None:
-                    abort(400, description="upsert_drawing_note.scene is invalid or too large")
-                topic_key = str(topic_index)
-                drawing_notes[topic_key] = {
-                    "scene": scene,
-                    "updated_at": now_iso,
-                }
-                drawing_notes = _clean_drawing_notes_map(drawing_notes)
-                course_state["drawing_notes"] = drawing_notes
-
             upsert_course_drawing_note = body.get("upsert_course_drawing_note")
             if upsert_course_drawing_note is not None:
                 if not drawings_enabled:
@@ -1410,16 +1349,6 @@ def create_auth_blueprint(auth_service: AuthService, db_manager: DBManager) -> B
                     "updated_at": now_iso,
                 }
                 course_state["drawing_note"] = drawing_note
-
-            remove_drawing_note = body.get("remove_drawing_note")
-            if remove_drawing_note is not None:
-                if not drawings_enabled:
-                    abort(403, description="Drawing notes are disabled by administrator")
-                if not isinstance(remove_drawing_note, dict):
-                    abort(400, description="remove_drawing_note must be an object")
-                topic_index = _to_int(remove_drawing_note.get("topic_index"), "remove_drawing_note.topic_index")
-                drawing_notes.pop(str(topic_index), None)
-                course_state["drawing_notes"] = drawing_notes
 
             remove_course_drawing_note = body.get("remove_course_drawing_note")
             if remove_course_drawing_note is not None:
@@ -1438,8 +1367,6 @@ def create_auth_blueprint(auth_service: AuthService, db_manager: DBManager) -> B
                 course_state["topic_notes"] = topic_notes
             if "course_notes" not in course_state:
                 course_state["course_notes"] = course_notes
-            if "drawing_notes" not in course_state:
-                course_state["drawing_notes"] = drawing_notes
             if "drawing_note" not in course_state and drawing_note is not None:
                 course_state["drawing_note"] = drawing_note
 

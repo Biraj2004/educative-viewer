@@ -161,7 +161,7 @@ type ViewerHistoryEntry = {
   undo: ViewerHistoryCommand[];
   redo: ViewerHistoryCommand[];
 };
-const DRAWER_ANIM_MS = 220;
+const DRAWER_ANIM_MS = 300;
 
 const HIGHLIGHT_COLORS: ReadonlyArray<HighlightColor> = [
   "yellow",
@@ -264,6 +264,10 @@ export default function TopicLayoutClient({
   const [tocDrawerVisible, setTocDrawerVisible] = useState(false);
   const [highlightDrawerMounted, setHighlightDrawerMounted] = useState(false);
   const [highlightDrawerVisible, setHighlightDrawerVisible] = useState(false);
+  const [highlightPanelWidth, setHighlightPanelWidth] = useState(() => {
+    if (typeof window === "undefined") return 420;
+    return Math.max(340, Math.floor(window.innerWidth * 0.3));
+  });
   const [drawingPanelEverOpened, setDrawingPanelEverOpened] = useState(false);
   const [drawingPanelVisible, setDrawingPanelVisible] = useState(false);
   const [drawingPanelWidth, setDrawingPanelWidth] = useState(() => {
@@ -278,6 +282,11 @@ export default function TopicLayoutClient({
     active: false,
     startX: 0,
     startWidth: 560,
+  });
+  const highlightResizeStateRef = useRef<{ active: boolean; startX: number; startWidth: number }>({
+    active: false,
+    startX: 0,
+    startWidth: 640,
   });
 
   const [currentTopic, setCurrentTopic] = useState<TopicDetail>(topic);
@@ -300,6 +309,10 @@ export default function TopicLayoutClient({
   const [newHighlightNote, setNewHighlightNote] = useState("");
   const [newTopicNote, setNewTopicNote] = useState("");
   const [noteDraftById, setNoteDraftById] = useState<Record<string, string>>({});
+  const [topicNoteComposerOpen, setTopicNoteComposerOpen] = useState(false);
+  const [topicNoteEditOpenById, setTopicNoteEditOpenById] = useState<Record<string, boolean>>({});
+  const [topicNoteEditDraftById, setTopicNoteEditDraftById] = useState<Record<string, string>>({});
+  const [highlightNoteEditorOpenById, setHighlightNoteEditorOpenById] = useState<Record<string, boolean>>({});
   const [savingNoteById, setSavingNoteById] = useState<Record<string, boolean>>({});
   const [highlightUndoStack, setHighlightUndoStack] = useState<ViewerHistoryEntry[]>([]);
   const [highlightRedoStack, setHighlightRedoStack] = useState<ViewerHistoryEntry[]>([]);
@@ -1457,6 +1470,7 @@ export default function TopicLayoutClient({
       },
     })).then((courseState) => {
       applyViewerCourseState(courseState);
+      setHighlightNoteEditorOpenById((prev) => ({ ...prev, [highlightId]: false }));
     }).catch(() => { }).finally(() => {
       setSavingNoteById((prev) => ({ ...prev, [highlightId]: false }));
     });
@@ -1504,13 +1518,21 @@ export default function TopicLayoutClient({
     handleAddHighlight(normalizedColor);
   }, [handleAddHighlight, persistLastHighlightColor]);
 
-  const handleClearTopicHighlights = useCallback(() => {
+  const handleClearTopicData = useCallback(() => {
     if (highlightMutationBusy || highlightHistoryBusy) return;
     const topicKey = String(currentTopic.topic_index);
     const beforeRows = cloneHighlights(highlightsByTopic[topicKey] ?? []);
+    const beforeNotes = cloneTopicNotes(topicNotesByTopic[topicKey] ?? []);
+    const noteIds = beforeNotes.map((row) => row.id).filter(Boolean);
+    if (beforeRows.length === 0 && noteIds.length === 0) return;
     const prevUndo = [...highlightUndoStack];
     const prevRedo = [...highlightRedoStack];
     setHighlightsByTopic((prev) => {
+      const next = { ...prev };
+      delete next[topicKey];
+      return next;
+    });
+    setTopicNotesByTopic((prev) => {
       const next = { ...prev };
       delete next[topicKey];
       return next;
@@ -1519,31 +1541,48 @@ export default function TopicLayoutClient({
     if (container) {
       unwrapUserHighlights(container);
     }
-    enqueueHighlightMutation(() => updateViewerCourseSettings({
-      course_id: courseId,
-      clear_highlights_topic_index: currentTopic.topic_index,
-    })).then((courseState) => {
-      applyViewerCourseState(courseState);
+    const run = async () => {
+      let lastCourseState: Awaited<ReturnType<typeof updateViewerCourseSettings>> = null;
+      if (beforeRows.length > 0) {
+        lastCourseState = await enqueueHighlightMutation(() => updateViewerCourseSettings({
+          course_id: courseId,
+          clear_highlights_topic_index: currentTopic.topic_index,
+        }));
+      }
+      for (const noteId of noteIds) {
+        lastCourseState = await enqueueHighlightMutation(() => updateViewerCourseSettings({
+          course_id: courseId,
+          remove_topic_note: {
+            topic_index: currentTopic.topic_index,
+            note_id: noteId,
+          },
+        }));
+      }
+      applyViewerCourseState(lastCourseState);
       // Clear is a destructive bulk boundary: reset local undo/redo history for this topic.
       setHighlightUndoStack([]);
       setHighlightRedoStack([]);
-    }).catch(() => {
+    };
+    run().catch(() => {
       setHighlightsByTopic((prev) => ({ ...prev, [topicKey]: beforeRows }));
+      setTopicNotesByTopic((prev) => ({ ...prev, [topicKey]: beforeNotes }));
       setHighlightUndoStack(prevUndo);
       setHighlightRedoStack(prevRedo);
     });
   }, [
+    applyViewerCourseState,
+    cloneTopicNotes,
     cloneHighlights,
     courseId,
     currentTopic.topic_index,
     highlightsByTopic,
+    topicNotesByTopic,
     unwrapUserHighlights,
     enqueueHighlightMutation,
     highlightMutationBusy,
     highlightHistoryBusy,
     highlightUndoStack,
     highlightRedoStack,
-    applyViewerCourseState,
   ]);
 
   const handleAddTopicNote = useCallback(() => {
@@ -1555,6 +1594,7 @@ export default function TopicLayoutClient({
     const normalized = normalizeHighlightTextKey(text);
     if (beforeRows.some((row) => normalizeHighlightTextKey(row.text) === normalized)) {
       setNewTopicNote("");
+      setTopicNoteComposerOpen(false);
       return;
     }
     const optimistic: ViewerTopicNote = {
@@ -1567,6 +1607,7 @@ export default function TopicLayoutClient({
       [topicKey]: [...(prev[topicKey] ?? []), optimistic],
     }));
     setNewTopicNote("");
+    setTopicNoteComposerOpen(false);
     enqueueHighlightMutation(() => updateViewerCourseSettings({
       course_id: courseId,
       add_topic_note: {
@@ -1636,6 +1677,49 @@ export default function TopicLayoutClient({
     highlightMutationBusy,
     notesEnabled,
     pushHighlightHistory,
+    topicNotesByTopic,
+  ]);
+
+  const handleUpdateTopicNote = useCallback((noteId: string) => {
+    if (!notesEnabled || highlightMutationBusy) return;
+    const topicKey = String(currentTopic.topic_index);
+    const draft = (topicNoteEditDraftById[noteId] ?? "").trim().slice(0, 1200);
+    if (!draft) return;
+    const beforeRows = cloneTopicNotes(topicNotesByTopic[topicKey] ?? []);
+    const targetRow = beforeRows.find((row) => row.id === noteId);
+    if (!targetRow) return;
+    if (targetRow.text.trim() === draft.trim()) {
+      setTopicNoteEditOpenById((prev) => ({ ...prev, [noteId]: false }));
+      return;
+    }
+    setTopicNotesByTopic((prev) => ({
+      ...prev,
+      [topicKey]: (prev[topicKey] ?? []).map((row) => (
+        row.id === noteId ? { ...row, text: draft } : row
+      )),
+    }));
+    setTopicNoteEditOpenById((prev) => ({ ...prev, [noteId]: false }));
+    enqueueHighlightMutation(() => updateViewerCourseSettings({
+      course_id: courseId,
+      update_topic_note: {
+        topic_index: currentTopic.topic_index,
+        note_id: noteId,
+        text: draft,
+      },
+    })).then((courseState) => {
+      applyViewerCourseState(courseState);
+    }).catch(() => {
+      setTopicNotesByTopic((prev) => ({ ...prev, [topicKey]: beforeRows }));
+    });
+  }, [
+    applyViewerCourseState,
+    cloneTopicNotes,
+    courseId,
+    currentTopic.topic_index,
+    enqueueHighlightMutation,
+    highlightMutationBusy,
+    notesEnabled,
+    topicNoteEditDraftById,
     topicNotesByTopic,
   ]);
 
@@ -2003,6 +2087,11 @@ export default function TopicLayoutClient({
     setSelectedText("");
     setNewHighlightNote("");
     setNewTopicNote("");
+    setTopicNoteComposerOpen(false);
+    setTopicNoteEditOpenById({});
+    setTopicNoteEditDraftById({});
+    setHighlightNoteEditorOpenById({});
+    setNoteDraftById({});
     selectedOffsetsRef.current = null;
     selectedQuoteContextRef.current = null;
     setSelectionAction((prev) => ({ ...prev, visible: false }));
@@ -2024,6 +2113,26 @@ export default function TopicLayoutClient({
     setDesktopSidebarCollapsed(true);
     setDrawingPadOpen(true);
   }, [drawingsEnabled]);
+
+  const handleToggleHighlightDrawer = useCallback(() => {
+    if (!notesDrawerEnabled) return;
+    setDrawerOpen(false);
+    setTocDrawerOpen(false);
+    setDesktopSidebarCollapsed(true);
+    if (drawingPadOpen) {
+      setDrawingPanelVisible(false);
+      window.setTimeout(() => {
+        setDrawingPadOpen(false);
+      }, DRAWER_ANIM_MS);
+    }
+    if (!highlightDrawerOpen) {
+      const max = Math.max(320, window.innerWidth - 24);
+      const min = Math.min(340, max);
+      const target = window.innerWidth * 0.3;
+      setHighlightPanelWidth(Math.max(min, Math.min(target, max)));
+    }
+    setHighlightDrawerOpen((prev) => !prev);
+  }, [drawingPadOpen, highlightDrawerOpen, notesDrawerEnabled]);
 
   const handleCloseDrawingPad = useCallback(() => {
     setDrawingPanelVisible(false);
@@ -2105,6 +2214,13 @@ export default function TopicLayoutClient({
     return Math.max(min, Math.min(next, max));
   }, []);
 
+  const clampHighlightPanelWidth = useCallback((next: number) => {
+    if (typeof window === "undefined") return 420;
+    const max = Math.max(320, window.innerWidth - 24);
+    const min = Math.min(340, max);
+    return Math.max(min, Math.min(next, max));
+  }, []);
+
   useEffect(() => {
     if (!drawingPadOpen) return;
     setDrawingPanelWidth((prev) => clampDrawingPanelWidth(prev));
@@ -2116,14 +2232,31 @@ export default function TopicLayoutClient({
   }, [clampDrawingPanelWidth, drawingPadOpen]);
 
   useEffect(() => {
+    if (!highlightDrawerMounted) return;
+    setHighlightPanelWidth((prev) => clampHighlightPanelWidth(prev));
+    const onResize = () => {
+      setHighlightPanelWidth((prev) => clampHighlightPanelWidth(prev));
+    };
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, [clampHighlightPanelWidth, highlightDrawerMounted]);
+
+  useEffect(() => {
     const onPointerMove = (e: PointerEvent) => {
-      const state = drawingResizeStateRef.current;
-      if (!state.active) return;
-      const delta = state.startX - e.clientX;
-      setDrawingPanelWidth(clampDrawingPanelWidth(state.startWidth + delta));
+      const drawingState = drawingResizeStateRef.current;
+      if (drawingState.active) {
+        const delta = drawingState.startX - e.clientX;
+        setDrawingPanelWidth(clampDrawingPanelWidth(drawingState.startWidth + delta));
+      }
+      const highlightState = highlightResizeStateRef.current;
+      if (highlightState.active) {
+        const delta = highlightState.startX - e.clientX;
+        setHighlightPanelWidth(clampHighlightPanelWidth(highlightState.startWidth + delta));
+      }
     };
     const onPointerUp = () => {
       drawingResizeStateRef.current.active = false;
+      highlightResizeStateRef.current.active = false;
     };
     window.addEventListener("pointermove", onPointerMove);
     window.addEventListener("pointerup", onPointerUp);
@@ -2131,7 +2264,7 @@ export default function TopicLayoutClient({
       window.removeEventListener("pointermove", onPointerMove);
       window.removeEventListener("pointerup", onPointerUp);
     };
-  }, [clampDrawingPanelWidth]);
+  }, [clampDrawingPanelWidth, clampHighlightPanelWidth]);
 
   const handleStartDrawingResize = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
     e.preventDefault();
@@ -2141,8 +2274,21 @@ export default function TopicLayoutClient({
       startWidth: drawingPanelWidth,
     };
   }, [drawingPanelWidth]);
-  const contentShiftStyle = drawingPadOpen
-    ? { marginRight: `${drawingPanelWidth}px` }
+
+  const handleStartHighlightResize = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    highlightResizeStateRef.current = {
+      active: true,
+      startX: e.clientX,
+      startWidth: highlightPanelWidth,
+    };
+  }, [highlightPanelWidth]);
+
+  const activeRightPanelWidth = drawingPanelVisible
+    ? drawingPanelWidth
+    : (highlightDrawerVisible ? highlightPanelWidth : 0);
+  const contentShiftStyle = activeRightPanelWidth > 0
+    ? { marginRight: `${activeRightPanelWidth}px` }
     : undefined;
 
   // Track reading progress bar.
@@ -2268,7 +2414,7 @@ export default function TopicLayoutClient({
 
         {/* Main content — natural page scroll */}
         <main
-          className="flex-1 min-w-0 transition-[margin-right] duration-200"
+          className="flex-1 min-w-0 transition-[margin-right] duration-300 ease-out"
           style={contentShiftStyle}
         >
 
@@ -2281,6 +2427,22 @@ export default function TopicLayoutClient({
                 </svg>
                 <span>{estimatedTime} min read</span>
               </div>
+              {bookmarksEnabled && (
+                <button
+                  onClick={handleToggleBookmark}
+                  className={[
+                    "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] uppercase tracking-wider font-semibold border shadow-sm transition-colors cursor-pointer",
+                    isBookmarked
+                      ? "bg-amber-50 dark:bg-amber-900/30 border-amber-300 dark:border-amber-700 text-amber-700 dark:text-amber-300"
+                      : "bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400 hover:text-amber-600 dark:hover:text-amber-300 hover:border-amber-300 dark:hover:border-amber-700",
+                  ].join(" ")}
+                >
+                  <svg className="w-3.5 h-3.5" fill={isBookmarked ? "currentColor" : "none"} viewBox="0 0 20 20" stroke="currentColor" strokeWidth={1.6}>
+                    <path d="M5 2a2 2 0 0 0-2 2v14l7-3 7 3V4a2 2 0 0 0-2-2H5Z" />
+                  </svg>
+                  <span>{isBookmarked ? "Bookmarked" : "Bookmark"}</span>
+                </button>
+              )}
             </div>
           </div>
 
@@ -2396,7 +2558,9 @@ export default function TopicLayoutClient({
         <>
           <button
             onClick={handleOpenDrawingPad}
-            className="hidden lg:flex fixed right-0 top-[calc(50%+2.6rem)] z-40 flex-col items-center gap-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 border-r-0 rounded-l-xl px-2 py-3 shadow-md text-gray-500 hover:text-sky-600 dark:hover:text-sky-300 transition-colors cursor-pointer"
+            className={`hidden lg:flex fixed right-0 z-40 flex-col items-center gap-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 border-r-0 rounded-l-xl px-2 py-3 shadow-md text-gray-500 hover:text-sky-600 dark:hover:text-sky-300 transition-colors cursor-pointer ${
+              notesDrawerEnabled ? "top-[calc(50%+8rem)]" : "top-[calc(50%+2.6rem)]"
+            }`}
             title="Drawing Notes"
           >
             <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
@@ -2423,8 +2587,8 @@ export default function TopicLayoutClient({
 
       {notesDrawerEnabled && (
         <button
-          onClick={() => setHighlightDrawerOpen((o) => !o)}
-          className="hidden lg:flex fixed right-0 top-[calc(50%+8rem)] z-40 flex-col items-center gap-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 border-r-0 rounded-l-xl px-2 py-3 shadow-md text-gray-500 hover:text-amber-600 dark:hover:text-amber-300 transition-colors cursor-pointer"
+          onClick={handleToggleHighlightDrawer}
+          className="hidden lg:flex fixed right-0 top-[calc(50%+2.6rem)] z-40 flex-col items-center gap-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 border-r-0 rounded-l-xl px-2 py-3 shadow-md text-gray-500 hover:text-amber-600 dark:hover:text-amber-300 transition-colors cursor-pointer"
           title={highlightsEnabled ? "Highlights & Notes" : "Notes"}
         >
           <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
@@ -2510,21 +2674,71 @@ export default function TopicLayoutClient({
       )}
 
       {notesDrawerEnabled && highlightDrawerMounted && (
-        <div className={`fixed inset-x-0 bottom-0 top-14 z-40 transition-opacity duration-200 ${highlightDrawerVisible ? "pointer-events-auto" : "pointer-events-none"}`}>
+        <div
+          className={`fixed top-14 bottom-0 right-0 z-50 border-l border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-950 shadow-2xl will-change-transform transition-[transform,opacity] duration-300 ease-out ${highlightDrawerVisible ? "pointer-events-auto translate-x-0 opacity-100" : "pointer-events-none translate-x-full opacity-0"}`}
+          style={{
+            width: `${highlightPanelWidth}px`,
+          }}
+        >
           <div
-            className={`absolute inset-0 bg-black/40 transition-opacity duration-200 ${highlightDrawerVisible ? "opacity-100" : "opacity-0"}`}
-            onClick={() => setHighlightDrawerOpen(false)}
-          />
-          <div className={`absolute right-0 top-0 bottom-0 w-[24rem] bg-white dark:bg-gray-900 border-l border-gray-200 dark:border-gray-800 shadow-2xl flex flex-col transform-gpu will-change-transform transition-transform duration-300 ease-out ${highlightDrawerVisible ? "translate-x-0" : "translate-x-full"}`}>
-            <div className="flex items-center justify-between px-6 py-5 border-b border-gray-200 dark:border-gray-800 shrink-0">
-              <h2 className="text-sm font-bold text-gray-900 dark:text-gray-100 uppercase tracking-wider">
-                {highlightsEnabled ? "Highlights & Notes" : "Notes"}
-              </h2>
+            role="separator"
+            aria-orientation="vertical"
+            aria-label="Resize notes and highlights panel"
+            onPointerDown={handleStartHighlightResize}
+            className="absolute left-0 top-0 h-full w-2 -translate-x-1/2 cursor-col-resize bg-transparent z-10"
+          >
+            <div className="mx-auto mt-8 h-12 w-1 rounded-full bg-gray-300 dark:bg-gray-700" />
+          </div>
+          <div className="flex items-center justify-between px-6 py-5 border-b border-gray-200 dark:border-gray-800 shrink-0">
+            <h2 className="text-sm font-bold text-gray-900 dark:text-gray-100 uppercase tracking-wider">
+              {highlightsEnabled ? "Highlights & Notes" : "Notes"}
+            </h2>
+            <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                onClick={handleUndoHighlightChange}
+                disabled={highlightHistoryBusy || highlightMutationBusy || highlightUndoStack.length === 0}
+                className="inline-flex items-center justify-center w-8 h-8 rounded border border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-300 hover:border-indigo-300 dark:hover:border-indigo-700 disabled:opacity-45 disabled:cursor-not-allowed cursor-pointer transition-colors"
+                title="Undo recent change"
+                aria-label="Undo recent change"
+              >
+                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M9 14 4 9l5-5" />
+                  <path d="M4 9h8a6 6 0 1 1 0 12h-1" />
+                </svg>
+              </button>
+              <button
+                type="button"
+                onClick={handleRedoHighlightChange}
+                disabled={highlightHistoryBusy || highlightMutationBusy || highlightRedoStack.length === 0}
+                className="inline-flex items-center justify-center w-8 h-8 rounded border border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-300 hover:border-indigo-300 dark:hover:border-indigo-700 disabled:opacity-45 disabled:cursor-not-allowed cursor-pointer transition-colors"
+                title="Redo recent change"
+                aria-label="Redo recent change"
+              >
+                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                  <path d="m15 14 5-5-5-5" />
+                  <path d="M20 9h-8a6 6 0 1 0 0 12h1" />
+                </svg>
+              </button>
+              <button
+                onClick={handleClearTopicData}
+                disabled={(currentTopicHighlights.length === 0 && currentTopicNotes.length === 0) || highlightHistoryBusy || highlightMutationBusy}
+                className="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] rounded border border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400 hover:text-red-600 dark:hover:text-red-400 hover:border-red-300 dark:hover:border-red-700 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer transition-colors"
+              >
+                <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M3 6h18" />
+                  <path d="M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2" />
+                  <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+                </svg>
+                <span>Clear All</span>
+              </button>
               <button onClick={() => setHighlightDrawerOpen(false)} className="p-1 text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 cursor-pointer">
                 <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
               </button>
             </div>
-            <div className="flex-1 overflow-y-auto p-6 space-y-4">
+          </div>
+          <div className="flex-1 overflow-y-auto p-6 space-y-4">
+
               {highlightsEnabled && selectedText && (
                 <section className="rounded-lg border border-indigo-200 dark:border-indigo-800 bg-indigo-50/60 dark:bg-indigo-950/30 p-3">
                   <p className="text-[11px] font-semibold uppercase tracking-wide text-indigo-700 dark:text-indigo-300 mb-1">
@@ -2570,58 +2784,115 @@ export default function TopicLayoutClient({
               )}
 
               {notesEnabled && (
-                <section className="rounded-lg border border-gray-200 dark:border-gray-800 bg-white/70 dark:bg-gray-900/60 p-3">
+                <section className="rounded-lg border border-sky-200 dark:border-sky-900 bg-sky-50/50 dark:bg-sky-950/20 p-3">
                   <div className="mb-2 flex items-center justify-between">
                     <p className="text-xs uppercase tracking-wide font-semibold text-gray-500 dark:text-gray-400">
-                      Topic Notes ({currentTopicNotes.length})
+                      Notes ({currentTopicNotes.length})
                     </p>
-                  </div>
-                  <div className="flex items-start gap-2">
-                    <textarea
-                      value={newTopicNote}
-                      onChange={(e) => setNewTopicNote(e.target.value.slice(0, 1200))}
-                      rows={3}
-                      placeholder="Add note..."
-                      className="flex-1 min-h-[4.25rem] rounded-md border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-2 py-1.5 text-xs text-gray-700 dark:text-gray-200 outline-none focus:ring-2 focus:ring-indigo-500/30"
-                    />
-                    <button
-                      type="button"
-                      onClick={handleAddTopicNote}
-                      disabled={highlightMutationBusy || !newTopicNote.trim()}
-                      className="inline-flex items-center justify-center w-7 h-7 rounded border border-amber-300 dark:border-amber-700 text-amber-700 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-900/40 disabled:opacity-50 disabled:cursor-not-allowed transition-colors cursor-pointer"
-                      title="Save note"
-                      aria-label="Save note"
-                    >
-                      <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M5 4a1 1 0 0 1 1-1h10l3 3v14a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V4Z" />
-                        <path d="M8 3v6h8V3" />
-                        <path d="M8 17h8" />
-                      </svg>
-                    </button>
-                  </div>
-                  {currentTopicNotes.length > 0 && (
-                    <ul className="mt-2 space-y-1.5">
-                      {currentTopicNotes.map((note) => (
-                        <li key={note.id} className="flex items-start gap-2 rounded border border-gray-200 dark:border-gray-800 bg-gray-50/70 dark:bg-gray-900/40 px-2 py-1.5">
-                          <p className="flex-1 text-xs text-gray-700 dark:text-gray-200 leading-relaxed whitespace-pre-wrap">
-                            {note.text}
-                          </p>
+                    <div className="flex items-center gap-3">
+                      {topicNoteComposerOpen ? (
+                        <>
                           <button
                             type="button"
-                            onClick={() => handleRemoveTopicNote(note.id)}
-                            disabled={highlightMutationBusy}
-                            className="inline-flex items-center justify-center w-7 h-7 rounded border border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400 hover:text-red-600 dark:hover:text-red-400 hover:border-red-300 dark:hover:border-red-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors cursor-pointer"
-                            title="Remove note"
-                            aria-label="Remove note"
+                            onClick={handleAddTopicNote}
+                            disabled={highlightMutationBusy || !newTopicNote.trim()}
+                            className="text-xs text-indigo-600 dark:text-indigo-300 hover:underline disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
                           >
-                            <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-                              <path d="M3 6h18" />
-                              <path d="M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2" />
-                              <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
-                            </svg>
+                            Save
                           </button>
-                        </li>
-                      ))}
+                          <button
+                            type="button"
+                            onClick={() => setTopicNoteComposerOpen(false)}
+                            className="text-xs text-indigo-600 dark:text-indigo-300 hover:underline cursor-pointer"
+                          >
+                            Cancel
+                          </button>
+                        </>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => setTopicNoteComposerOpen(true)}
+                          className="text-xs text-indigo-600 dark:text-indigo-300 hover:underline cursor-pointer"
+                        >
+                          Add Note
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                  {topicNoteComposerOpen && (
+                    <div className="mb-2">
+                      <textarea
+                        value={newTopicNote}
+                        onChange={(e) => setNewTopicNote(e.target.value.slice(0, 1200))}
+                        rows={3}
+                        placeholder="Add note..."
+                        className="w-full min-h-[4.25rem] rounded-md border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-2 py-1.5 text-xs text-gray-700 dark:text-gray-200 outline-none focus:ring-2 focus:ring-indigo-500/30"
+                      />
+                    </div>
+                  )}
+                  {currentTopicNotes.length > 0 && (
+                    <ul className="mt-2 space-y-1.5">
+                      {currentTopicNotes.map((note) => {
+                        const isEditing = Boolean(topicNoteEditOpenById[note.id]);
+                        const draft = topicNoteEditDraftById[note.id] ?? note.text;
+                        return (
+                      <li key={note.id} className="rounded border border-sky-200 dark:border-sky-900 bg-white/80 dark:bg-sky-950/30 px-2 py-1.5">
+                            {isEditing ? (
+                              <div className="space-y-1.5">
+                                <textarea
+                                  value={draft}
+                                  onChange={(e) => setTopicNoteEditDraftById((prev) => ({ ...prev, [note.id]: e.target.value.slice(0, 1200) }))}
+                                  rows={3}
+                                  className="w-full rounded-md border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-2 py-1.5 text-xs text-gray-700 dark:text-gray-200 outline-none focus:ring-2 focus:ring-indigo-500/30"
+                                />
+                                <div className="flex items-center gap-2">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleUpdateTopicNote(note.id)}
+                                    disabled={highlightMutationBusy || !draft.trim()}
+                                    className="text-xs text-indigo-600 dark:text-indigo-300 hover:underline cursor-pointer disabled:opacity-50"
+                                  >
+                                    Save
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => setTopicNoteEditOpenById((prev) => ({ ...prev, [note.id]: false }))}
+                                    className="text-xs text-gray-500 dark:text-gray-400 hover:underline cursor-pointer"
+                                  >
+                                    Cancel
+                                  </button>
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="flex items-start gap-2">
+                                <p className="flex-1 text-xs text-gray-700 dark:text-gray-200 leading-relaxed whitespace-pre-wrap">
+                                  {note.text}
+                                </p>
+                                <div className="flex items-center gap-2">
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setTopicNoteEditDraftById((prev) => ({ ...prev, [note.id]: note.text }));
+                                      setTopicNoteEditOpenById((prev) => ({ ...prev, [note.id]: true }));
+                                    }}
+                                    className="text-xs text-indigo-600 dark:text-indigo-300 hover:underline cursor-pointer"
+                                  >
+                                    Edit
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleRemoveTopicNote(note.id)}
+                                    disabled={highlightMutationBusy}
+                                    className="text-xs text-red-600 dark:text-red-400 hover:underline disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                                  >
+                                    Delete
+                                  </button>
+                                </div>
+                              </div>
+                            )}
+                          </li>
+                        );
+                      })}
                     </ul>
                   )}
                 </section>
@@ -2631,48 +2902,8 @@ export default function TopicLayoutClient({
                 <>
                   <div className="flex items-center justify-between">
                     <p className="text-xs uppercase tracking-wide font-semibold text-gray-500 dark:text-gray-400">
-                      Saved ({currentTopicHighlights.length})
+                      Highlights ({currentTopicHighlights.length})
                     </p>
-                    <div className="flex items-center gap-1.5">
-                      <button
-                        type="button"
-                        onClick={handleUndoHighlightChange}
-                        disabled={highlightHistoryBusy || highlightMutationBusy || highlightUndoStack.length === 0}
-                        className="inline-flex items-center justify-center w-8 h-8 rounded border border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-300 hover:border-indigo-300 dark:hover:border-indigo-700 disabled:opacity-45 disabled:cursor-not-allowed cursor-pointer transition-colors"
-                        title="Undo recent change"
-                        aria-label="Undo recent change"
-                      >
-                        <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-                          <path d="M9 14 4 9l5-5" />
-                          <path d="M4 9h8a6 6 0 1 1 0 12h-1" />
-                        </svg>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={handleRedoHighlightChange}
-                        disabled={highlightHistoryBusy || highlightMutationBusy || highlightRedoStack.length === 0}
-                        className="inline-flex items-center justify-center w-8 h-8 rounded border border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-300 hover:border-indigo-300 dark:hover:border-indigo-700 disabled:opacity-45 disabled:cursor-not-allowed cursor-pointer transition-colors"
-                        title="Redo recent change"
-                        aria-label="Redo recent change"
-                      >
-                        <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-                          <path d="m15 14 5-5-5-5" />
-                          <path d="M20 9h-8a6 6 0 1 0 0 12h1" />
-                        </svg>
-                      </button>
-                      <button
-                        onClick={handleClearTopicHighlights}
-                        disabled={currentTopicHighlights.length === 0 || highlightHistoryBusy || highlightMutationBusy}
-                        className="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] rounded border border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400 hover:text-red-600 dark:hover:text-red-400 hover:border-red-300 dark:hover:border-red-700 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer transition-colors"
-                      >
-                        <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-                          <path d="M3 6h18" />
-                          <path d="M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2" />
-                          <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
-                        </svg>
-                        <span>Clear Topic</span>
-                      </button>
-                    </div>
                   </div>
 
                   {currentTopicHighlights.length === 0 ? (
@@ -2684,9 +2915,10 @@ export default function TopicLayoutClient({
                       {currentTopicHighlights.map((item) => {
                     const noteValue = noteDraftById[item.id] ?? "";
                     const saving = Boolean(savingNoteById[item.id]);
+                    const noteEditorOpen = Boolean(highlightNoteEditorOpenById[item.id]);
                     const itemColor = normalizeHighlightColor(item.color);
                     return (
-                      <li key={item.id} className="rounded-lg border border-amber-200 dark:border-amber-900 bg-amber-50/50 dark:bg-amber-950/20 p-3">
+                      <li key={item.id} className="rounded-lg border border-amber-300 dark:border-amber-800 bg-amber-50/80 dark:bg-amber-950/30 p-3">
                         <div className="mb-2 flex items-center justify-between gap-2">
                           <div className="flex items-center gap-1.5">
                             {HIGHLIGHT_COLORS.map((color) => (
@@ -2706,9 +2938,19 @@ export default function TopicLayoutClient({
                               />
                             ))}
                           </div>
-                          <span className="text-[10px] uppercase tracking-wide text-gray-500 dark:text-gray-400">
-                            {itemColor}
-                          </span>
+                          <div className="flex items-center gap-3">
+                            <span className="text-[10px] uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                              {itemColor}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveHighlight(item.id)}
+                              disabled={highlightMutationBusy}
+                              className="text-xs text-red-600 dark:text-red-400 hover:underline disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                            >
+                              Delete
+                            </button>
+                          </div>
                         </div>
                         <button
                           type="button"
@@ -2720,58 +2962,65 @@ export default function TopicLayoutClient({
                         </button>
                         {notesEnabled && (
                           <div className="flex items-start gap-2">
-                            <textarea
-                              value={noteValue}
-                              onChange={(e) => setNoteDraftById((prev) => ({ ...prev, [item.id]: e.target.value.slice(0, 800) }))}
-                              rows={3}
-                              placeholder="Add note..."
-                              className="flex-1 min-h-[4.25rem] rounded-md border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-2 py-1.5 text-xs text-gray-700 dark:text-gray-200 outline-none focus:ring-2 focus:ring-amber-500/30"
-                            />
-                            <div className="flex shrink-0 flex-col gap-1.5">
-                              <button
-                                onClick={() => handleSaveHighlightNote(item.id)}
-                                disabled={saving || highlightMutationBusy}
-                                className="inline-flex items-center justify-center w-7 h-7 rounded border border-amber-300 dark:border-amber-700 text-amber-700 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-900/40 disabled:opacity-60 cursor-pointer transition-colors"
-                                title={saving ? "Saving note..." : "Save note"}
-                                aria-label={saving ? "Saving note..." : "Save note"}
-                              >
-                                <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-                                  <path d="M5 4a1 1 0 0 1 1-1h10l3 3v14a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V4Z" />
-                                  <path d="M8 3v6h8V3" />
-                                  <path d="M8 17h8" />
-                                </svg>
-                              </button>
-                              <button
-                                onClick={() => handleRemoveHighlight(item.id)}
-                                disabled={highlightMutationBusy}
-                                className="inline-flex items-center justify-center w-7 h-7 rounded border border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400 hover:text-red-600 dark:hover:text-red-400 hover:border-red-300 dark:hover:border-red-700 transition-colors cursor-pointer"
-                                title="Remove highlight"
-                                aria-label="Remove highlight"
-                              >
-                                <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-                                  <path d="M3 6h18" />
-                                  <path d="M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2" />
-                                  <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
-                                </svg>
-                              </button>
+                            <div className="flex-1 space-y-2">
+                              {!noteEditorOpen && (
+                                <>
+                                  {(item.note ?? "").trim() && (
+                                    <div className="rounded-md border border-sky-200 dark:border-sky-900 bg-sky-50/80 dark:bg-sky-950/30 px-2 py-1.5">
+                                      <p className="mb-1 text-[10px] uppercase tracking-wide font-semibold text-sky-700 dark:text-sky-300">
+                                        Note
+                                      </p>
+                                      <p className="text-xs text-gray-700 dark:text-gray-300 whitespace-pre-wrap">
+                                        {item.note}
+                                      </p>
+                                    </div>
+                                  )}
+                                  <div className="flex items-center gap-2">
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setNoteDraftById((prev) => ({ ...prev, [item.id]: item.note ?? "" }));
+                                        setHighlightNoteEditorOpenById((prev) => ({ ...prev, [item.id]: true }));
+                                      }}
+                                      className="text-xs text-indigo-600 dark:text-indigo-300 hover:underline cursor-pointer"
+                                    >
+                                      {(item.note ?? "").trim() ? "Edit Note" : "Add Note"}
+                                    </button>
+                                  </div>
+                                </>
+                              )}
+                              {noteEditorOpen && (
+                                <div className="space-y-1.5">
+                                  <p className="text-[10px] uppercase tracking-wide font-semibold text-sky-700 dark:text-sky-300">
+                                    Note
+                                  </p>
+                                  <textarea
+                                    value={noteValue}
+                                    onChange={(e) => setNoteDraftById((prev) => ({ ...prev, [item.id]: e.target.value.slice(0, 800) }))}
+                                    rows={3}
+                                    placeholder="Add note..."
+                                    className="w-full min-h-[4.25rem] rounded-md border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-2 py-1.5 text-xs text-gray-700 dark:text-gray-200 outline-none focus:ring-2 focus:ring-amber-500/30"
+                                  />
+                                  <div className="flex items-center gap-2">
+                                    <button
+                                      type="button"
+                                      onClick={() => handleSaveHighlightNote(item.id)}
+                                      disabled={saving || highlightMutationBusy}
+                                      className="text-xs text-indigo-600 dark:text-indigo-300 hover:underline disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                                    >
+                                      {saving ? "Saving..." : "Save"}
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => setHighlightNoteEditorOpenById((prev) => ({ ...prev, [item.id]: false }))}
+                                      className="text-xs text-gray-500 dark:text-gray-400 hover:underline cursor-pointer"
+                                    >
+                                      Cancel
+                                    </button>
+                                  </div>
+                                </div>
+                              )}
                             </div>
-                          </div>
-                        )}
-                        {!notesEnabled && (
-                          <div className="mt-2 flex items-center justify-end">
-                              <button
-                                onClick={() => handleRemoveHighlight(item.id)}
-                                disabled={highlightMutationBusy}
-                                className="inline-flex items-center justify-center w-7 h-7 rounded border border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400 hover:text-red-600 dark:hover:text-red-400 hover:border-red-300 dark:hover:border-red-700 transition-colors cursor-pointer"
-                              title="Remove highlight"
-                              aria-label="Remove highlight"
-                            >
-                              <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-                                <path d="M3 6h18" />
-                                <path d="M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2" />
-                                <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
-                              </svg>
-                            </button>
                           </div>
                         )}
                       </li>
@@ -2783,15 +3032,13 @@ export default function TopicLayoutClient({
               )}
             </div>
           </div>
-        </div>
       )}
 
       {drawingsEnabled && drawingPanelEverOpened && (
         <div
-          className={`fixed top-14 bottom-0 right-0 z-50 border-l border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-950 shadow-2xl will-change-[opacity] transition-opacity duration-220 ease-out ${drawingPanelVisible ? "pointer-events-auto" : "pointer-events-none"}`}
+          className={`fixed top-14 bottom-0 right-0 z-50 border-l border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-950 shadow-2xl will-change-transform transition-transform duration-300 ease-out ${drawingPanelVisible ? "pointer-events-auto translate-x-0" : "pointer-events-none translate-x-full"}`}
           style={{
             width: `${drawingPanelWidth}px`,
-            opacity: drawingPanelVisible ? 1 : 0,
           }}
         >
           <div

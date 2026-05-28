@@ -400,12 +400,13 @@ export default function CourseDetailPage() {
 
   const openReaderPanel = (mode: ReaderPanelMode) => {
     setReaderPanelMode(mode);
+    if (typeof window !== "undefined") {
+      const targetRatio = mode === "highlightNotes" ? 0.3 : 0.6;
+      setReaderPanelWidth(clampReaderPanelWidth(window.innerWidth * targetRatio));
+    }
     if (panelCloseTimerRef.current) {
       clearTimeout(panelCloseTimerRef.current);
       panelCloseTimerRef.current = null;
-    }
-    if (!readerPanelMounted && typeof window !== "undefined") {
-      setReaderPanelWidth(clampReaderPanelWidth(window.innerWidth * 0.6));
     }
     setReaderPanelMounted(true);
     requestAnimationFrame(() => setReaderPanelVisible(true));
@@ -446,6 +447,11 @@ export default function CourseDetailPage() {
 
   const getTopicNotesFromState = (state: CourseViewerSettings | null, topicIndex: number): ViewerTopicNote[] => {
     const rows = state?.topic_notes?.[String(topicIndex)];
+    return Array.isArray(rows) ? rows : [];
+  };
+
+  const getHighlightsFromState = (state: CourseViewerSettings | null, topicIndex: number): ViewerHighlight[] => {
+    const rows = state?.highlights?.[String(topicIndex)];
     return Array.isArray(rows) ? rows : [];
   };
 
@@ -671,6 +677,62 @@ export default function CourseDetailPage() {
     setHighlightNoteEditOpen((prev) => ({ ...prev, [draftKey]: false }));
   };
 
+  const handleRemoveHighlight = async (topicIndex: number, row: ViewerHighlight) => {
+    await mutateViewerCourse({
+      course_id: courseId,
+      remove_highlight: {
+        topic_index: topicIndex,
+        highlight_id: row.id,
+      },
+    });
+    const highlightRef = { id: row.id };
+    const canRestore =
+      typeof row.start_offset === "number"
+      && typeof row.end_offset === "number"
+      && typeof row.component_index === "number";
+    if (!canRestore) return;
+    pushNoteHistory({
+      undo: async () => {
+        const next = await mutateViewerCourse({
+          course_id: courseId,
+          add_highlight: {
+            topic_index: topicIndex,
+            text: row.text,
+            context: row.context,
+            quote_prefix: row.quote_prefix,
+            quote_suffix: row.quote_suffix,
+            note: row.note,
+            color: row.color,
+            start_offset: row.start_offset,
+            end_offset: row.end_offset,
+            component_index: row.component_index,
+          },
+        });
+        const rows = getHighlightsFromState(next, topicIndex);
+        const restored = rows.find((item) => (
+          item.id !== highlightRef.id
+          && item.text.trim() === row.text.trim()
+          && item.start_offset === row.start_offset
+          && item.end_offset === row.end_offset
+          && item.component_index === row.component_index
+        ));
+        highlightRef.id = restored?.id ?? highlightRef.id;
+        return true;
+      },
+      redo: async () => {
+        if (!highlightRef.id) return false;
+        await mutateViewerCourse({
+          course_id: courseId,
+          remove_highlight: {
+            topic_index: topicIndex,
+            highlight_id: highlightRef.id,
+          },
+        });
+        return true;
+      },
+    });
+  };
+
   const handleClearAllTopicNotes = async () => {
     const operations = topicNotesEntries.flatMap(({ topicIndex, notes }) =>
       notes.map((note) => ({ topicIndex, noteId: note.id }))
@@ -742,6 +804,21 @@ export default function CourseDetailPage() {
     : [];
   const topicNotesCount = topicNotesEntries.reduce((sum, entry) => sum + entry.notes.length, 0);
   const highlightsCount = highlightEntries.reduce((sum, entry) => sum + entry.rows.length, 0);
+  const topicNotesByKey = new Map(topicNotesEntries.map((entry) => [entry.topicKey, entry.notes] as const));
+  const highlightRowsByKey = new Map(highlightEntries.map((entry) => [entry.topicKey, entry.rows] as const));
+  const groupedTopicEntries = Array.from(
+    new Set([
+      ...topicNotesEntries.map((entry) => entry.topicKey),
+      ...highlightEntries.map((entry) => entry.topicKey),
+    ])
+  )
+    .sort((a, b) => Number(a) - Number(b))
+    .map((topicKey) => ({
+      topicKey,
+      topicIndex: Number(topicKey),
+      notes: topicNotesByKey.get(topicKey) ?? [],
+      rows: highlightRowsByKey.get(topicKey) ?? [],
+    }));
   const notesDrawerEnabled = highlightsEnabled || notesEnabled;
   const readerContentShiftStyle = readerPanelMounted
     ? { marginRight: `${readerPanelWidth}px` }
@@ -776,8 +853,8 @@ export default function CourseDetailPage() {
             </p>
           </div>
           
-          {/* Reset Progress Action */}
-          <div className="flex flex-wrap items-center gap-2 lg:hidden">
+          {/* Header actions moved to floating rail/buttons to avoid small-screen collisions */}
+          <div className="hidden">
             {bookmarksEnabled && (
               <button
                 onClick={() => openReaderPanel("bookmarks")}
@@ -832,58 +909,129 @@ export default function CourseDetailPage() {
         </div>
       </div>
       {!readerPanelMounted && (
-      <div className="hidden lg:flex fixed right-0 top-1/2 -translate-y-1/2 z-40 flex-col items-end gap-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 border-r-0 rounded-l-xl px-2 py-3 shadow-md transition-[margin-right] duration-200" style={readerContentShiftStyle}>
+      <div className="hidden lg:flex fixed right-0 top-1/2 -translate-y-1/2 z-40 flex-col items-end gap-1.5 transition-[margin-right] duration-200" style={readerContentShiftStyle}>
         {bookmarksEnabled && (
           <button
             onClick={() => openReaderPanel("bookmarks")}
-            className="inline-flex items-center justify-between min-w-[10.5rem] gap-2 px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-xs font-semibold text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors cursor-pointer"
+            className="flex flex-col items-center gap-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 border-r-0 rounded-l-xl px-2 py-3 shadow-md text-gray-500 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors cursor-pointer"
+            title="Bookmarks"
           >
-            Bookmarks
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 20 20" stroke="currentColor" strokeWidth={1.6}>
+              <path d="M5 2a2 2 0 0 0-2 2v14l7-3 7 3V4a2 2 0 0 0-2-2H5Z" />
+            </svg>
+            <span className="text-[9px] font-semibold uppercase tracking-wide [writing-mode:vertical-rl] rotate-180">BOOK</span>
           </button>
         )}
         {notesDrawerEnabled && (
           <button
             onClick={() => openReaderPanel("highlightNotes")}
-            className="inline-flex items-center justify-between min-w-[10.5rem] gap-2 px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-xs font-semibold text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors cursor-pointer"
+            className="flex flex-col items-center gap-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 border-r-0 rounded-l-xl px-2 py-3 shadow-md text-gray-500 hover:text-amber-600 dark:hover:text-amber-300 transition-colors cursor-pointer"
+            title="Highlights+Notes"
           >
-            Highlights+Notes
+            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+              <path d="M15 4H6a2 2 0 0 0-2 2v14l5-2 5 2V6a2 2 0 0 0-2-2Z" />
+            </svg>
+            <span className="text-[9px] font-semibold uppercase tracking-wide [writing-mode:vertical-rl] rotate-180">H&N</span>
           </button>
         )}
         {drawingsEnabled && (
           <button
             onClick={() => openReaderPanel("drawing")}
-            className="inline-flex items-center justify-between min-w-[10.5rem] gap-2 px-3 py-2 rounded-lg border border-sky-300 dark:border-sky-700 bg-sky-50 dark:bg-sky-900/20 text-xs font-semibold text-sky-700 dark:text-sky-300 hover:bg-sky-100 dark:hover:bg-sky-900/30 transition-colors cursor-pointer"
+            className="flex flex-col items-center gap-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 border-r-0 rounded-l-xl px-2 py-3 shadow-md text-gray-500 hover:text-sky-600 dark:hover:text-sky-300 transition-colors cursor-pointer"
+            title="Drawing Board"
           >
-            Drawing Board
+            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+              <path d="M12 20h9" />
+              <path d="m16.5 3.5 4 4L7 21H3v-4L16.5 3.5Z" />
+            </svg>
+            <span className="text-[9px] font-semibold uppercase tracking-wide [writing-mode:vertical-rl] rotate-180">DRAW</span>
           </button>
         )}
         {completedIds.length > 0 && (
           <button
             onClick={handleResetProgress}
             disabled={resetting}
-            className={[
-              "inline-flex items-center justify-between min-w-[10.5rem] gap-2 px-3 py-2 rounded-lg border text-xs font-semibold transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed",
-              showConfirmReset
-                ? "border-red-500 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/40"
-                : "border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
-            ].join(" ")}
             onMouseLeave={() => setShowConfirmReset(false)}
+            className={[
+              "flex flex-col items-center gap-1 border border-r-0 rounded-l-xl px-2 py-3 shadow-md text-gray-500 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed",
+              showConfirmReset
+                ? "bg-red-50 dark:bg-red-900/20 border-red-500 text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/40"
+                : "bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 hover:text-red-600 dark:hover:text-red-400"
+            ].join(" ")}
+            title={showConfirmReset ? "Confirm Reset" : "Reset progress"}
           >
-            <span>{showConfirmReset ? "Confirm Reset" : "Reset progress"}</span>
             {resetting ? (
-              <div className="w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin" />
-            ) : showConfirmReset ? (
-              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-              </svg>
+              <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
             ) : (
-              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
               </svg>
             )}
+            <span className="text-[9px] font-semibold uppercase tracking-wide [writing-mode:vertical-rl] rotate-180">
+              {showConfirmReset ? "CONFIRM" : "RESET"}
+            </span>
           </button>
         )}
       </div>
+      )}
+      {!readerPanelMounted && (
+        <div className="lg:hidden fixed right-3 bottom-4 z-40 flex flex-col items-end gap-2">
+          {bookmarksEnabled && (
+            <button
+              onClick={() => openReaderPanel("bookmarks")}
+              className="inline-flex items-center gap-2 px-3 py-2 rounded-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 shadow-md text-xs font-semibold text-gray-600 dark:text-gray-300 hover:text-indigo-600 dark:hover:text-indigo-300 transition-colors cursor-pointer"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 20 20" stroke="currentColor" strokeWidth={1.6}>
+                <path d="M5 2a2 2 0 0 0-2 2v14l7-3 7 3V4a2 2 0 0 0-2-2H5Z" />
+              </svg>
+              <span>Bookmarks</span>
+            </button>
+          )}
+          {notesDrawerEnabled && (
+            <button
+              onClick={() => openReaderPanel("highlightNotes")}
+              className="inline-flex items-center gap-2 px-3 py-2 rounded-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 shadow-md text-xs font-semibold text-gray-600 dark:text-gray-300 hover:text-amber-600 dark:hover:text-amber-300 transition-colors cursor-pointer"
+            >
+              <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                <path d="M15 4H6a2 2 0 0 0-2 2v14l5-2 5 2V6a2 2 0 0 0-2-2Z" />
+              </svg>
+              <span>H+N</span>
+            </button>
+          )}
+          {drawingsEnabled && (
+            <button
+              onClick={() => openReaderPanel("drawing")}
+              className="inline-flex items-center gap-2 px-3 py-2 rounded-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 shadow-md text-xs font-semibold text-gray-600 dark:text-gray-300 hover:text-sky-700 dark:hover:text-sky-300 transition-colors cursor-pointer"
+            >
+              <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                <path d="M12 20h9" />
+                <path d="m16.5 3.5 4 4L7 21H3v-4L16.5 3.5Z" />
+              </svg>
+              <span>Draw</span>
+            </button>
+          )}
+          {completedIds.length > 0 && (
+            <button
+              onClick={handleResetProgress}
+              disabled={resetting}
+              className={[
+                "inline-flex items-center gap-2 px-3 py-2 rounded-full border shadow-md text-xs font-semibold transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed",
+                showConfirmReset
+                  ? "border-red-500 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/40"
+                  : "bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:text-red-600 dark:hover:text-red-400"
+              ].join(" ")}
+            >
+              <span>{showConfirmReset ? "Confirm" : "Reset"}</span>
+              {resetting ? (
+                <div className="w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin" />
+              ) : (
+                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+              )}
+            </button>
+          )}
+        </div>
       )}
       <div className="max-w-5xl mx-auto px-6 py-8 transition-[margin-right] duration-200" style={readerContentShiftStyle}>
         <CourseDetailToc
@@ -988,144 +1136,24 @@ export default function CourseDetailPage() {
 
                   {readerPanelMode === "highlightNotes" && (
                     <>
-                      <section className="space-y-3">
-                        <div className="flex items-center justify-between gap-2">
-                          <p className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
-                            Topic Notes
-                          </p>
-                          <button
-                            onClick={() => void handleClearAllTopicNotes()}
-                            disabled={readerBusy || noteHistoryBusy || topicNotesCount === 0}
-                            className="inline-flex items-center px-2 py-1 text-[11px] rounded border border-red-300 dark:border-red-700 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 disabled:opacity-45 disabled:cursor-not-allowed cursor-pointer"
-                          >
-                            Clear All
-                          </button>
-                        </div>
-                        {topicNotesEntries.length === 0 ? (
-                          <p className="text-sm text-gray-500 dark:text-gray-400">No topic notes yet.</p>
-                        ) : (
-                          topicNotesEntries.map(({ topicKey, topicIndex, notes }) => {
-                            const topicMeta = topicMetaByIndex.get(topicIndex);
-                            const topicHref = topicMeta
-                              ? buildTopicHref(courseId, routeSlug, topicIndex, topicMeta.slug, fromPath)
-                              : null;
-                            return (
-                              <section key={topicKey} className="rounded-lg border border-gray-200 dark:border-gray-800 p-3 bg-white dark:bg-gray-900/50 space-y-2">
-                                <div className="flex items-center justify-between">
-                                  {topicHref ? (
-                                    <a href={topicHref} className="text-xs font-semibold uppercase tracking-wide text-indigo-600 dark:text-indigo-300 hover:underline">
-                                      {topicMeta?.title ?? `Topic ${topicIndex + 1}`}
-                                    </a>
-                                  ) : (
-                                    <p className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
-                                      {topicMeta?.title ?? `Topic ${topicIndex + 1}`}
-                                    </p>
-                                  )}
-                                  <div className="flex items-center gap-3">
-                                    {topicHref && (
-                                      <a href={topicHref} className="text-xs text-gray-500 dark:text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-300 hover:underline">
-                                        Open Topic
-                                      </a>
-                                    )}
-                                    <button
-                                      onClick={() => setTopicAddOpenByTopic((prev) => ({ ...prev, [topicKey]: !prev[topicKey] }))}
-                                      className="text-xs text-indigo-600 dark:text-indigo-300 hover:underline cursor-pointer"
-                                    >
-                                      Add Note
-                                    </button>
-                                  </div>
-                                </div>
-                                {topicAddOpenByTopic[topicKey] && (
-                                  <div className="space-y-2">
-                                    <textarea
-                                      value={topicAddDraftByTopic[topicKey] ?? ""}
-                                      onChange={(e) => setTopicAddDraftByTopic((prev) => ({ ...prev, [topicKey]: e.target.value.slice(0, 1200) }))}
-                                      rows={3}
-                                      placeholder="Type note..."
-                                      className="w-full rounded-md border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-2 py-1.5 text-xs text-gray-700 dark:text-gray-200 outline-none focus:ring-2 focus:ring-indigo-500/30"
-                                    />
-                                    <button
-                                      disabled={readerBusy || noteHistoryBusy || !(topicAddDraftByTopic[topicKey] ?? "").trim()}
-                                      onClick={() => void handleAddTopicNote(topicKey, topicIndex, topicAddDraftByTopic[topicKey] ?? "")}
-                                      className="inline-flex items-center px-2.5 py-1 text-xs rounded border border-indigo-300 dark:border-indigo-700 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
-                                    >
-                                      Save
-                                    </button>
-                                  </div>
-                                )}
-                                <ul className="space-y-1.5">
-                                  {notes.map((note: ViewerTopicNote) => {
-                                    const draftKey = `${topicKey}:${note.id}`;
-                                    const isEditing = !!topicNoteEditOpen[draftKey];
-                                    const draft = topicNoteDrafts[draftKey] ?? note.text;
-                                    return (
-                                      <li key={note.id} className="rounded border border-gray-200 dark:border-gray-800 bg-gray-50/70 dark:bg-gray-900/40 px-2 py-1.5 space-y-1.5">
-                                        {isEditing ? (
-                                          <textarea
-                                            value={draft}
-                                            onChange={(e) => setTopicNoteDrafts((prev) => ({ ...prev, [draftKey]: e.target.value.slice(0, 1200) }))}
-                                            rows={3}
-                                            className="w-full rounded-md border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-2 py-1.5 text-xs text-gray-700 dark:text-gray-200 outline-none focus:ring-2 focus:ring-indigo-500/30"
-                                          />
-                                        ) : (
-                                          <p className="text-xs text-gray-700 dark:text-gray-200 whitespace-pre-wrap">{note.text}</p>
-                                        )}
-                                        <div className="flex items-center gap-2">
-                                          {isEditing ? (
-                                            <button
-                                              disabled={readerBusy || noteHistoryBusy || !draft.trim()}
-                                              onClick={() => void handleUpdateTopicNote(topicIndex, note.id, note.text, draft, draftKey)}
-                                              className="text-xs text-indigo-600 dark:text-indigo-300 hover:underline cursor-pointer disabled:opacity-50"
-                                            >
-                                              Save
-                                            </button>
-                                          ) : (
-                                            <button
-                                              onClick={() => {
-                                                setTopicNoteDrafts((prev) => ({ ...prev, [draftKey]: note.text }));
-                                                setTopicNoteEditOpen((prev) => ({ ...prev, [draftKey]: true }));
-                                              }}
-                                              className="text-xs text-indigo-600 dark:text-indigo-300 hover:underline cursor-pointer"
-                                            >
-                                              Edit
-                                            </button>
-                                          )}
-                                          <button
-                                            disabled={readerBusy || noteHistoryBusy}
-                                            onClick={() => void handleRemoveTopicNote(topicIndex, note)}
-                                            className="text-xs text-red-600 dark:text-red-400 hover:underline cursor-pointer disabled:opacity-50"
-                                          >
-                                            Remove
-                                          </button>
-                                        </div>
-                                      </li>
-                                    );
-                                  })}
-                                </ul>
-                              </section>
-                            );
-                          })
-                        )}
-                      </section>
-
-                      <section className="space-y-3">
+                      <section className="space-y-3 rounded-lg border border-sky-200 dark:border-sky-900 bg-sky-50/40 dark:bg-sky-950/20 p-3">
                         <div className="flex items-center justify-between">
                           <p className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
                             Course Notes
                           </p>
                           <div className="flex items-center gap-3">
                             <button
+                              onClick={() => setCourseAddOpen((prev) => !prev)}
+                              className="text-xs text-indigo-600 dark:text-indigo-300 hover:underline cursor-pointer"
+                            >
+                              Add Note
+                            </button>
+                            <button
                               onClick={() => void handleClearAllCourseNotes()}
                               disabled={readerBusy || noteHistoryBusy || courseNotes.length === 0}
                               className="inline-flex items-center px-2 py-1 text-[11px] rounded border border-red-300 dark:border-red-700 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 disabled:opacity-45 disabled:cursor-not-allowed cursor-pointer"
                             >
                               Clear All
-                            </button>
-                            <button
-                              onClick={() => setCourseAddOpen((prev) => !prev)}
-                              className="text-xs text-indigo-600 dark:text-indigo-300 hover:underline cursor-pointer"
-                            >
-                              Add Note
                             </button>
                           </div>
                         </div>
@@ -1155,7 +1183,7 @@ export default function CourseDetailPage() {
                               const isEditing = !!courseNoteEditOpen[note.id];
                               const draft = courseNoteDrafts[note.id] ?? note.text;
                               return (
-                                <li key={note.id} className="rounded border border-gray-200 dark:border-gray-800 bg-gray-50/70 dark:bg-gray-900/40 px-2 py-1.5 space-y-1.5">
+                                <li key={note.id} className="rounded border border-sky-200 dark:border-sky-900 bg-white/80 dark:bg-sky-950/30 px-2 py-1.5 space-y-1.5">
                                   {isEditing ? (
                                     <textarea
                                       value={draft}
@@ -1168,13 +1196,22 @@ export default function CourseDetailPage() {
                                   )}
                                   <div className="flex items-center gap-2">
                                     {isEditing ? (
-                                      <button
-                                        disabled={readerBusy || noteHistoryBusy || !draft.trim()}
-                                        onClick={() => void handleUpdateCourseNote(note.id, note.text, draft)}
-                                        className="text-xs text-indigo-600 dark:text-indigo-300 hover:underline cursor-pointer disabled:opacity-50"
-                                      >
-                                        Save
-                                      </button>
+                                      <>
+                                        <button
+                                          disabled={readerBusy || noteHistoryBusy || !draft.trim()}
+                                          onClick={() => void handleUpdateCourseNote(note.id, note.text, draft)}
+                                          className="text-xs text-indigo-600 dark:text-indigo-300 hover:underline cursor-pointer disabled:opacity-50"
+                                        >
+                                          Save
+                                        </button>
+                                        <button
+                                          disabled={readerBusy || noteHistoryBusy}
+                                          onClick={() => setCourseNoteEditOpen((prev) => ({ ...prev, [note.id]: false }))}
+                                          className="text-xs text-gray-500 dark:text-gray-400 hover:underline cursor-pointer disabled:opacity-50"
+                                        >
+                                          Cancel
+                                        </button>
+                                      </>
                                     ) : (
                                       <button
                                         onClick={() => {
@@ -1204,27 +1241,40 @@ export default function CourseDetailPage() {
                       <section className="space-y-3">
                         <div className="flex items-center justify-between gap-2">
                           <p className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
-                            Highlights
+                            By Topic (Highlights + Notes)
                           </p>
-                          <button
-                            onClick={() => void handleClearAllHighlights()}
-                            disabled={readerBusy || noteHistoryBusy || highlightsCount === 0}
-                            className="inline-flex items-center px-2 py-1 text-[11px] rounded border border-red-300 dark:border-red-700 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 disabled:opacity-45 disabled:cursor-not-allowed cursor-pointer"
-                          >
-                            Clear All
-                          </button>
+                          <div className="flex items-center gap-2">
+                            {notesEnabled && (
+                              <button
+                                onClick={() => void handleClearAllTopicNotes()}
+                                disabled={readerBusy || noteHistoryBusy || topicNotesCount === 0}
+                                className="inline-flex items-center px-2 py-1 text-[11px] rounded border border-red-300 dark:border-red-700 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 disabled:opacity-45 disabled:cursor-not-allowed cursor-pointer"
+                              >
+                                Clear Notes
+                              </button>
+                            )}
+                            {highlightsEnabled && (
+                              <button
+                                onClick={() => void handleClearAllHighlights()}
+                                disabled={readerBusy || noteHistoryBusy || highlightsCount === 0}
+                                className="inline-flex items-center px-2 py-1 text-[11px] rounded border border-red-300 dark:border-red-700 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 disabled:opacity-45 disabled:cursor-not-allowed cursor-pointer"
+                              >
+                                Clear Highlights
+                              </button>
+                            )}
+                          </div>
                         </div>
-                        {highlightEntries.length === 0 ? (
-                          <p className="text-sm text-gray-500 dark:text-gray-400">No highlights yet.</p>
+                        {groupedTopicEntries.length === 0 ? (
+                          <p className="text-sm text-gray-500 dark:text-gray-400">No topic highlights or notes yet.</p>
                         ) : (
-                          highlightEntries.map(({ topicKey, topicIndex, rows }) => {
+                          groupedTopicEntries.map(({ topicKey, topicIndex, notes, rows }) => {
                             const topicMeta = topicMetaByIndex.get(topicIndex);
                             const topicHref = topicMeta
                               ? buildTopicHref(courseId, routeSlug, topicIndex, topicMeta.slug, fromPath)
                               : null;
                             return (
                               <section key={topicKey} className="rounded-lg border border-gray-200 dark:border-gray-800 p-3 bg-white dark:bg-gray-900/50 space-y-2">
-                                <div className="flex items-center justify-between gap-2">
+                                <div className="flex items-center justify-between">
                                   {topicHref ? (
                                     <a href={topicHref} className="text-xs font-semibold uppercase tracking-wide text-indigo-600 dark:text-indigo-300 hover:underline">
                                       {topicMeta?.title ?? `Topic ${topicIndex + 1}`}
@@ -1234,60 +1284,193 @@ export default function CourseDetailPage() {
                                       {topicMeta?.title ?? `Topic ${topicIndex + 1}`}
                                     </p>
                                   )}
-                                  {topicHref && (
-                                    <a href={topicHref} className="text-xs text-gray-500 dark:text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-300 hover:underline">
-                                      Open Topic
-                                    </a>
+                                  {notesEnabled && (
+                                    <button
+                                      onClick={() => setTopicAddOpenByTopic((prev) => ({ ...prev, [topicKey]: !prev[topicKey] }))}
+                                      className="text-xs text-indigo-600 dark:text-indigo-300 hover:underline cursor-pointer"
+                                    >
+                                      {topicAddOpenByTopic[topicKey] ? "Cancel" : "Add Note"}
+                                    </button>
                                   )}
                                 </div>
-                                <ul className="space-y-2">
-                                  {rows.map((row: ViewerHighlight) => {
-                                    const draftKey = `${topicKey}:${row.id}`;
-                                    const isEditing = !!highlightNoteEditOpen[draftKey];
-                                    const hasNote = Boolean((row.note ?? "").trim());
-                                    const draft = highlightNoteDrafts[draftKey] ?? row.note ?? "";
-                                    return (
-                                      <li key={row.id} className="rounded border border-amber-200 dark:border-amber-900 bg-amber-50/60 dark:bg-amber-950/20 p-2 space-y-1.5">
-                                        <p className="text-xs text-gray-800 dark:text-gray-100">{row.text}</p>
-                                        {(hasNote || isEditing) && (
-                                          <>
+                                {notesEnabled && topicAddOpenByTopic[topicKey] && (
+                                  <div className="space-y-2">
+                                    <textarea
+                                      value={topicAddDraftByTopic[topicKey] ?? ""}
+                                      onChange={(e) => setTopicAddDraftByTopic((prev) => ({ ...prev, [topicKey]: e.target.value.slice(0, 1200) }))}
+                                      rows={3}
+                                      placeholder="Type note..."
+                                      className="w-full rounded-md border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-2 py-1.5 text-xs text-gray-700 dark:text-gray-200 outline-none focus:ring-2 focus:ring-indigo-500/30"
+                                    />
+                                    <button
+                                      disabled={readerBusy || noteHistoryBusy || !(topicAddDraftByTopic[topicKey] ?? "").trim()}
+                                      onClick={() => void handleAddTopicNote(topicKey, topicIndex, topicAddDraftByTopic[topicKey] ?? "")}
+                                      className="inline-flex items-center px-2.5 py-1 text-xs rounded border border-indigo-300 dark:border-indigo-700 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                                    >
+                                      Save
+                                    </button>
+                                  </div>
+                                )}
+                                {notesEnabled && notes.length > 0 && (
+                                  <div className="space-y-1.5">
+                                    <p className="text-[11px] uppercase tracking-wide font-semibold text-gray-500 dark:text-gray-400">
+                                      Notes
+                                    </p>
+                                    <ul className="space-y-1.5">
+                                      {notes.map((note: ViewerTopicNote) => {
+                                        const draftKey = `${topicKey}:${note.id}`;
+                                        const isEditing = !!topicNoteEditOpen[draftKey];
+                                        const draft = topicNoteDrafts[draftKey] ?? note.text;
+                                        return (
+                                          <li key={note.id} className="rounded border border-sky-200 dark:border-sky-900 bg-sky-50/50 dark:bg-sky-950/20 px-2 py-1.5 space-y-1.5">
                                             {isEditing ? (
                                               <textarea
                                                 value={draft}
-                                                onChange={(e) => setHighlightNoteDrafts((prev) => ({ ...prev, [draftKey]: e.target.value.slice(0, 800) }))}
+                                                onChange={(e) => setTopicNoteDrafts((prev) => ({ ...prev, [draftKey]: e.target.value.slice(0, 1200) }))}
                                                 rows={3}
-                                                className="w-full rounded-md border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-2 py-1.5 text-xs text-gray-700 dark:text-gray-200 outline-none focus:ring-2 focus:ring-amber-500/30"
+                                                className="w-full rounded-md border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-2 py-1.5 text-xs text-gray-700 dark:text-gray-200 outline-none focus:ring-2 focus:ring-indigo-500/30"
                                               />
                                             ) : (
-                                              <p className="text-xs text-gray-700 dark:text-gray-300 whitespace-pre-wrap">{row.note}</p>
+                                              <p className="text-xs text-gray-700 dark:text-gray-200 whitespace-pre-wrap">{note.text}</p>
                                             )}
-                                          </>
-                                        )}
-                                        <div className="flex items-center gap-2">
-                                          {isEditing ? (
-                                            <button
-                                              disabled={readerBusy || noteHistoryBusy}
-                                              onClick={() => void handleUpdateHighlightNote(topicIndex, row, draft, draftKey)}
-                                              className="text-xs text-indigo-600 dark:text-indigo-300 hover:underline cursor-pointer disabled:opacity-50"
-                                            >
-                                              Save
-                                            </button>
-                                          ) : (
-                                            <button
-                                              onClick={() => {
-                                                setHighlightNoteDrafts((prev) => ({ ...prev, [draftKey]: row.note ?? "" }));
-                                                setHighlightNoteEditOpen((prev) => ({ ...prev, [draftKey]: true }));
-                                              }}
-                                              className="text-xs text-indigo-600 dark:text-indigo-300 hover:underline cursor-pointer"
-                                            >
-                                              {hasNote ? "Edit Note" : "Add Note"}
-                                            </button>
-                                          )}
-                                        </div>
-                                      </li>
-                                    );
-                                  })}
-                                </ul>
+                                            <div className="flex items-center gap-2">
+                                              {isEditing ? (
+                                                <>
+                                                  <button
+                                                    disabled={readerBusy || noteHistoryBusy || !draft.trim()}
+                                                    onClick={() => void handleUpdateTopicNote(topicIndex, note.id, note.text, draft, draftKey)}
+                                                    className="text-xs text-indigo-600 dark:text-indigo-300 hover:underline cursor-pointer disabled:opacity-50"
+                                                  >
+                                                    Save
+                                                  </button>
+                                                  <button
+                                                    disabled={readerBusy || noteHistoryBusy}
+                                                    onClick={() => setTopicNoteEditOpen((prev) => ({ ...prev, [draftKey]: false }))}
+                                                    className="text-xs text-gray-500 dark:text-gray-400 hover:underline cursor-pointer disabled:opacity-50"
+                                                  >
+                                                    Cancel
+                                                  </button>
+                                                </>
+                                              ) : (
+                                                <button
+                                                  onClick={() => {
+                                                    setTopicNoteDrafts((prev) => ({ ...prev, [draftKey]: note.text }));
+                                                    setTopicNoteEditOpen((prev) => ({ ...prev, [draftKey]: true }));
+                                                  }}
+                                                  className="text-xs text-indigo-600 dark:text-indigo-300 hover:underline cursor-pointer"
+                                                >
+                                                  Edit
+                                                </button>
+                                              )}
+                                              <button
+                                                disabled={readerBusy || noteHistoryBusy}
+                                                onClick={() => void handleRemoveTopicNote(topicIndex, note)}
+                                                className="text-xs text-red-600 dark:text-red-400 hover:underline cursor-pointer disabled:opacity-50"
+                                              >
+                                                Remove
+                                              </button>
+                                            </div>
+                                          </li>
+                                        );
+                                      })}
+                                    </ul>
+                                  </div>
+                                )}
+
+                                {highlightsEnabled && rows.length > 0 && (
+                                  <div className="space-y-2">
+                                    <p className="text-[11px] uppercase tracking-wide font-semibold text-gray-500 dark:text-gray-400">
+                                      Highlights
+                                    </p>
+                                    <ul className="space-y-2">
+                                      {rows.map((row: ViewerHighlight) => {
+                                        const draftKey = `${topicKey}:${row.id}`;
+                                        const isEditing = !!highlightNoteEditOpen[draftKey];
+                                        const hasNote = Boolean((row.note ?? "").trim());
+                                        const draft = highlightNoteDrafts[draftKey] ?? row.note ?? "";
+                                        return (
+                                          <li key={row.id} className="rounded border border-amber-300 dark:border-amber-800 bg-amber-50/80 dark:bg-amber-950/30 p-2 space-y-1.5">
+                                            <div className="flex items-start justify-between gap-2">
+                                              <p className="text-xs text-gray-800 dark:text-gray-100">{row.text}</p>
+                                              <button
+                                                disabled={readerBusy || noteHistoryBusy}
+                                                onClick={() => void handleRemoveHighlight(topicIndex, row)}
+                                                className="text-xs text-red-600 dark:text-red-400 hover:underline cursor-pointer disabled:opacity-50 shrink-0"
+                                              >
+                                                Delete
+                                              </button>
+                                            </div>
+                                            {(hasNote || isEditing) && (
+                                              <>
+                                                {isEditing ? (
+                                                  <div className="space-y-1">
+                                                    <p className="text-[10px] uppercase tracking-wide font-semibold text-sky-700 dark:text-sky-300">
+                                                      Note
+                                                    </p>
+                                                    <textarea
+                                                      value={draft}
+                                                      onChange={(e) => setHighlightNoteDrafts((prev) => ({ ...prev, [draftKey]: e.target.value.slice(0, 800) }))}
+                                                      rows={3}
+                                                      className="w-full rounded-md border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-2 py-1.5 text-xs text-gray-700 dark:text-gray-200 outline-none focus:ring-2 focus:ring-amber-500/30"
+                                                    />
+                                                  </div>
+                                                ) : (
+                                                  <div className="rounded-md border border-sky-200 dark:border-sky-900 bg-sky-50/80 dark:bg-sky-950/30 px-2 py-1.5">
+                                                    <p className="mb-1 text-[10px] uppercase tracking-wide font-semibold text-sky-700 dark:text-sky-300">
+                                                      Note
+                                                    </p>
+                                                    <p className="text-xs text-gray-700 dark:text-gray-300 whitespace-pre-wrap">{row.note}</p>
+                                                  </div>
+                                                )}
+                                              </>
+                                            )}
+                                            <div className="flex items-center gap-2">
+                                              {isEditing ? (
+                                                <>
+                                                  <button
+                                                    disabled={readerBusy || noteHistoryBusy}
+                                                    onClick={() => void handleUpdateHighlightNote(topicIndex, row, draft, draftKey)}
+                                                    className="text-xs text-indigo-600 dark:text-indigo-300 hover:underline cursor-pointer disabled:opacity-50"
+                                                  >
+                                                    Save
+                                                  </button>
+                                                  <button
+                                                    disabled={readerBusy || noteHistoryBusy}
+                                                    onClick={() => setHighlightNoteEditOpen((prev) => ({ ...prev, [draftKey]: false }))}
+                                                    className="text-xs text-gray-500 dark:text-gray-400 hover:underline cursor-pointer disabled:opacity-50"
+                                                  >
+                                                    Cancel
+                                                  </button>
+                                                  <button
+                                                    disabled={readerBusy || noteHistoryBusy}
+                                                    onClick={() => void handleUpdateHighlightNote(topicIndex, row, "", draftKey)}
+                                                    className="text-xs text-red-600 dark:text-red-400 hover:underline cursor-pointer disabled:opacity-50"
+                                                  >
+                                                    Delete Note
+                                                  </button>
+                                                </>
+                                              ) : (
+                                                <button
+                                                  onClick={() => {
+                                                    setHighlightNoteDrafts((prev) => ({ ...prev, [draftKey]: row.note ?? "" }));
+                                                    setHighlightNoteEditOpen((prev) => ({ ...prev, [draftKey]: true }));
+                                                  }}
+                                                  className="text-xs text-indigo-600 dark:text-indigo-300 hover:underline cursor-pointer"
+                                                >
+                                                  {hasNote ? "Edit Note" : "Add Note"}
+                                                </button>
+                                              )}
+                                            </div>
+                                          </li>
+                                        );
+                                      })}
+                                    </ul>
+                                  </div>
+                                )}
+
+                                {notes.length === 0 && rows.length === 0 && (
+                                  <p className="text-xs text-gray-500 dark:text-gray-400">No notes or highlights for this topic.</p>
+                                )}
                               </section>
                             );
                           })
