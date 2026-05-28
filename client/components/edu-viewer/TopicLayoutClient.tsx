@@ -2026,7 +2026,10 @@ export default function TopicLayoutClient({
   }, [drawingsEnabled]);
 
   const handleCloseDrawingPad = useCallback(() => {
-    setDrawingPadOpen(false);
+    setDrawingPanelVisible(false);
+    window.setTimeout(() => {
+      setDrawingPadOpen(false);
+    }, DRAWER_ANIM_MS);
     setDrawerOpen(false);
     setTocDrawerOpen(false);
     setHighlightDrawerOpen(false);
@@ -2785,11 +2788,10 @@ export default function TopicLayoutClient({
 
       {drawingsEnabled && drawingPanelEverOpened && (
         <div
-          className={`fixed top-14 bottom-0 z-50 border-l border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-950 shadow-2xl will-change-[right,opacity] transition-[right,opacity] duration-300 ease-out ${drawingPanelVisible ? "pointer-events-auto" : "pointer-events-none"}`}
+          className={`fixed top-14 bottom-0 right-0 z-50 border-l border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-950 shadow-2xl will-change-[opacity] transition-opacity duration-220 ease-out ${drawingPanelVisible ? "pointer-events-auto" : "pointer-events-none"}`}
           style={{
             width: `${drawingPanelWidth}px`,
-            right: drawingPanelVisible ? 0 : -drawingPanelWidth,
-            opacity: drawingPanelVisible ? 1 : 0.96,
+            opacity: drawingPanelVisible ? 1 : 0,
           }}
         >
           <div

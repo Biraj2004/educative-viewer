@@ -902,11 +902,10 @@ export default function CourseDetailPage() {
         <div className={`fixed inset-x-0 bottom-0 top-14 z-50 transition-opacity duration-200 ${readerPanelVisible ? "pointer-events-auto" : "pointer-events-none"}`}>
           <div className={`absolute inset-0 bg-black/40 transition-opacity duration-200 ${readerPanelVisible ? "opacity-100" : "opacity-0"}`} onClick={closeReaderPanel} />
           <div
-            className="absolute top-0 bottom-0 bg-white dark:bg-gray-900 border-l border-gray-200 dark:border-gray-800 shadow-2xl flex flex-col will-change-[right,opacity] transition-[right,opacity] duration-300 ease-out"
+            className="absolute top-0 bottom-0 right-0 bg-white dark:bg-gray-900 border-l border-gray-200 dark:border-gray-800 shadow-2xl flex flex-col will-change-[opacity] transition-opacity duration-220 ease-out"
             style={{
               width: `${readerPanelWidth}px`,
-              right: readerPanelVisible ? 0 : -readerPanelWidth,
-              opacity: readerPanelVisible ? 1 : 0.96,
+              opacity: readerPanelVisible ? 1 : 0,
             }}
           >
             <div
