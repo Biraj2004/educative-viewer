@@ -3074,7 +3074,7 @@ export default function TopicLayoutClient({
 
       {drawingsEnabled && drawingPadOpen && (
         <div
-          className={`fixed top-14 bottom-0 right-0 z-50 border-l border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-950 shadow-2xl will-change-transform transition-transform duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] ${drawingPanelVisible ? "pointer-events-auto translate-x-0" : "pointer-events-none translate-x-full"}`}
+          className={`fixed top-14 bottom-0 right-0 z-50 border-l border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-950 shadow-2xl will-change-[opacity] transition-opacity duration-220 ease-out ${drawingPanelVisible ? "pointer-events-auto opacity-100" : "pointer-events-none opacity-0"}`}
           style={{
             width: `${drawingPanelWidth}px`,
             opacity: drawingPanelVisible ? 1 : 0,

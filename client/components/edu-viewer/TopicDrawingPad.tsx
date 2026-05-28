@@ -127,6 +127,7 @@ export default function TopicDrawingPad({
   onDelete,
   onClose,
 }: Props) {
+  const rootRef = useRef<HTMLDivElement | null>(null);
   const [api, setApi] = useState<ExcalidrawImperativeAPI | null>(null);
   const [dirty, setDirty] = useState(false);
   const [localSaveBusy, setLocalSaveBusy] = useState(false);
@@ -149,6 +150,41 @@ export default function TopicDrawingPad({
       }
     }
   }, []);
+
+  useEffect(() => {
+    if (!api) return;
+    const refreshNow = () => {
+      try {
+        api.refresh();
+      } catch {
+        // No-op. Refresh is best-effort to keep pointer offsets in sync.
+      }
+    };
+
+    const raf1 = window.requestAnimationFrame(() => {
+      refreshNow();
+      window.requestAnimationFrame(refreshNow);
+    });
+    const timeoutId = window.setTimeout(refreshNow, 260);
+
+    let resizeObserver: ResizeObserver | null = null;
+    if (typeof ResizeObserver !== "undefined" && rootRef.current) {
+      resizeObserver = new ResizeObserver(() => {
+        window.requestAnimationFrame(refreshNow);
+      });
+      resizeObserver.observe(rootRef.current);
+    }
+
+    const onWindowResize = () => window.requestAnimationFrame(refreshNow);
+    window.addEventListener("resize", onWindowResize);
+
+    return () => {
+      window.cancelAnimationFrame(raf1);
+      window.clearTimeout(timeoutId);
+      window.removeEventListener("resize", onWindowResize);
+      if (resizeObserver) resizeObserver.disconnect();
+    };
+  }, [api]);
 
   const libraryReturnUrl = useMemo(() => {
     if (typeof window === "undefined") return undefined;
@@ -296,7 +332,7 @@ export default function TopicDrawingPad({
   }, [api, busy]);
 
   return (
-    <div className="h-full bg-white dark:bg-gray-950 flex flex-col">
+    <div ref={rootRef} className="h-full bg-white dark:bg-gray-950 flex flex-col">
       <ExcalidrawLibraryHandler excalidrawAPI={api} />
       <div className="h-14 px-4 border-b border-gray-200 dark:border-gray-800 bg-white/95 dark:bg-gray-950/95 backdrop-blur flex items-center justify-between gap-3">
         <div className="min-w-0">
