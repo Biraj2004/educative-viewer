@@ -468,7 +468,7 @@ export default function CourseDetailPage() {
   const openReaderPanel = (mode: ReaderPanelMode) => {
     setReaderPanelMode(mode);
     if (typeof window !== "undefined") {
-      const targetRatio = mode === "highlightNotes" ? 0.3 : 0.6;
+      const targetRatio = mode === "drawing" ? 0.6 : 0.3;
       setReaderPanelWidth(clampReaderPanelWidth(window.innerWidth * targetRatio));
     }
     if (panelCloseTimerRef.current) {
