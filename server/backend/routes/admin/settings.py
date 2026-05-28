@@ -53,7 +53,6 @@ def register_settings_routes(bp: Blueprint, auth_service: AuthService) -> None:
             "groq_api_key": get_env_variable("GROQ_API_KEY"),
             "course_db_engine": get_env_variable("COURSE_DB_ENGINE", "sqlite"),
             "course_sqlite_db_paths_json": get_env_variable("COURSE_SQLITE_DB_PATHS_JSON", '[]'),
-            "highlights_enabled": "1" if viewer_feature_flags.get("highlights_enabled", True) else "0",
             "viewer_feature_flags_json": json.dumps(viewer_feature_flags, separators=(",", ":")),
             "viewer_feature_role_overrides_json": json.dumps(
                 viewer_feature_role_overrides, separators=(",", ":")
@@ -74,7 +73,6 @@ def register_settings_routes(bp: Blueprint, auth_service: AuthService) -> None:
             "groq_api_key": "GROQ_API_KEY",
             "course_db_engine": "COURSE_DB_ENGINE",
             "course_sqlite_db_paths_json": "COURSE_SQLITE_DB_PATHS_JSON",
-            "highlights_enabled": "HIGHLIGHTS_ENABLED",
         }
 
         for key, var_name in mapping.items():
@@ -113,26 +111,28 @@ def register_settings_routes(bp: Blueprint, auth_service: AuthService) -> None:
             try:
                 cfg.course_sqlite_db_paths = _parse_sqlite_db_paths(str(data["course_sqlite_db_paths_json"]))
                 course_db_updated = True
-            except Exception:
-                pass
+            except Exception as exc:
+                return jsonify({"error": f"Invalid course_sqlite_db_paths_json: {exc}"}), 400
         viewer_flags_updated = False
         if "viewer_feature_flags_json" in data:
             try:
                 parsed = json.loads(str(data["viewer_feature_flags_json"]))
                 cfg.viewer_feature_flags = normalize_viewer_feature_flags(parsed)
                 viewer_flags_updated = True
-            except Exception:
-                pass
+            except Exception as exc:
+                return jsonify({"error": f"Invalid viewer_feature_flags_json: {exc}"}), 400
 
         if "viewer_feature_role_overrides_json" in data:
             try:
                 parsed = json.loads(str(data["viewer_feature_role_overrides_json"]))
                 cfg.viewer_feature_role_overrides = parse_role_feature_overrides(parsed)
                 viewer_flags_updated = True
-            except Exception:
-                pass
+            except Exception as exc:
+                return jsonify({"error": f"Invalid viewer_feature_role_overrides_json: {exc}"}), 400
 
-        if "highlights_enabled" in data:
+        # Legacy compatibility: only accept highlights_enabled when the JSON
+        # feature map is not part of the same payload.
+        if "highlights_enabled" in data and "viewer_feature_flags_json" not in data:
             raw = str(data["highlights_enabled"]).strip().lower()
             next_highlights = raw in ("1", "true", "yes", "on")
             current_flags = normalize_viewer_feature_flags(cfg.viewer_feature_flags)

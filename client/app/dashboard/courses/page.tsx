@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import AppNavbar from "@/components/edu-viewer/AppNavbar";
 import CoursesListClient from "@/components/edu-viewer/CoursesListClient";
 import UserMenu from "@/components/edu-viewer/UserMenu";
-import { getAuthToken, clearAuthToken, getProgress, getUser, getViewerSettings } from "@/utils/authClient";
+import { getAuthToken, clearAuthToken, getProgress, getUser, getViewerFeatures } from "@/utils/authClient";
 import { useAuth } from "@/components/edu-viewer/AuthProvider";
 import type { ProgressData } from "@/utils/authClient";
 import ScrollToTop from "@/components/edu-viewer/ScrollToTop";
@@ -73,12 +73,12 @@ export default function CoursesPage() {
           inflightFetches.set(fetchKey, coursesPromise);
         }
 
-        Promise.all([coursesPromise, getProgress(), getViewerSettings()])
-          .then(([data, prog, viewerPayload]) => {
+        Promise.all([coursesPromise, getProgress(), getViewerFeatures()])
+          .then(([data, prog, viewerFeatures]) => {
             if (cancelled) return;
             setCourses(data.filter((course) => isBrowsableCourseType(course.type)));
             setProgress(prog);
-            setSearchEnabled(viewerPayload.features.search_enabled !== false);
+            setSearchEnabled(viewerFeatures.search_enabled !== false);
             setLoading(false);
           })
           .catch((err: unknown) => {

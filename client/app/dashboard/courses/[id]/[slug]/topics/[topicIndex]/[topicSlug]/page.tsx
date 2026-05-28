@@ -11,7 +11,7 @@ import {
   clearAuthToken,
   getProgress,
   getUser,
-  getViewerSettings,
+  getViewerCourseSettings,
   type ViewerDrawingNote,
   type ViewerHighlight,
   type ViewerTopicNote,
@@ -153,19 +153,18 @@ export default function TopicDetailPage() {
           inflightFetches.set(courseFetchKey, coursePromise);
         }
 
-        Promise.all([topicPromise, coursePromise, getProgress(), getViewerSettings()])
-          .then(([topicData, courseData, prog, viewerPayload]) => {
+        Promise.all([topicPromise, coursePromise, getProgress(), getViewerCourseSettings(courseId, topicIdx)])
+          .then(([topicData, courseData, prog, viewerCoursePayload]) => {
             if (cancelled) return;
             if (!topicData) { setMissing(true); setLoading(false); return; }
             setTopic(topicData);
             setCourse(courseData);
             setInitialCompleted(prog.completed[String(courseId)] ?? []);
-            setHighlightsEnabled(viewerPayload.features.highlights_enabled !== false);
-            setBookmarksEnabled(viewerPayload.features.bookmarks_enabled !== false);
-            setNotesEnabled(viewerPayload.features.notes_enabled !== false);
-            setDrawingsEnabled(viewerPayload.features.drawings_enabled !== false);
-            const viewerSettings = viewerPayload.settings;
-            const viewerCourse = viewerSettings?.courses?.[String(courseId)];
+            setHighlightsEnabled(viewerCoursePayload.features.highlights_enabled !== false);
+            setBookmarksEnabled(viewerCoursePayload.features.bookmarks_enabled !== false);
+            setNotesEnabled(viewerCoursePayload.features.notes_enabled !== false);
+            setDrawingsEnabled(viewerCoursePayload.features.drawings_enabled !== false);
+            const viewerCourse = viewerCoursePayload.course;
             const rawColor = String(viewerCourse?.last_highlight_color || "").trim().toLowerCase();
             setInitialHighlightColor(
               rawColor === "yellow" || rawColor === "blue" || rawColor === "green" || rawColor === "pink" || rawColor === "orange"

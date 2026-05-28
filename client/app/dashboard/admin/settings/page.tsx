@@ -132,6 +132,8 @@ export default function GlobalSettingsPage() {
       if (finalSettings.viewer_feature_role_overrides_json) {
         finalSettings.viewer_feature_role_overrides_json = JSON.stringify(JSON.parse(finalSettings.viewer_feature_role_overrides_json));
       }
+      // Legacy key; avoid sending stale value that can override JSON flags.
+      delete finalSettings.highlights_enabled;
 
       await adminSaveSettings(finalSettings);
       alert("Settings saved successfully.");

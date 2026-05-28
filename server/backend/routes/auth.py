@@ -774,11 +774,104 @@ def create_auth_blueprint(auth_service: AuthService, db_manager: DBManager) -> B
             abort(401, description="Not authenticated")
 
         features = _viewer_features_for_user(auth_service, user)
+        include_settings_raw = str(request.args.get("include_settings", "1") or "").strip().lower()
+        include_settings = include_settings_raw not in ("0", "false", "no", "off")
+        if not include_settings:
+            return jsonify({"features": features}), 200
+
         settings = _parse_viewer_settings(user.get("viewer_settings_json"))
         settings = _filter_settings_by_features(settings, features)
         return jsonify(
             {
                 "settings": settings,
+                "features": features,
+            }
+        ), 200
+
+    @bp.route("/viewer-settings/course", methods=["GET"])
+    def auth_get_viewer_settings_course():
+        user, _ = auth_service.resolve_user(require_full=True)
+        if not user:
+            abort(401, description="Not authenticated")
+
+        course_id_raw = request.args.get("course_id")
+        if course_id_raw is None:
+            abort(400, description="course_id is required")
+        course_id = _to_int(course_id_raw, "course_id")
+
+        topic_index_raw = request.args.get("topic_index")
+        topic_index: int | None = None
+        if topic_index_raw is not None and str(topic_index_raw).strip() != "":
+            topic_index = _to_int(topic_index_raw, "topic_index")
+
+        features = _viewer_features_for_user(auth_service, user)
+
+        conn = db_manager.get_auth_connection()
+        try:
+            row = fetch_one_dict(
+                conn,
+                "SELECT viewer_settings_json FROM users WHERE id = :user_id",
+                {"user_id": user["id"]},
+            ) or {}
+        finally:
+            conn.close()
+
+        settings = _parse_viewer_settings(row.get("viewer_settings_json"))
+        courses = settings.get("courses")
+        if not isinstance(courses, dict):
+            courses = {}
+        course_key = str(course_id)
+        raw_course_state = courses.get(course_key, {})
+        if not isinstance(raw_course_state, dict):
+            raw_course_state = {}
+
+        normalized_course_state: dict[str, Any] = {
+            "bookmarks": _clean_topic_list(raw_course_state.get("bookmarks"))[-MAX_BOOKMARKS_PER_COURSE:],
+            "highlights": _clean_highlights_map(raw_course_state.get("highlights")),
+            "topic_notes": _clean_topic_notes_map(raw_course_state.get("topic_notes")),
+            "drawing_notes": _clean_drawing_notes_map(raw_course_state.get("drawing_notes")),
+        }
+        if "last_topic_index" in raw_course_state:
+            normalized_course_state["last_topic_index"] = _coerce_non_negative_int(
+                raw_course_state.get("last_topic_index")
+            )
+        if "last_highlight_color" in raw_course_state:
+            normalized_course_state["last_highlight_color"] = _normalize_highlight_color(
+                raw_course_state.get("last_highlight_color")
+            )
+
+        filtered_course_state = _filter_course_state_by_features(normalized_course_state, features)
+
+        if topic_index is not None:
+            topic_key = str(topic_index)
+
+            topic_highlights: dict[str, list[dict[str, Any]]] = {}
+            all_highlights = filtered_course_state.get("highlights")
+            if isinstance(all_highlights, dict):
+                topic_rows = all_highlights.get(topic_key)
+                if isinstance(topic_rows, list) and topic_rows:
+                    topic_highlights[topic_key] = topic_rows
+            filtered_course_state["highlights"] = topic_highlights
+
+            topic_notes: dict[str, list[dict[str, Any]]] = {}
+            all_topic_notes = filtered_course_state.get("topic_notes")
+            if isinstance(all_topic_notes, dict):
+                note_rows = all_topic_notes.get(topic_key)
+                if isinstance(note_rows, list) and note_rows:
+                    topic_notes[topic_key] = note_rows
+            filtered_course_state["topic_notes"] = topic_notes
+
+            topic_drawing_notes: dict[str, dict[str, Any]] = {}
+            all_drawing_notes = filtered_course_state.get("drawing_notes")
+            if isinstance(all_drawing_notes, dict):
+                drawing_row = all_drawing_notes.get(topic_key)
+                if isinstance(drawing_row, dict):
+                    topic_drawing_notes[topic_key] = drawing_row
+            filtered_course_state["drawing_notes"] = topic_drawing_notes
+
+        return jsonify(
+            {
+                "course": filtered_course_state,
                 "features": features,
             }
         ), 200

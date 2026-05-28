@@ -6,7 +6,7 @@ import { notFound } from "next/navigation";
 import AppNavbar from "@/components/edu-viewer/AppNavbar";
 import CourseDetailToc from "@/components/edu-viewer/CourseDetailToc";
 import UserMenu from "@/components/edu-viewer/UserMenu";
-import { getAuthToken, clearAuthToken, getProgress, getUser, resetCourseProgress, getViewerSettings } from "@/utils/authClient";
+import { getAuthToken, clearAuthToken, getProgress, getUser, resetCourseProgress, getViewerCourseSettings } from "@/utils/authClient";
 import type { ProgressData } from "@/utils/authClient";
 import { getBackendApiBase } from "@/utils/runtime-config";
 
@@ -87,23 +87,23 @@ export default function CourseDetailPage() {
           inflightFetches.set(fetchKey, coursePromise);
         }
 
-        Promise.all([coursePromise, getProgress(), getViewerSettings()])
-          .then(([data, prog, viewerPayload]) => {
+        Promise.all([coursePromise, getProgress(), getViewerCourseSettings(courseId)])
+          .then(([data, prog, viewerCoursePayload]) => {
             if (cancelled) return;
             if (!data) { setMissing(true); setLoading(false); return; }
             setCourse(data);
             setProgress(prog);
-            const viewerSettings = viewerPayload.settings;
-            const canUseBookmarks = viewerPayload.features.bookmarks_enabled !== false;
+            const viewerCourse = viewerCoursePayload.course;
+            const canUseBookmarks = viewerCoursePayload.features.bookmarks_enabled !== false;
             setBookmarksEnabled(canUseBookmarks);
-            setSearchEnabled(viewerPayload.features.search_enabled !== false);
-            const rawLastVisited = viewerSettings?.courses?.[String(courseId)]?.last_topic_index;
+            setSearchEnabled(viewerCoursePayload.features.search_enabled !== false);
+            const rawLastVisited = viewerCourse?.last_topic_index;
             setLastVisitedTopicIndex(
               typeof rawLastVisited === "number" && Number.isFinite(rawLastVisited)
                 ? rawLastVisited
                 : null
             );
-            const rawBookmarks = viewerSettings?.courses?.[String(courseId)]?.bookmarks;
+            const rawBookmarks = viewerCourse?.bookmarks;
             setBookmarkedTopicIndices(
               new Set(
                 canUseBookmarks && Array.isArray(rawBookmarks)

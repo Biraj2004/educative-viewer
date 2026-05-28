@@ -277,6 +277,11 @@ export interface ViewerSettingsPayload {
   features: ViewerFeatures;
 }
 
+export interface ViewerCourseSettingsPayload {
+  course: CourseViewerSettings;
+  features: ViewerFeatures;
+}
+
 export interface AuthUser {
   id: number;
   email: string;
@@ -581,6 +586,69 @@ export async function getViewerSettings(): Promise<ViewerSettingsPayload> {
   }
 }
 
+export async function getViewerFeatures(): Promise<ViewerFeatures> {
+  try {
+    const data = await apiGet<{
+      features?: Partial<ViewerFeatures>;
+    }>(`${getAPI()}/viewer-settings?include_settings=0`);
+    const features = data?.features;
+    return {
+      highlights_enabled: features?.highlights_enabled !== false,
+      bookmarks_enabled: features?.bookmarks_enabled !== false,
+      notes_enabled: features?.notes_enabled !== false,
+      search_enabled: features?.search_enabled !== false,
+      drawings_enabled: features?.drawings_enabled !== false,
+    };
+  } catch {
+    return {
+      highlights_enabled: true,
+      bookmarks_enabled: true,
+      notes_enabled: true,
+      search_enabled: true,
+      drawings_enabled: true,
+    };
+  }
+}
+
+export async function getViewerCourseSettings(
+  courseId: number,
+  topicIndex?: number,
+): Promise<ViewerCourseSettingsPayload> {
+  try {
+    const params = new URLSearchParams({ course_id: String(courseId) });
+    if (typeof topicIndex === "number" && Number.isFinite(topicIndex)) {
+      params.set("topic_index", String(topicIndex));
+    }
+    const data = await apiGet<{
+      course?: CourseViewerSettings;
+      features?: Partial<ViewerFeatures>;
+    }>(`${getAPI()}/viewer-settings/course?${params.toString()}`);
+    const course = data?.course && typeof data.course === "object" ? data.course : {};
+    const features = data?.features;
+    return {
+      course,
+      features: {
+        highlights_enabled: features?.highlights_enabled !== false,
+        bookmarks_enabled: features?.bookmarks_enabled !== false,
+        notes_enabled: features?.notes_enabled !== false,
+        search_enabled: features?.search_enabled !== false,
+        drawings_enabled: features?.drawings_enabled !== false,
+      },
+    };
+  } catch {
+    return {
+      course: {},
+      features: {
+        highlights_enabled: true,
+        bookmarks_enabled: true,
+        notes_enabled: true,
+        search_enabled: true,
+        drawings_enabled: true,
+      },
+    };
+  }
+}
+
 export interface UpdateViewerCourseSettingsPayload {
   course_id: number;
   last_topic_index?: number;
@@ -636,25 +704,57 @@ export async function updateViewerCourseSettings(
 ): Promise<CourseViewerSettings | null> {
   const token = getAuthToken();
   if (!token) return null;
-  const res = await fetch(`${getAPI()}/viewer-settings/course`, {
-    method: "PUT",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${token}`,
-    },
-    body: JSON.stringify(payload),
-  });
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) {
-    if (res.status === 401) {
-      await _handleUnauthorized();
+  const payloadKeys = Object.keys(payload);
+  const isOnlyLastTopicUpdate = payloadKeys.length === 2
+    && payloadKeys.includes("course_id")
+    && payloadKeys.includes("last_topic_index");
+  const syncKey = isOnlyLastTopicUpdate && typeof payload.last_topic_index === "number"
+    ? `last-topic:${payload.course_id}`
+    : null;
+  if (syncKey && typeof window !== "undefined") {
+    const inflightMap = (window as Window & { __evLastTopicSyncInflight?: Record<string, number> }).__evLastTopicSyncInflight ?? {};
+    if (inflightMap[syncKey] === payload.last_topic_index) {
+      return null;
     }
-    if (res.status === 403) {
-      await _handleForbidden(data?.error ?? data?.message);
+    const syncedMap = (window as Window & { __evLastTopicSynced?: Record<string, number> }).__evLastTopicSynced ?? {};
+    if (syncedMap[syncKey] === payload.last_topic_index) {
+      return null;
     }
-    throw new ApiError(data?.error ?? `Request failed (${res.status})`, res.status);
+    inflightMap[syncKey] = payload.last_topic_index;
+    (window as Window & { __evLastTopicSyncInflight?: Record<string, number> }).__evLastTopicSyncInflight = inflightMap;
   }
-  return (data?.course as CourseViewerSettings) ?? null;
+  try {
+    const res = await fetch(`${getAPI()}/viewer-settings/course`, {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      if (res.status === 401) {
+        await _handleUnauthorized();
+      }
+      if (res.status === 403) {
+        await _handleForbidden(data?.error ?? data?.message);
+      }
+      throw new ApiError(data?.error ?? `Request failed (${res.status})`, res.status);
+    }
+    if (syncKey && typeof payload.last_topic_index === "number" && typeof window !== "undefined") {
+      const syncedMap = (window as Window & { __evLastTopicSynced?: Record<string, number> }).__evLastTopicSynced ?? {};
+      syncedMap[syncKey] = payload.last_topic_index;
+      (window as Window & { __evLastTopicSynced?: Record<string, number> }).__evLastTopicSynced = syncedMap;
+    }
+    return (data?.course as CourseViewerSettings) ?? null;
+  } finally {
+    if (syncKey && typeof window !== "undefined") {
+      const inflightMap = (window as Window & { __evLastTopicSyncInflight?: Record<string, number> }).__evLastTopicSyncInflight ?? {};
+      delete inflightMap[syncKey];
+      (window as Window & { __evLastTopicSyncInflight?: Record<string, number> }).__evLastTopicSyncInflight = inflightMap;
+    }
+  }
 }
 
 // ─── Internal helper ──────────────────────────────────────────────────────────
