@@ -307,6 +307,7 @@ def _filter_settings_by_features(
     highlights_enabled = bool(features.get("highlights_enabled", True))
     bookmarks_enabled = bool(features.get("bookmarks_enabled", True))
     notes_enabled = bool(features.get("notes_enabled", True))
+    drawings_enabled = bool(features.get("drawings_enabled", True))
 
     for course_state in courses.values():
         if not isinstance(course_state, dict):
@@ -330,7 +331,10 @@ def _filter_settings_by_features(
             course_state.pop("topic_notes", None)
         else:
             course_state["topic_notes"] = _clean_topic_notes_map(course_state.get("topic_notes"))
-        course_state["drawing_notes"] = _clean_drawing_notes_map(course_state.get("drawing_notes"))
+        if not drawings_enabled:
+            course_state.pop("drawing_notes", None)
+        else:
+            course_state["drawing_notes"] = _clean_drawing_notes_map(course_state.get("drawing_notes"))
     return settings
 
 
@@ -342,6 +346,7 @@ def _filter_course_state_by_features(
     highlights_enabled = bool(features.get("highlights_enabled", True))
     bookmarks_enabled = bool(features.get("bookmarks_enabled", True))
     notes_enabled = bool(features.get("notes_enabled", True))
+    drawings_enabled = bool(features.get("drawings_enabled", True))
 
     if not bookmarks_enabled:
         filtered.pop("bookmarks", None)
@@ -351,7 +356,10 @@ def _filter_course_state_by_features(
         filtered.pop("topic_notes", None)
     else:
         filtered["topic_notes"] = _clean_topic_notes_map(filtered.get("topic_notes"))
-    filtered["drawing_notes"] = _clean_drawing_notes_map(filtered.get("drawing_notes"))
+    if not drawings_enabled:
+        filtered.pop("drawing_notes", None)
+    else:
+        filtered["drawing_notes"] = _clean_drawing_notes_map(filtered.get("drawing_notes"))
 
     if not highlights_enabled:
         return filtered
@@ -791,6 +799,7 @@ def create_auth_blueprint(auth_service: AuthService, db_manager: DBManager) -> B
         highlights_enabled = bool(features.get("highlights_enabled", True))
         bookmarks_enabled = bool(features.get("bookmarks_enabled", True))
         notes_enabled = bool(features.get("notes_enabled", True))
+        drawings_enabled = bool(features.get("drawings_enabled", True))
 
         conn = db_manager.get_auth_connection()
         try:
@@ -1118,6 +1127,8 @@ def create_auth_blueprint(auth_service: AuthService, db_manager: DBManager) -> B
 
             upsert_drawing_note = body.get("upsert_drawing_note")
             if upsert_drawing_note is not None:
+                if not drawings_enabled:
+                    abort(403, description="Drawing notes are disabled by administrator")
                 if not isinstance(upsert_drawing_note, dict):
                     abort(400, description="upsert_drawing_note must be an object")
                 topic_index = _to_int(upsert_drawing_note.get("topic_index"), "upsert_drawing_note.topic_index")
@@ -1134,6 +1145,8 @@ def create_auth_blueprint(auth_service: AuthService, db_manager: DBManager) -> B
 
             remove_drawing_note = body.get("remove_drawing_note")
             if remove_drawing_note is not None:
+                if not drawings_enabled:
+                    abort(403, description="Drawing notes are disabled by administrator")
                 if not isinstance(remove_drawing_note, dict):
                     abort(400, description="remove_drawing_note must be an object")
                 topic_index = _to_int(remove_drawing_note.get("topic_index"), "remove_drawing_note.topic_index")

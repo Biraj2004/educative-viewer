@@ -192,7 +192,7 @@ export default function GlobalSettingsPage() {
                 value={settings.viewer_feature_flags_json || ""}
                 onChange={handleChange}
                 className={`mt-1 block w-full rounded-md border ${featureFlagsJsonError ? 'border-red-500 focus:border-red-500 focus:ring-red-500' : 'border-gray-300 dark:border-gray-700 focus:border-indigo-500 focus:ring-indigo-500'} bg-gray-50 dark:bg-gray-950 py-3 px-4 shadow-sm sm:text-sm dark:text-gray-300 font-mono resize-y`}
-                placeholder='{"highlights_enabled":true,"bookmarks_enabled":true,"notes_enabled":true,"search_enabled":true}'
+                placeholder='{"highlights_enabled":true,"bookmarks_enabled":true,"notes_enabled":true,"search_enabled":true,"drawings_enabled":true}'
               />
               {featureFlagsJsonError && <p className="mt-1 text-xs text-red-500">{featureFlagsJsonError}</p>}
             </div>
@@ -207,7 +207,7 @@ export default function GlobalSettingsPage() {
                 value={settings.viewer_feature_role_overrides_json || ""}
                 onChange={handleChange}
                 className={`mt-1 block w-full rounded-md border ${roleOverridesJsonError ? 'border-red-500 focus:border-red-500 focus:ring-red-500' : 'border-gray-300 dark:border-gray-700 focus:border-indigo-500 focus:ring-indigo-500'} bg-gray-50 dark:bg-gray-950 py-3 px-4 shadow-sm sm:text-sm dark:text-gray-300 font-mono resize-y`}
-                placeholder='{"admin":{"search_enabled":true},"user":{"notes_enabled":false}}'
+                placeholder='{"admin":{"search_enabled":true,"drawings_enabled":true},"user":{"notes_enabled":false,"drawings_enabled":false}}'
               />
               {roleOverridesJsonError && <p className="mt-1 text-xs text-red-500">{roleOverridesJsonError}</p>}
             </div>

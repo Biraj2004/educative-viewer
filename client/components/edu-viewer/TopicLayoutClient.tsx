@@ -145,6 +145,7 @@ interface Props {
   highlightsEnabled?: boolean;
   bookmarksEnabled?: boolean;
   notesEnabled?: boolean;
+  drawingsEnabled?: boolean;
 }
 
 type HighlightColor = "yellow" | "blue" | "green" | "pink" | "orange";
@@ -251,6 +252,7 @@ export default function TopicLayoutClient({
   highlightsEnabled = true,
   bookmarksEnabled = true,
   notesEnabled = true,
+  drawingsEnabled = true,
 }: Props) {
   const USER_HIGHLIGHT_ATTR = "data-user-highlight";
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -1993,11 +1995,12 @@ export default function TopicLayoutClient({
   }, [currentTopic.topic_index]);
 
   const handleOpenDrawingPad = useCallback(() => {
+    if (!drawingsEnabled) return;
     setDrawerOpen(false);
     setTocDrawerOpen(false);
     setHighlightDrawerOpen(false);
     setDrawingPadOpen(true);
-  }, []);
+  }, [drawingsEnabled]);
 
   const handleCloseDrawingPad = useCallback(() => {
     setDrawingPadOpen(false);
@@ -2007,6 +2010,7 @@ export default function TopicLayoutClient({
   }, []);
 
   const handleSaveDrawingScene = useCallback(async (scene: ViewerDrawingScene) => {
+    if (!drawingsEnabled) return;
     setDrawingSaveBusy(true);
     try {
       const courseState = await updateViewerCourseSettings({
@@ -2030,7 +2034,13 @@ export default function TopicLayoutClient({
     } finally {
       setDrawingSaveBusy(false);
     }
-  }, [courseId, currentTopic.topic_index, currentTopicKey]);
+  }, [courseId, currentTopic.topic_index, currentTopicKey, drawingsEnabled]);
+
+  useEffect(() => {
+    if (!drawingsEnabled && drawingPadOpen) {
+      setDrawingPadOpen(false);
+    }
+  }, [drawingsEnabled, drawingPadOpen]);
 
   // Track reading progress bar and persist last visited topic in auth DB
   useEffect(() => {
@@ -2279,30 +2289,34 @@ export default function TopicLayoutClient({
         <span className="text-[9px] font-semibold uppercase tracking-wide [writing-mode:vertical-rl] rotate-180">TOC</span>
       </button>
 
-      <button
-        onClick={handleOpenDrawingPad}
-        className="hidden lg:flex fixed right-0 top-[calc(50%+2.6rem)] z-40 flex-col items-center gap-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 border-r-0 rounded-l-xl px-2 py-3 shadow-md text-gray-500 hover:text-sky-600 dark:hover:text-sky-300 transition-colors cursor-pointer"
-        title="Drawing Notes"
-      >
-        <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
-          <path d="M12 20h9" />
-          <path d="m16.5 3.5 4 4L7 21H3v-4L16.5 3.5Z" />
-        </svg>
-        <span className="text-[9px] font-semibold uppercase tracking-wide [writing-mode:vertical-rl] rotate-180">
-          DRAW
-        </span>
-      </button>
-      <button
-        onClick={handleOpenDrawingPad}
-        className="lg:hidden fixed bottom-5 right-4 z-40 inline-flex items-center gap-1.5 px-3 py-2 rounded-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 shadow-md text-gray-600 dark:text-gray-300 hover:text-sky-700 dark:hover:text-sky-300 transition-colors cursor-pointer"
-        title="Drawing Notes"
-      >
-        <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
-          <path d="M12 20h9" />
-          <path d="m16.5 3.5 4 4L7 21H3v-4L16.5 3.5Z" />
-        </svg>
-        <span className="text-[11px] font-semibold uppercase tracking-wide">Draw</span>
-      </button>
+      {drawingsEnabled && (
+        <>
+          <button
+            onClick={handleOpenDrawingPad}
+            className="hidden lg:flex fixed right-0 top-[calc(50%+2.6rem)] z-40 flex-col items-center gap-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 border-r-0 rounded-l-xl px-2 py-3 shadow-md text-gray-500 hover:text-sky-600 dark:hover:text-sky-300 transition-colors cursor-pointer"
+            title="Drawing Notes"
+          >
+            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+              <path d="M12 20h9" />
+              <path d="m16.5 3.5 4 4L7 21H3v-4L16.5 3.5Z" />
+            </svg>
+            <span className="text-[9px] font-semibold uppercase tracking-wide [writing-mode:vertical-rl] rotate-180">
+              DRAW
+            </span>
+          </button>
+          <button
+            onClick={handleOpenDrawingPad}
+            className="lg:hidden fixed bottom-5 right-4 z-40 inline-flex items-center gap-1.5 px-3 py-2 rounded-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 shadow-md text-gray-600 dark:text-gray-300 hover:text-sky-700 dark:hover:text-sky-300 transition-colors cursor-pointer"
+            title="Drawing Notes"
+          >
+            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+              <path d="M12 20h9" />
+              <path d="m16.5 3.5 4 4L7 21H3v-4L16.5 3.5Z" />
+            </svg>
+            <span className="text-[11px] font-semibold uppercase tracking-wide">Draw</span>
+          </button>
+        </>
+      )}
 
       {highlightsEnabled && (
         <button
@@ -2349,18 +2363,20 @@ export default function TopicLayoutClient({
                   </button>
                 </div>
               )}
-              <div className="mb-5">
-                <button
-                  onClick={handleOpenDrawingPad}
-                  className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-[11px] uppercase tracking-wider font-semibold border shadow-sm bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:text-sky-700 dark:hover:text-sky-300 hover:border-sky-300 dark:hover:border-sky-700 transition-colors cursor-pointer"
-                >
-                  <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
-                    <path d="M12 20h9" />
-                    <path d="m16.5 3.5 4 4L7 21H3v-4L16.5 3.5Z" />
-                  </svg>
-                  <span>Drawing Notes</span>
-                </button>
-              </div>
+              {drawingsEnabled && (
+                <div className="mb-5">
+                  <button
+                    onClick={handleOpenDrawingPad}
+                    className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-[11px] uppercase tracking-wider font-semibold border shadow-sm bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:text-sky-700 dark:hover:text-sky-300 hover:border-sky-300 dark:hover:border-sky-700 transition-colors cursor-pointer"
+                  >
+                    <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                      <path d="M12 20h9" />
+                      <path d="m16.5 3.5 4 4L7 21H3v-4L16.5 3.5Z" />
+                    </svg>
+                    <span>Drawing Notes</span>
+                  </button>
+                </div>
+              )}
               {headings.length === 0 ? (
                 <p className="text-sm text-gray-500">No headings detected yet.</p>
               ) : (
@@ -2671,7 +2687,7 @@ export default function TopicLayoutClient({
         </div>
       )}
 
-      {drawingPadOpen && (
+      {drawingsEnabled && drawingPadOpen && (
         <TopicDrawingPad
           topicTitle={currentTopic.topic_name}
           initialScene={currentTopicDrawing?.scene ?? null}

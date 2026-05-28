@@ -14,12 +14,14 @@ VIEWER_FEATURE_FLAG_KEYS: tuple[str, ...] = (
     "bookmarks_enabled",
     "notes_enabled",
     "search_enabled",
+    "drawings_enabled",
 )
 DEFAULT_VIEWER_FEATURE_FLAGS: dict[str, bool] = {
     "highlights_enabled": True,
     "bookmarks_enabled": True,
     "notes_enabled": True,
     "search_enabled": True,
+    "drawings_enabled": True,
 }
 
 

@@ -102,6 +102,7 @@ export default function TopicDetailPage() {
   const [highlightsEnabled, setHighlightsEnabled] = useState(true);
   const [bookmarksEnabled, setBookmarksEnabled] = useState(true);
   const [notesEnabled, setNotesEnabled] = useState(true);
+  const [drawingsEnabled, setDrawingsEnabled] = useState(true);
   const [loading, setLoading] = useState(true);
   const [missing, setMissing] = useState(false);
 
@@ -162,6 +163,7 @@ export default function TopicDetailPage() {
             setHighlightsEnabled(viewerPayload.features.highlights_enabled !== false);
             setBookmarksEnabled(viewerPayload.features.bookmarks_enabled !== false);
             setNotesEnabled(viewerPayload.features.notes_enabled !== false);
+            setDrawingsEnabled(viewerPayload.features.drawings_enabled !== false);
             const viewerSettings = viewerPayload.settings;
             const viewerCourse = viewerSettings?.courses?.[String(courseId)];
             const rawColor = String(viewerCourse?.last_highlight_color || "").trim().toLowerCase();
@@ -280,6 +282,7 @@ export default function TopicDetailPage() {
       highlightsEnabled={highlightsEnabled}
       bookmarksEnabled={bookmarksEnabled}
       notesEnabled={notesEnabled}
+      drawingsEnabled={drawingsEnabled}
     />
   );
 }

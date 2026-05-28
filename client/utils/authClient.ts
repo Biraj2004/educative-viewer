@@ -269,6 +269,7 @@ export interface ViewerFeatures {
   bookmarks_enabled: boolean;
   notes_enabled: boolean;
   search_enabled: boolean;
+  drawings_enabled: boolean;
 }
 
 export interface ViewerSettingsPayload {
@@ -552,6 +553,7 @@ export async function getViewerSettings(): Promise<ViewerSettingsPayload> {
           bookmarks_enabled: true,
           notes_enabled: true,
           search_enabled: true,
+          drawings_enabled: true,
         },
       };
     }
@@ -562,6 +564,7 @@ export async function getViewerSettings(): Promise<ViewerSettingsPayload> {
         bookmarks_enabled: features?.bookmarks_enabled !== false,
         notes_enabled: features?.notes_enabled !== false,
         search_enabled: features?.search_enabled !== false,
+        drawings_enabled: features?.drawings_enabled !== false,
       },
     };
   } catch {
@@ -572,6 +575,7 @@ export async function getViewerSettings(): Promise<ViewerSettingsPayload> {
         bookmarks_enabled: true,
         notes_enabled: true,
         search_enabled: true,
+        drawings_enabled: true,
       },
     };
   }
