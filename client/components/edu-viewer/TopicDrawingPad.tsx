@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
-import { serializeAsJSON } from "@excalidraw/excalidraw";
 import type {
   ExcalidrawImperativeAPI,
   ExcalidrawInitialDataState,
@@ -26,17 +25,13 @@ function toSerializableScene(scene: ViewerDrawingScene): ViewerDrawingScene {
   return JSON.parse(JSON.stringify(scene)) as ViewerDrawingScene;
 }
 
-function serializeForDatabase(
-  elements: readonly unknown[],
-  appState: Record<string, unknown>,
-  files: Record<string, unknown>,
-): string {
-  return serializeAsJSON(
-    elements as never[],
-    appState as never,
-    files as never,
-    "database",
-  );
+function sanitizeAppState(value: Record<string, unknown>): Record<string, unknown> {
+  const next = { ...value };
+  // Collaboration runtime fields are Map/Set in-memory and may break restore.
+  delete next.collaborators;
+  delete next.followedBy;
+  delete next.userToFollow;
+  return next;
 }
 
 function buildContentSignature(
@@ -86,15 +81,33 @@ function buildContentSignature(
   });
 }
 
-function contentSignatureFromSerialized(serialized: string): string {
+function contentSignatureFromScene(scene: ViewerDrawingScene): string {
+  return buildContentSignature(
+    Array.isArray(scene.elements) ? scene.elements : [],
+    scene.files && typeof scene.files === "object" ? scene.files : {},
+  );
+}
+
+function buildSerializableScene(
+  elements: readonly unknown[],
+  appState: Record<string, unknown>,
+  files: Record<string, unknown>,
+): ViewerDrawingScene {
+  return toSerializableScene({
+    elements: Array.isArray(elements) ? elements : [],
+    appState: sanitizeAppState(appState),
+    files: files && typeof files === "object" ? files : {},
+  });
+}
+
+function contentSignatureFromUnknown(
+  elements: readonly unknown[],
+  files: Record<string, unknown>,
+): string {
   try {
-    const parsed = JSON.parse(serialized) as {
-      elements?: readonly unknown[];
-      files?: Record<string, unknown>;
-    };
     return buildContentSignature(
-      Array.isArray(parsed.elements) ? parsed.elements : [],
-      parsed.files && typeof parsed.files === "object" ? parsed.files : {},
+      Array.isArray(elements) ? elements : [],
+      files && typeof files === "object" ? files : {},
     );
   } catch {
     return "";
@@ -104,24 +117,19 @@ function contentSignatureFromSerialized(serialized: string): string {
 function buildCurrentContentKey(
   api: ExcalidrawImperativeAPI | null,
   fallbackElements: readonly unknown[],
-  fallbackAppState: Record<string, unknown>,
   fallbackFiles: Record<string, unknown>,
 ): string {
   try {
     if (api) {
-      const serialized = serializeForDatabase(
+      return contentSignatureFromUnknown(
         api.getSceneElements() as readonly unknown[],
-        api.getAppState() as unknown as Record<string, unknown>,
         api.getFiles() as unknown as Record<string, unknown>,
       );
-      return contentSignatureFromSerialized(serialized);
     }
-    const serialized = serializeForDatabase(
+    return contentSignatureFromUnknown(
       fallbackElements,
-      fallbackAppState,
       fallbackFiles,
     );
-    return contentSignatureFromSerialized(serialized);
   } catch {
     return "";
   }
@@ -174,12 +182,10 @@ export default function TopicDrawingPad({
       return;
     }
     try {
-      const serialized = serializeForDatabase(
+      lastSavedContentKeyRef.current = contentSignatureFromUnknown(
         (initialData.elements ?? []) as readonly unknown[],
-        (initialData.appState ?? {}) as Record<string, unknown>,
         (initialData.files ?? {}) as Record<string, unknown>,
       );
-      lastSavedContentKeyRef.current = contentSignatureFromSerialized(serialized);
     } catch {
       lastSavedContentKeyRef.current = "";
     }
@@ -196,23 +202,13 @@ export default function TopicDrawingPad({
     setLocalSaveBusy(true);
     setSaveError(null);
     try {
-      const serialized = serializeForDatabase(
+      const nextScene = buildSerializableScene(
         api.getSceneElements() as readonly unknown[],
         api.getAppState() as unknown as Record<string, unknown>,
         api.getFiles() as unknown as Record<string, unknown>,
       );
-      const parsed = JSON.parse(serialized) as {
-        elements?: readonly unknown[];
-        appState?: Record<string, unknown>;
-        files?: Record<string, unknown>;
-      };
-      const nextScene = toSerializableScene({
-        elements: Array.isArray(parsed.elements) ? parsed.elements : [],
-        appState: parsed.appState && typeof parsed.appState === "object" ? parsed.appState : {},
-        files: parsed.files && typeof parsed.files === "object" ? parsed.files : {},
-      });
       await onSave(nextScene);
-      lastSavedContentKeyRef.current = contentSignatureFromSerialized(serialized);
+      lastSavedContentKeyRef.current = contentSignatureFromScene(nextScene);
       setDirty(false);
       return true;
     } catch (err: unknown) {
@@ -314,11 +310,10 @@ export default function TopicDrawingPad({
         <Excalidraw
           excalidrawAPI={(editorApi) => setApi(editorApi)}
           initialData={initialData}
-          onChange={(elements, appState, files) => {
+          onChange={(elements, _appState, files) => {
             const currentKey = buildCurrentContentKey(
               api,
               elements as readonly unknown[],
-              appState as unknown as Record<string, unknown>,
               files as unknown as Record<string, unknown>,
             );
             if (!lastSavedContentKeyRef.current) {
