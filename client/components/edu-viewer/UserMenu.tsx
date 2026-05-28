@@ -142,7 +142,7 @@ export default function UserMenu() {
 
       {/* Dropdown */}
       {open && (
-        <div className="absolute right-0 top-full mt-2 w-56 rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 shadow-lg shadow-gray-100/50 dark:shadow-black/30 overflow-hidden z-50">
+        <div className="absolute right-0 top-full mt-2 w-56 rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 shadow-lg shadow-gray-100/50 dark:shadow-black/30 overflow-hidden z-[70]">
           {/* User info header */}
           <div className="px-4 py-3 border-b border-gray-100 dark:border-gray-800">
             <div className="flex items-center gap-3">

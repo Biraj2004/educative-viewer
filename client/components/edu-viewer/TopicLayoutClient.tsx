@@ -2414,7 +2414,7 @@ export default function TopicLayoutClient({
 
         {/* Main content — natural page scroll */}
         <main
-          className="flex-1 min-w-0 transition-[margin-right] duration-300 ease-out"
+          className="flex-1 min-w-0 transition-[margin-right] duration-300 ease-[cubic-bezier(0.4,0,0.2,1)]"
           style={contentShiftStyle}
         >
 
@@ -2602,12 +2602,12 @@ export default function TopicLayoutClient({
 
       {/* Slide-out TOC Drawer */}
       {tocDrawerMounted && (
-        <div className={`fixed inset-x-0 bottom-0 top-14 z-40 transition-opacity duration-200 ${tocDrawerVisible ? "pointer-events-auto" : "pointer-events-none"}`}>
+        <div className={`fixed inset-x-0 bottom-0 top-14 z-40 transition-opacity duration-300 ${tocDrawerVisible ? "pointer-events-auto" : "pointer-events-none"}`}>
           <div
-            className={`absolute inset-0 bg-black/40 transition-opacity duration-200 ${tocDrawerVisible ? "opacity-100" : "opacity-0"}`}
+            className={`absolute inset-0 bg-black/40 transition-opacity duration-300 ${tocDrawerVisible ? "opacity-100" : "opacity-0"}`}
             onClick={() => setTocDrawerOpen(false)}
           />
-          <div className={`absolute right-0 top-0 bottom-0 w-80 bg-white dark:bg-gray-900 border-l border-gray-200 dark:border-gray-800 shadow-2xl flex flex-col transform-gpu will-change-transform transition-transform duration-300 ease-out ${tocDrawerVisible ? "translate-x-0" : "translate-x-full"}`}>
+          <div className={`absolute right-0 top-0 bottom-0 w-80 bg-white dark:bg-gray-900 border-l border-gray-200 dark:border-gray-800 shadow-2xl flex flex-col transform-gpu will-change-transform transition-transform duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] ${tocDrawerVisible ? "translate-x-0" : "translate-x-full"}`}>
             <div className="flex items-center justify-between px-6 py-5 border-b border-gray-200 dark:border-gray-800 shrink-0">
               <h2 className="text-sm font-bold text-gray-900 dark:text-gray-100 uppercase tracking-wider">On this page</h2>
               <button onClick={() => setTocDrawerOpen(false)} className="p-1 text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 cursor-pointer">
@@ -2675,7 +2675,7 @@ export default function TopicLayoutClient({
 
       {notesDrawerEnabled && highlightDrawerMounted && (
         <div
-          className={`fixed top-14 bottom-0 right-0 z-50 border-l border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-950 shadow-2xl will-change-transform transition-[transform,opacity] duration-300 ease-out ${highlightDrawerVisible ? "pointer-events-auto translate-x-0 opacity-100" : "pointer-events-none translate-x-full opacity-0"}`}
+          className={`fixed top-14 bottom-0 right-0 z-50 border-l border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-950 shadow-2xl will-change-transform transition-[transform,opacity] duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] ${highlightDrawerVisible ? "pointer-events-auto translate-x-0 opacity-100" : "pointer-events-none translate-x-full opacity-0"}`}
           style={{
             width: `${highlightPanelWidth}px`,
           }}
@@ -3036,7 +3036,7 @@ export default function TopicLayoutClient({
 
       {drawingsEnabled && drawingPanelEverOpened && (
         <div
-          className={`fixed top-14 bottom-0 right-0 z-50 border-l border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-950 shadow-2xl will-change-transform transition-transform duration-300 ease-out ${drawingPanelVisible ? "pointer-events-auto translate-x-0" : "pointer-events-none translate-x-full"}`}
+          className={`fixed top-14 bottom-0 right-0 z-50 border-l border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-950 shadow-2xl will-change-transform transition-transform duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] ${drawingPanelVisible ? "pointer-events-auto translate-x-0" : "pointer-events-none translate-x-full"}`}
           style={{
             width: `${drawingPanelWidth}px`,
           }}

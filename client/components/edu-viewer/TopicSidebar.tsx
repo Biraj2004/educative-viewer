@@ -95,7 +95,7 @@ export default function TopicSidebar({
     }, [currentTopicIndex]);
 
     return (
-        <aside className={asideClassName ?? `shrink-0 hidden lg:flex flex-col sticky top-14 h-[calc(100vh-3.5rem)] transition-[width] duration-300 ease-in-out relative ${isCollapsed ? 'w-0' : 'w-72'}`}>
+        <aside className={asideClassName ?? `shrink-0 hidden lg:flex flex-col sticky top-14 h-[calc(100vh-3.5rem)] transition-[width] duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] relative ${isCollapsed ? 'w-0' : 'w-72'}`}>
             
             {/* Toggle Button on the border line */}
             <button 

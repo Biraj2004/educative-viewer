@@ -70,7 +70,7 @@ export default function AppNavbar({
   const { user } = useAuth();
 
   return (
-    <div className="sticky top-0 z-50 bg-white/60 dark:bg-[#030712]/60 backdrop-blur-2xl border-b border-gray-200/50 dark:border-white/5 dark:supports-backdrop-filter:bg-[#030712]/40 shadow-sm dark:shadow-[0_4px_24px_-8px_rgba(0,0,0,0.5)] transition-all duration-500">
+    <div className="sticky top-0 z-[60] bg-white/60 dark:bg-[#030712]/60 backdrop-blur-2xl border-b border-gray-200/50 dark:border-white/5 dark:supports-backdrop-filter:bg-[#030712]/40 shadow-sm dark:shadow-[0_4px_24px_-8px_rgba(0,0,0,0.5)] transition-all duration-500">
       <div className="w-full px-8 h-14 flex items-center justify-between gap-5 relative">
         {/* Premium subtle glass edge reflection instead of "gamer" neon */}
         <div className="absolute bottom-0 left-0 w-full h-px bg-linear-to-r from-transparent via-gray-300 dark:via-white/12 to-transparent" />
