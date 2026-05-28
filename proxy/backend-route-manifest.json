@@ -1,6 +1,7 @@
 {
-  "generated_at_utc": "2026-05-28T16:18:53Z",
+  "generated_at_utc": "2026-05-28T19:53:18Z",
   "backend_api_rules": [
+    "/api/admin/reader-state/cleanup",
     "/api/admin/set-course-status",
     "/api/admin/set-user-status",
     "/api/admin/settings",
@@ -9,6 +10,7 @@
     "/api/admin/users",
     "/api/admin/users/<int:user_id>",
     "/api/admin/users/<int:user_id>/edit",
+    "/api/admin/users/<int:user_id>/reader-state/cleanup",
     "/api/admin/users/<int:user_id>/reset-password",
     "/api/admin/users/create",
     "/api/ai/generate",
@@ -24,11 +26,10 @@
     "/api/auth/me",
     "/api/auth/progress/course",
     "/api/auth/progress/topic",
+    "/api/auth/reader-state/course",
     "/api/auth/signup",
     "/api/auth/signup/rollback",
     "/api/auth/theme",
-    "/api/auth/viewer-settings",
-    "/api/auth/viewer-settings/course",
     "/api/code-test/execute",
     "/api/contact",
     "/api/course-details",
@@ -41,6 +42,7 @@
     "/api/topic-details"
   ],
   "backend_api_regexes": [
+    "^/api/admin/reader\\-state/cleanup/?$",
     "^/api/admin/set\\-course\\-status/?$",
     "^/api/admin/set\\-user\\-status/?$",
     "^/api/admin/settings/?$",
@@ -49,6 +51,7 @@
     "^/api/admin/users/?$",
     "^/api/admin/users/[0-9]+/?$",
     "^/api/admin/users/[0-9]+/edit/?$",
+    "^/api/admin/users/[0-9]+/reader\\-state/cleanup/?$",
     "^/api/admin/users/[0-9]+/reset\\-password/?$",
     "^/api/admin/users/create/?$",
     "^/api/ai/generate/?$",
@@ -64,11 +67,10 @@
     "^/api/auth/me/?$",
     "^/api/auth/progress/course/?$",
     "^/api/auth/progress/topic/?$",
+    "^/api/auth/reader\\-state/course/?$",
     "^/api/auth/signup/?$",
     "^/api/auth/signup/rollback/?$",
     "^/api/auth/theme/?$",
-    "^/api/auth/viewer\\-settings/?$",
-    "^/api/auth/viewer\\-settings/course/?$",
     "^/api/code\\-test/execute/?$",
     "^/api/contact/?$",
     "^/api/course\\-details/?$",
@@ -80,5 +82,5 @@
     "^/api/search/?$",
     "^/api/topic\\-details/?$"
   ],
-  "count": 38
+  "count": 39
 }

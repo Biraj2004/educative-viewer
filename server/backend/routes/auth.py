@@ -76,21 +76,6 @@ def _coerce_component_index(value: Any) -> int | None:
     return out if out >= -1 else None
 
 
-def _parse_viewer_settings(raw: Any) -> dict[str, Any]:
-    if not raw:
-        return {"courses": {}}
-    try:
-        parsed = json.loads(raw)
-    except (TypeError, json.JSONDecodeError):
-        return {"courses": {}}
-    if not isinstance(parsed, dict):
-        return {"courses": {}}
-    courses = parsed.get("courses")
-    if not isinstance(courses, dict):
-        parsed["courses"] = {}
-    return parsed
-
-
 def _clean_topic_list(value: Any) -> list[int]:
     if not isinstance(value, list):
         return []
@@ -294,16 +279,6 @@ def _clean_drawing_note(value: Any) -> dict[str, Any] | None:
     }
 
 
-def _strip_highlights_from_settings(settings: dict[str, Any]) -> dict[str, Any]:
-    courses = settings.get("courses")
-    if not isinstance(courses, dict):
-        return settings
-    for course_state in courses.values():
-        if isinstance(course_state, dict):
-            course_state.pop("highlights", None)
-    return settings
-
-
 def _viewer_features_for_user(auth_service: AuthService, user: dict[str, Any]) -> dict[str, bool]:
     return resolve_viewer_features_for_role(
         str(user.get("role", "") or ""),
@@ -312,62 +287,11 @@ def _viewer_features_for_user(auth_service: AuthService, user: dict[str, Any]) -
     )
 
 
-def _filter_settings_by_features(
-    settings: dict[str, Any],
-    features: dict[str, bool],
-) -> dict[str, Any]:
-    courses = settings.get("courses")
-    if not isinstance(courses, dict):
-        return settings
-
-    highlights_enabled = bool(features.get("highlights_enabled", True))
-    bookmarks_enabled = bool(features.get("bookmarks_enabled", True))
-    notes_enabled = bool(features.get("notes_enabled", True))
-    drawings_enabled = bool(features.get("drawings_enabled", True))
-
-    for course_state in courses.values():
-        if not isinstance(course_state, dict):
-            continue
-        course_state.pop("drawing_notes", None)
-        if not bookmarks_enabled:
-            course_state.pop("bookmarks", None)
-        if not highlights_enabled:
-            course_state.pop("highlights", None)
-        else:
-            course_state["highlights"] = _clean_highlights_map(course_state.get("highlights"))
-            if not notes_enabled:
-                highlights = course_state.get("highlights")
-                if isinstance(highlights, dict):
-                    for topic_rows in highlights.values():
-                        if not isinstance(topic_rows, list):
-                            continue
-                        for item in topic_rows:
-                            if isinstance(item, dict):
-                                item.pop("note", None)
-        if not notes_enabled:
-            course_state.pop("topic_notes", None)
-            course_state.pop("course_notes", None)
-        else:
-            course_state["topic_notes"] = _clean_topic_notes_map(course_state.get("topic_notes"))
-            course_state["course_notes"] = _clean_course_notes_list(course_state.get("course_notes"))
-        if not drawings_enabled:
-            course_state.pop("drawing_note", None)
-        else:
-            drawing_note = _clean_drawing_note(course_state.get("drawing_note"))
-            if drawing_note is not None:
-                course_state["drawing_note"] = drawing_note
-            else:
-                course_state.pop("drawing_note", None)
-    return settings
-
-
 def _filter_course_state_by_features(
     course_state: dict[str, Any],
     features: dict[str, bool],
 ) -> dict[str, Any]:
     filtered = dict(course_state)
-    # Deprecated legacy key: never expose in API responses.
-    filtered.pop("drawing_notes", None)
     highlights_enabled = bool(features.get("highlights_enabled", True))
     bookmarks_enabled = bool(features.get("bookmarks_enabled", True))
     notes_enabled = bool(features.get("notes_enabled", True))
@@ -413,6 +337,112 @@ def _filter_course_state_by_features(
                     sanitized_highlights[str(topic_key)] = sanitized_rows
             filtered["highlights"] = sanitized_highlights
     return filtered
+
+
+def _parse_reader_state_json(raw: Any) -> dict[str, Any]:
+    if not raw:
+        return {}
+    try:
+        parsed = json.loads(raw)
+    except (TypeError, ValueError, json.JSONDecodeError):
+        return {}
+    if not isinstance(parsed, dict):
+        return {}
+    return parsed
+
+
+def _normalize_course_reader_state(raw_course_state: Any) -> dict[str, Any]:
+    if not isinstance(raw_course_state, dict):
+        raw_course_state = {}
+    normalized_course_state: dict[str, Any] = {
+        "bookmarks": _clean_topic_list(raw_course_state.get("bookmarks"))[-MAX_BOOKMARKS_PER_COURSE:],
+        "highlights": _clean_highlights_map(raw_course_state.get("highlights")),
+        "topic_notes": _clean_topic_notes_map(raw_course_state.get("topic_notes")),
+        "course_notes": _clean_course_notes_list(raw_course_state.get("course_notes")),
+    }
+    drawing_note = _clean_drawing_note(raw_course_state.get("drawing_note"))
+    if drawing_note is not None:
+        normalized_course_state["drawing_note"] = drawing_note
+    if "last_topic_index" in raw_course_state:
+        normalized_course_state["last_topic_index"] = _coerce_non_negative_int(raw_course_state.get("last_topic_index"))
+    if "last_highlight_color" in raw_course_state:
+        normalized_course_state["last_highlight_color"] = _normalize_highlight_color(
+            raw_course_state.get("last_highlight_color")
+        )
+    return normalized_course_state
+
+
+def _fetch_course_reader_state(conn: Any, user_id: int, course_id: int) -> dict[str, Any]:
+    row = fetch_one_dict(
+        conn,
+        """
+        SELECT state_json
+        FROM user_course_reader_state
+        WHERE user_id = :user_id AND course_id = :course_id
+        """,
+        {"user_id": user_id, "course_id": course_id},
+    ) or {}
+    return _parse_reader_state_json(row.get("state_json"))
+
+
+def _upsert_course_reader_state(
+    conn: Any,
+    user_id: int,
+    course_id: int,
+    state: dict[str, Any],
+    now_iso: str,
+    is_integrity_error,
+) -> None:
+    encoded_state = json.dumps(state, separators=(",", ":"))
+    updated = execute(
+        conn,
+        """
+        UPDATE user_course_reader_state
+        SET state_json = :state_json, updated_at = :updated_at
+        WHERE user_id = :user_id AND course_id = :course_id
+        """,
+        {
+            "state_json": encoded_state,
+            "updated_at": now_iso,
+            "user_id": user_id,
+            "course_id": course_id,
+        },
+    )
+    if updated > 0:
+        return
+    try:
+        execute(
+            conn,
+            """
+            INSERT INTO user_course_reader_state
+            (user_id, course_id, state_json, created_at, updated_at)
+            VALUES (:user_id, :course_id, :state_json, :created_at, :updated_at)
+            """,
+            {
+                "user_id": user_id,
+                "course_id": course_id,
+                "state_json": encoded_state,
+                "created_at": now_iso,
+                "updated_at": now_iso,
+            },
+        )
+    except Exception as exc:
+        if not is_integrity_error(exc):
+            raise
+        execute(
+            conn,
+            """
+            UPDATE user_course_reader_state
+            SET state_json = :state_json, updated_at = :updated_at
+            WHERE user_id = :user_id AND course_id = :course_id
+            """,
+            {
+                "state_json": encoded_state,
+                "updated_at": now_iso,
+                "user_id": user_id,
+                "course_id": course_id,
+            },
+        )
 
 
 def create_auth_blueprint(auth_service: AuthService, db_manager: DBManager) -> Blueprint:
@@ -798,37 +828,16 @@ def create_auth_blueprint(auth_service: AuthService, db_manager: DBManager) -> B
 
         return jsonify({"theme": theme}), 200
 
-    @bp.route("/viewer-settings", methods=["GET"])
-    def auth_get_viewer_settings():
-        user, _ = auth_service.resolve_user(require_full=True)
-        if not user:
-            abort(401, description="Not authenticated")
-
-        features = _viewer_features_for_user(auth_service, user)
-        include_settings_raw = str(request.args.get("include_settings", "1") or "").strip().lower()
-        include_settings = include_settings_raw not in ("0", "false", "no", "off")
-        if not include_settings:
-            return jsonify({"features": features}), 200
-
-        settings = _parse_viewer_settings(user.get("viewer_settings_json"))
-        settings = _filter_settings_by_features(settings, features)
-        return jsonify(
-            {
-                "settings": settings,
-                "features": features,
-            }
-        ), 200
-
-    @bp.route("/viewer-settings/course", methods=["GET"])
-    def auth_get_viewer_settings_course():
+    @bp.route("/reader-state/course", methods=["GET"])
+    def auth_get_reader_state_course():
         user, _ = auth_service.resolve_user(require_full=True)
         if not user:
             abort(401, description="Not authenticated")
 
         course_id_raw = request.args.get("course_id")
-        if course_id_raw is None:
-            abort(400, description="course_id is required")
-        course_id = _to_int(course_id_raw, "course_id")
+        course_id: int | None = None
+        if course_id_raw is not None and str(course_id_raw).strip() != "":
+            course_id = _to_int(course_id_raw, "course_id")
 
         topic_index_raw = request.args.get("topic_index")
         topic_index: int | None = None
@@ -837,46 +846,17 @@ def create_auth_blueprint(auth_service: AuthService, db_manager: DBManager) -> B
 
         features = _viewer_features_for_user(auth_service, user)
 
-        conn = db_manager.get_auth_connection()
-        try:
-            row = fetch_one_dict(
-                conn,
-                "SELECT viewer_settings_json FROM users WHERE id = :user_id",
-                {"user_id": user["id"]},
-            ) or {}
-        finally:
-            conn.close()
+        filtered_course_state: dict[str, Any] = {}
+        if course_id is not None:
+            conn = db_manager.get_auth_connection()
+            try:
+                raw_course_state = _fetch_course_reader_state(conn, int(user["id"]), course_id)
+            finally:
+                conn.close()
+            normalized_course_state = _normalize_course_reader_state(raw_course_state)
+            filtered_course_state = _filter_course_state_by_features(normalized_course_state, features)
 
-        settings = _parse_viewer_settings(row.get("viewer_settings_json"))
-        courses = settings.get("courses")
-        if not isinstance(courses, dict):
-            courses = {}
-        course_key = str(course_id)
-        raw_course_state = courses.get(course_key, {})
-        if not isinstance(raw_course_state, dict):
-            raw_course_state = {}
-
-        normalized_course_state: dict[str, Any] = {
-            "bookmarks": _clean_topic_list(raw_course_state.get("bookmarks"))[-MAX_BOOKMARKS_PER_COURSE:],
-            "highlights": _clean_highlights_map(raw_course_state.get("highlights")),
-            "topic_notes": _clean_topic_notes_map(raw_course_state.get("topic_notes")),
-            "course_notes": _clean_course_notes_list(raw_course_state.get("course_notes")),
-        }
-        drawing_note = _clean_drawing_note(raw_course_state.get("drawing_note"))
-        if drawing_note is not None:
-            normalized_course_state["drawing_note"] = drawing_note
-        if "last_topic_index" in raw_course_state:
-            normalized_course_state["last_topic_index"] = _coerce_non_negative_int(
-                raw_course_state.get("last_topic_index")
-            )
-        if "last_highlight_color" in raw_course_state:
-            normalized_course_state["last_highlight_color"] = _normalize_highlight_color(
-                raw_course_state.get("last_highlight_color")
-            )
-
-        filtered_course_state = _filter_course_state_by_features(normalized_course_state, features)
-
-        if topic_index is not None:
+        if topic_index is not None and course_id is not None:
             topic_key = str(topic_index)
 
             topic_highlights: dict[str, list[dict[str, Any]]] = {}
@@ -902,8 +882,8 @@ def create_auth_blueprint(auth_service: AuthService, db_manager: DBManager) -> B
             }
         ), 200
 
-    @bp.route("/viewer-settings/course", methods=["PUT"])
-    def auth_update_viewer_settings_course():
+    @bp.route("/reader-state/course", methods=["PUT"])
+    def auth_update_reader_state_course():
         user, _ = auth_service.resolve_user(require_full=True)
         if not user:
             abort(401, description="Not authenticated")
@@ -924,23 +904,9 @@ def create_auth_blueprint(auth_service: AuthService, db_manager: DBManager) -> B
 
         conn = db_manager.get_auth_connection()
         try:
-            row = fetch_one_dict(
-                conn,
-                "SELECT viewer_settings_json FROM users WHERE id = :user_id",
-                {"user_id": user["id"]},
-            ) or {}
-            settings = _parse_viewer_settings(row.get("viewer_settings_json"))
-            courses = settings.setdefault("courses", {})
-            if not isinstance(courses, dict):
-                courses = {}
-                settings["courses"] = courses
-
-            course_key = str(course_id)
-            course_state = courses.get(course_key, {})
+            course_state = _fetch_course_reader_state(conn, int(user["id"]), course_id)
             if not isinstance(course_state, dict):
                 course_state = {}
-            # Deprecated legacy key: remove it on write path as well.
-            course_state.pop("drawing_notes", None)
 
             bookmarks = _clean_topic_list(course_state.get("bookmarks"))
             highlights = _clean_highlights_map(course_state.get("highlights"))
@@ -1377,12 +1343,13 @@ def create_auth_blueprint(auth_service: AuthService, db_manager: DBManager) -> B
             if "drawing_note" not in course_state and drawing_note is not None:
                 course_state["drawing_note"] = drawing_note
 
-            courses[course_key] = course_state
-            settings_json = json.dumps(settings, separators=(",", ":"))
-            execute(
-                conn,
-                "UPDATE users SET viewer_settings_json = :settings WHERE id = :user_id",
-                {"settings": settings_json, "user_id": user["id"]},
+            _upsert_course_reader_state(
+                conn=conn,
+                user_id=int(user["id"]),
+                course_id=course_id,
+                state=course_state,
+                now_iso=now_iso,
+                is_integrity_error=db_manager.auth_backend.is_integrity_error,
             )
             conn.commit()
         finally:

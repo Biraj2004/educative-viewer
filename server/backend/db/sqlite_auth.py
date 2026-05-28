@@ -66,7 +66,6 @@ class SQLiteAuthDatabase:
                     two_factor_enabled INTEGER NOT NULL DEFAULT 0,
                     login_ip_log TEXT,
                     theme TEXT NOT NULL DEFAULT 'light',
-                    viewer_settings_json TEXT NOT NULL DEFAULT '{}',
                     created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
                 )
                 """
@@ -113,6 +112,24 @@ class SQLiteAuthDatabase:
                 ON user_progress (user_id, course_id, topic_index)
                 """
             )
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS user_course_reader_state (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                    course_id INTEGER NOT NULL,
+                    state_json TEXT NOT NULL DEFAULT '{}',
+                    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+                    updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+                )
+                """
+            )
+            conn.execute(
+                """
+                CREATE UNIQUE INDEX IF NOT EXISTS uq_user_course_reader_state
+                ON user_course_reader_state (user_id, course_id)
+                """
+            )
 
             conn.commit()
         finally:
@@ -150,14 +167,29 @@ class SQLiteAuthDatabase:
         finally:
             conn.close()
 
-    def ensure_viewer_settings_column(self) -> None:
-        """Lazily add viewer_settings_json column to users table if it doesn't exist."""
+    def ensure_course_reader_state_table(self) -> None:
+        """Ensure normalized per-user per-course reader state table exists."""
         conn = self.get_connection()
         try:
-            conn.execute("ALTER TABLE users ADD COLUMN viewer_settings_json TEXT NOT NULL DEFAULT '{}'")
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS user_course_reader_state (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                    course_id INTEGER NOT NULL,
+                    state_json TEXT NOT NULL DEFAULT '{}',
+                    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+                    updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+                )
+                """
+            )
+            conn.execute(
+                """
+                CREATE UNIQUE INDEX IF NOT EXISTS uq_user_course_reader_state
+                ON user_course_reader_state (user_id, course_id)
+                """
+            )
             conn.commit()
-        except sqlite3.OperationalError:
-            pass  # Column already exists
         finally:
             conn.close()
 

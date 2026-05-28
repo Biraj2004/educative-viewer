@@ -127,7 +127,6 @@ class OracleAuthDatabase:
                         two_factor_enabled NUMBER(1,0) DEFAULT 0 NOT NULL,
                         login_ip_log       CLOB,
                         theme              VARCHAR2(20 CHAR) DEFAULT 'light' NOT NULL,
-                        viewer_settings_json CLOB,
                         created_at         VARCHAR2(30 CHAR) DEFAULT
                             TO_CHAR(SYSTIMESTAMP AT TIME ZONE 'UTC',
                                     'YYYY-MM-DD"T"HH24:MI:SS"Z"') NOT NULL
@@ -177,6 +176,27 @@ class OracleAuthDatabase:
                 self._exec_ddl(
                     cursor,
                     "CREATE UNIQUE INDEX uq_user_progress ON user_progress (user_id, course_id, topic_index)",
+                )
+                self._exec_ddl(
+                    cursor,
+                    """
+                    CREATE TABLE user_course_reader_state (
+                        id          NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+                        user_id     NUMBER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                        course_id   NUMBER NOT NULL,
+                        state_json  CLOB NOT NULL,
+                        created_at  VARCHAR2(30 CHAR) DEFAULT
+                            TO_CHAR(SYSTIMESTAMP AT TIME ZONE 'UTC',
+                                    'YYYY-MM-DD"T"HH24:MI:SS"Z"') NOT NULL,
+                        updated_at  VARCHAR2(30 CHAR) DEFAULT
+                            TO_CHAR(SYSTIMESTAMP AT TIME ZONE 'UTC',
+                                    'YYYY-MM-DD"T"HH24:MI:SS"Z"') NOT NULL
+                    )
+                    """,
+                )
+                self._exec_ddl(
+                    cursor,
+                    "CREATE UNIQUE INDEX uq_user_course_reader_state ON user_course_reader_state (user_id, course_id)",
                 )
 
                 conn.commit()
@@ -238,21 +258,36 @@ class OracleAuthDatabase:
         finally:
             conn.close()
 
-    def ensure_viewer_settings_column(self) -> None:
-        """Lazily add viewer_settings_json column to users table if it doesn't exist."""
+    def ensure_course_reader_state_table(self) -> None:
+        """Ensure normalized per-user per-course reader state table exists."""
         if not self.is_configured:
             return
         conn = self.get_connection()
         try:
             cursor = conn.cursor()
             try:
-                cursor.execute("ALTER TABLE users ADD viewer_settings_json CLOB")
+                self._exec_ddl(
+                    cursor,
+                    """
+                    CREATE TABLE user_course_reader_state (
+                        id          NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+                        user_id     NUMBER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                        course_id   NUMBER NOT NULL,
+                        state_json  CLOB NOT NULL,
+                        created_at  VARCHAR2(30 CHAR) DEFAULT
+                            TO_CHAR(SYSTIMESTAMP AT TIME ZONE 'UTC',
+                                    'YYYY-MM-DD"T"HH24:MI:SS"Z"') NOT NULL,
+                        updated_at  VARCHAR2(30 CHAR) DEFAULT
+                            TO_CHAR(SYSTIMESTAMP AT TIME ZONE 'UTC',
+                                    'YYYY-MM-DD"T"HH24:MI:SS"Z"') NOT NULL
+                    )
+                    """,
+                )
+                self._exec_ddl(
+                    cursor,
+                    "CREATE UNIQUE INDEX uq_user_course_reader_state ON user_course_reader_state (user_id, course_id)",
+                )
                 conn.commit()
-            except oracledb.DatabaseError as exc:
-                (err,) = exc.args
-                # ORA-01430: column being added already exists in table
-                if err.code != 1430:
-                    raise
             finally:
                 cursor.close()
         finally:

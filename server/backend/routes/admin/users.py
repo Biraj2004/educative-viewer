@@ -6,25 +6,63 @@ Endpoints for administrators to list and manage user accounts.
 
 from __future__ import annotations
 
+import json
 import secrets
 import string
 import time
+from typing import Any
 
 import bcrypt
 from flask import Blueprint, jsonify, abort
 
 from backend.auth_service import AuthService
 from backend.db.manager import DBManager
+from backend.db.sql_helpers import execute, fetch_all_dict
 from backend.routes.admin.helpers import require_admin, get_json_body, parse_int_field
 
 EMAIL_RE = __import__("re").compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 TEMP_PW_EXPIRES_HOURS = 1
+READER_DATA_CLEANUP_SCOPES = {"bookmarks", "highlights", "notes", "drawing", "all"}
 
 
 def _gen_temp_password(length: int = 12) -> str:
     """Generate a random alphanumeric temporary password."""
     alphabet = string.ascii_letters + string.digits
     return "".join(secrets.choice(alphabet) for _ in range(length))
+
+
+def _parse_reader_state(raw: Any) -> dict[str, Any]:
+    if not raw:
+        return {}
+    try:
+        parsed = json.loads(raw)
+    except Exception:
+        return {}
+    if not isinstance(parsed, dict):
+        return {}
+    return parsed
+
+
+def _cleanup_reader_state_by_scope(state: dict[str, Any], scope: str) -> tuple[dict[str, Any], bool]:
+    next_state = dict(state)
+    changed = False
+    if scope in {"bookmarks", "all"} and next_state.get("bookmarks"):
+        next_state["bookmarks"] = []
+        changed = True
+    if scope in {"highlights", "all"} and next_state.get("highlights"):
+        next_state["highlights"] = {}
+        changed = True
+    if scope in {"notes", "all"}:
+        if next_state.get("topic_notes"):
+            next_state["topic_notes"] = {}
+            changed = True
+        if next_state.get("course_notes"):
+            next_state["course_notes"] = []
+            changed = True
+    if scope in {"drawing", "all"} and "drawing_note" in next_state:
+        next_state.pop("drawing_note", None)
+        changed = True
+    return next_state, changed
 
 
 def register_user_routes(bp: Blueprint, auth_service: AuthService, db_manager: DBManager) -> None:
@@ -176,6 +214,114 @@ def register_user_routes(bp: Blueprint, auth_service: AuthService, db_manager: D
             abort(404, description=f"User id={user_id} not found")
 
         return jsonify({"success": True, "user_id": user_id})
+
+    @bp.route("/users/<int:user_id>/reader-state/cleanup", methods=["POST"])
+    def cleanup_user_reader_state(user_id: int):
+        """Cleanup reader data for one user across all courses by scope."""
+        require_admin(auth_service)
+        body = get_json_body()
+        scope = str(body.get("scope", "all") or "all").strip().lower()
+        if scope not in READER_DATA_CLEANUP_SCOPES:
+            abort(400, description="scope must be one of: bookmarks, highlights, notes, drawing, all")
+
+        conn = db_manager.get_auth_connection()
+        try:
+            if scope == "all":
+                affected = execute(
+                    conn,
+                    "DELETE FROM user_course_reader_state WHERE user_id = :user_id",
+                    {"user_id": user_id},
+                )
+                conn.commit()
+                return jsonify({"success": True, "user_id": user_id, "scope": scope, "affected_courses": max(affected, 0)})
+
+            rows = fetch_all_dict(
+                conn,
+                """
+                SELECT course_id, state_json
+                FROM user_course_reader_state
+                WHERE user_id = :user_id
+                """,
+                {"user_id": user_id},
+            )
+            now_iso = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+            affected_courses = 0
+            for row in rows:
+                course_id = int(row.get("course_id"))
+                state = _parse_reader_state(row.get("state_json"))
+                next_state, changed = _cleanup_reader_state_by_scope(state, scope)
+                if not changed:
+                    continue
+                execute(
+                    conn,
+                    """
+                    UPDATE user_course_reader_state
+                    SET state_json = :state_json, updated_at = :updated_at
+                    WHERE user_id = :user_id AND course_id = :course_id
+                    """,
+                    {
+                        "state_json": json.dumps(next_state, separators=(",", ":")),
+                        "updated_at": now_iso,
+                        "user_id": user_id,
+                        "course_id": course_id,
+                    },
+                )
+                affected_courses += 1
+            conn.commit()
+        finally:
+            conn.close()
+
+        return jsonify({"success": True, "user_id": user_id, "scope": scope, "affected_courses": affected_courses})
+
+    @bp.route("/reader-state/cleanup", methods=["POST"])
+    def cleanup_all_reader_state():
+        """Global cleanup of reader state table, optionally scoped by feature."""
+        require_admin(auth_service)
+        body = get_json_body()
+        scope = str(body.get("scope", "all") or "all").strip().lower()
+        if scope not in READER_DATA_CLEANUP_SCOPES:
+            abort(400, description="scope must be one of: bookmarks, highlights, notes, drawing, all")
+
+        conn = db_manager.get_auth_connection()
+        try:
+            if scope == "all":
+                affected = execute(conn, "DELETE FROM user_course_reader_state")
+                conn.commit()
+                return jsonify({"success": True, "scope": scope, "affected_courses": max(affected, 0)})
+
+            rows = fetch_all_dict(
+                conn,
+                "SELECT user_id, course_id, state_json FROM user_course_reader_state",
+            )
+            now_iso = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+            affected_courses = 0
+            for row in rows:
+                user_id_row = int(row.get("user_id"))
+                course_id = int(row.get("course_id"))
+                state = _parse_reader_state(row.get("state_json"))
+                next_state, changed = _cleanup_reader_state_by_scope(state, scope)
+                if not changed:
+                    continue
+                execute(
+                    conn,
+                    """
+                    UPDATE user_course_reader_state
+                    SET state_json = :state_json, updated_at = :updated_at
+                    WHERE user_id = :user_id AND course_id = :course_id
+                    """,
+                    {
+                        "state_json": json.dumps(next_state, separators=(",", ":")),
+                        "updated_at": now_iso,
+                        "user_id": user_id_row,
+                        "course_id": course_id,
+                    },
+                )
+                affected_courses += 1
+            conn.commit()
+        finally:
+            conn.close()
+
+        return jsonify({"success": True, "scope": scope, "affected_courses": affected_courses})
 
     @bp.route("/users/<int:user_id>/reset-password", methods=["POST"])
     def reset_user_password(user_id: int):

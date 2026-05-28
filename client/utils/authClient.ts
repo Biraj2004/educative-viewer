@@ -282,7 +282,6 @@ export interface ViewerFeatures {
 }
 
 export interface ViewerSettingsPayload {
-  settings: ViewerSettingsData;
   features: ViewerFeatures;
 }
 
@@ -554,25 +553,10 @@ export async function resetCourseProgress(courseId: number): Promise<void> {
 export async function getViewerSettings(): Promise<ViewerSettingsPayload> {
   try {
     const data = await apiGet<{
-      settings?: ViewerSettingsData;
       features?: Partial<ViewerFeatures>;
-    }>(`${getAPI()}/viewer-settings`);
-    const settings = data?.settings;
+    }>(`${getAPI()}/reader-state/course`);
     const features = data?.features;
-    if (!settings || typeof settings !== "object" || typeof settings.courses !== "object") {
-      return {
-        settings: { courses: {} },
-        features: {
-          highlights_enabled: true,
-          bookmarks_enabled: true,
-          notes_enabled: true,
-          search_enabled: true,
-          drawings_enabled: true,
-        },
-      };
-    }
     return {
-      settings,
       features: {
         highlights_enabled: features?.highlights_enabled !== false,
         bookmarks_enabled: features?.bookmarks_enabled !== false,
@@ -583,7 +567,6 @@ export async function getViewerSettings(): Promise<ViewerSettingsPayload> {
     };
   } catch {
     return {
-      settings: { courses: {} },
       features: {
         highlights_enabled: true,
         bookmarks_enabled: true,
@@ -599,7 +582,7 @@ export async function getViewerFeatures(): Promise<ViewerFeatures> {
   try {
     const data = await apiGet<{
       features?: Partial<ViewerFeatures>;
-    }>(`${getAPI()}/viewer-settings?include_settings=0`);
+    }>(`${getAPI()}/reader-state/course`);
     const features = data?.features;
     return {
       highlights_enabled: features?.highlights_enabled !== false,
@@ -631,7 +614,7 @@ export async function getViewerCourseSettings(
     const data = await apiGet<{
       course?: CourseViewerSettings;
       features?: Partial<ViewerFeatures>;
-    }>(`${getAPI()}/viewer-settings/course?${params.toString()}`);
+    }>(`${getAPI()}/reader-state/course?${params.toString()}`);
     const course = data?.course && typeof data.course === "object" ? data.course : {};
     const features = data?.features;
     return {
@@ -751,7 +734,7 @@ export async function updateViewerCourseSettings(
   }
   try {
     const res = await fetch(
-      `${getAPI()}/viewer-settings/course?include_course=${includeCourse ? "1" : "0"}`,
+      `${getAPI()}/reader-state/course?include_course=${includeCourse ? "1" : "0"}`,
       {
       method: "PUT",
       headers: {
@@ -851,6 +834,15 @@ export interface AdminResetResult {
   temp_password_expires_at: string;
 }
 
+export type ReaderDataCleanupScope = "bookmarks" | "highlights" | "notes" | "drawing" | "all";
+
+export interface ReaderDataCleanupResult {
+  success: boolean;
+  scope: ReaderDataCleanupScope;
+  user_id?: number;
+  affected_courses: number;
+}
+
 async function adminApiCall<T>(
   path: string,
   method: string,
@@ -906,6 +898,19 @@ export async function adminDeleteUser(userId: number): Promise<{ success: boolea
 
 export async function adminResetUserPassword(userId: number): Promise<AdminResetResult> {
   return adminApiCall<AdminResetResult>(`${getAdminAPI()}/users/${userId}/reset-password`, "POST");
+}
+
+export async function adminCleanupUserReaderState(
+  userId: number,
+  scope: ReaderDataCleanupScope,
+): Promise<ReaderDataCleanupResult> {
+  return adminApiCall<ReaderDataCleanupResult>(`${getAdminAPI()}/users/${userId}/reader-state/cleanup`, "POST", { scope });
+}
+
+export async function adminCleanupAllReaderState(
+  scope: ReaderDataCleanupScope = "all",
+): Promise<ReaderDataCleanupResult> {
+  return adminApiCall<ReaderDataCleanupResult>(`${getAdminAPI()}/reader-state/cleanup`, "POST", { scope });
 }
 
 export async function adminGetSettings(): Promise<Record<string, string>> {

@@ -11,7 +11,10 @@ import {
   adminEditUser,
   adminDeleteUser,
   adminResetUserPassword,
+  adminCleanupUserReaderState,
+  adminCleanupAllReaderState,
   type AdminUser,
+  type ReaderDataCleanupScope,
 } from "@/utils/authClient";
 
 // ─── Icons ────────────────────────────────────────────────────────────────────
@@ -33,6 +36,7 @@ const ShieldCheckIcon = ({ className }: { className?: string }) => <svg classNam
 const EyeIcon = ({ className }: { className?: string }) => <svg className={className ?? "w-4 h-4"} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" /><circle cx="12" cy="12" r="3" /></svg>;
 const EyeOffIcon = ({ className }: { className?: string }) => <svg className={className ?? "w-4 h-4"} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" /><line x1="1" y1="1" x2="23" y2="23" /></svg>;
 const CopyIcon = ({ className }: { className?: string }) => <Icon d="M8 4H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2h-2M8 4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2H8z" className={className} />;
+const DatabaseIcon = ({ className }: { className?: string }) => <Icon d="M12 2C7 2 3 3.79 3 6v12c0 2.21 4 4 9 4s9-1.79 9-4V6c0-2.21-4-4-9-4zm0 0v16m-9-6c0 2.21 4 4 9 4s9-1.79 9-4" className={className} />;
 
 // ─── Shared input/button styles ───────────────────────────────────────────────
 
@@ -168,14 +172,24 @@ function CreateUserModal({ onClose, onCreated }: { onClose: () => void; onCreate
 
 // ─── Edit User Modal ──────────────────────────────────────────────────────────
 
-function EditUserModal({ user, currentUser, onClose, onSaved }: { user: AdminUser; currentUser: any; onClose: () => void; onSaved: () => void }) {
+function EditUserModal({
+  user,
+  currentUser,
+  onClose,
+  onSaved,
+}: {
+  user: AdminUser;
+  currentUser: { id?: number } | null | undefined;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
   const [email, setEmail] = useState(user.email);
   const [name, setName] = useState(user.name ?? "");
   const [roleId, setRoleId] = useState(user.role_id);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
-  const isSelf = currentUser && currentUser.id === user.id;
+  const isSelf = !!currentUser && currentUser.id === user.id;
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -289,6 +303,96 @@ function ResetPasswordModal({ user, onClose, onReset }: { user: AdminUser; onClo
   );
 }
 
+const CLEANUP_SCOPE_OPTIONS: { value: ReaderDataCleanupScope; label: string }[] = [
+  { value: "notes", label: "Notes" },
+  { value: "highlights", label: "Highlights" },
+  { value: "drawing", label: "Drawing Board" },
+  { value: "bookmarks", label: "Bookmarks" },
+  { value: "all", label: "All" },
+];
+
+function CleanupUserReaderDataModal({ user, onClose, onDone }: { user: AdminUser; onClose: () => void; onDone: () => void }) {
+  const [scope, setScope] = useState<ReaderDataCleanupScope>("all");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  async function handleCleanup() {
+    setLoading(true);
+    setError("");
+    try {
+      await adminCleanupUserReaderState(user.id, scope);
+      onDone();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to cleanup reader data");
+      setLoading(false);
+    }
+  }
+
+  return (
+    <Modal title="Cleanup User Reader Data" onClose={onClose}>
+      <div className="text-sm text-gray-600 dark:text-gray-400">
+        Select what to clear for <strong className="text-gray-900 dark:text-gray-100">{user.name || user.email}</strong> across all courses.
+      </div>
+      <div>
+        <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1.5">Cleanup Scope</label>
+        <select value={scope} onChange={(e) => setScope(e.target.value as ReaderDataCleanupScope)} className={inputCls}>
+          {CLEANUP_SCOPE_OPTIONS.map((opt) => (
+            <option key={opt.value} value={opt.value}>{opt.label}</option>
+          ))}
+        </select>
+      </div>
+      {error && <p className="text-xs text-red-600 dark:text-red-400">{error}</p>}
+      <div className="flex gap-2 justify-end">
+        <button type="button" onClick={onClose} className={btnGhost}>Cancel</button>
+        <button type="button" onClick={handleCleanup} disabled={loading} className={btnDanger}>
+          {loading ? "Cleaning..." : "Cleanup"}
+        </button>
+      </div>
+    </Modal>
+  );
+}
+
+function GlobalCleanupReaderDataModal({ onClose, onDone }: { onClose: () => void; onDone: () => void }) {
+  const [scope, setScope] = useState<ReaderDataCleanupScope>("all");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  async function handleCleanup() {
+    setLoading(true);
+    setError("");
+    try {
+      await adminCleanupAllReaderState(scope);
+      onDone();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to cleanup reader data globally");
+      setLoading(false);
+    }
+  }
+
+  return (
+    <Modal title="Global Reader Data Cleanup" onClose={onClose}>
+      <div className="text-sm text-gray-600 dark:text-gray-400">
+        This will cleanup selected reader data for every user and every course.
+      </div>
+      <div>
+        <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1.5">Cleanup Scope</label>
+        <select value={scope} onChange={(e) => setScope(e.target.value as ReaderDataCleanupScope)} className={inputCls}>
+          {CLEANUP_SCOPE_OPTIONS.map((opt) => (
+            <option key={opt.value} value={opt.value}>{opt.label}</option>
+          ))}
+        </select>
+      </div>
+      {error && <p className="text-xs text-red-600 dark:text-red-400">{error}</p>}
+      <div className="flex gap-2 justify-end">
+        <button type="button" onClick={onClose} className={btnGhost}>Cancel</button>
+        <button type="button" onClick={handleCleanup} disabled={loading} className={btnDanger}>
+          {loading ? "Cleaning..." : "Cleanup All"}
+        </button>
+      </div>
+    </Modal>
+  );
+}
+
 // ─── Badges ───────────────────────────────────────────────────────────────────
 
 function Badge({ label, color }: { label: string; color: "green" | "red" | "yellow" | "gray" | "blue" }) {
@@ -316,6 +420,8 @@ export default function AdminUsersPage() {
   const [editUser, setEditUser] = useState<AdminUser | null>(null);
   const [deleteUser, setDeleteUser] = useState<AdminUser | null>(null);
   const [resetUser, setResetUser] = useState<AdminUser | null>(null);
+  const [cleanupUser, setCleanupUser] = useState<AdminUser | null>(null);
+  const [showGlobalCleanup, setShowGlobalCleanup] = useState(false);
   const [tempPwResult, setTempPwResult] = useState<{ password: string; expiresAt: string } | null>(null);
 
   const fetchUsers = useCallback(async () => {
@@ -366,13 +472,22 @@ export default function AdminUsersPage() {
               {users.length} user{users.length !== 1 ? "s" : ""} registered
             </p>
           </div>
-          <button
-            onClick={() => setShowCreate(true)}
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold transition-colors cursor-pointer"
-          >
-            <PlusIcon className="w-4 h-4" />
-            Add User
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setShowGlobalCleanup(true)}
+              className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-red-500/40 text-red-400 hover:bg-red-500/10 text-sm font-semibold transition-colors cursor-pointer"
+            >
+              <DatabaseIcon className="w-4 h-4" />
+              Global Cleanup
+            </button>
+            <button
+              onClick={() => setShowCreate(true)}
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold transition-colors cursor-pointer"
+            >
+              <PlusIcon className="w-4 h-4" />
+              Add User
+            </button>
+          </div>
         </div>
 
         {/* Search */}
@@ -519,6 +634,13 @@ export default function AdminUsersPage() {
                               >
                                 <KeyIcon className="w-4 h-4" />
                               </button>
+                              <button
+                                onClick={() => setCleanupUser(u)}
+                                title="Cleanup reader data"
+                                className="p-1.5 rounded-lg text-gray-400 hover:text-red-500 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 cursor-pointer transition-colors"
+                              >
+                                <DatabaseIcon className="w-4 h-4" />
+                              </button>
                               {!isSelf && (
                                 <button
                                   onClick={() => setDeleteUser(u)}
@@ -572,6 +694,19 @@ export default function AdminUsersPage() {
           user={resetUser}
           onClose={() => setResetUser(null)}
           onReset={(result) => { setResetUser(null); setTempPwResult(result); fetchUsers(); }}
+        />
+      )}
+      {cleanupUser && (
+        <CleanupUserReaderDataModal
+          user={cleanupUser}
+          onClose={() => setCleanupUser(null)}
+          onDone={() => { setCleanupUser(null); fetchUsers(); }}
+        />
+      )}
+      {showGlobalCleanup && (
+        <GlobalCleanupReaderDataModal
+          onClose={() => setShowGlobalCleanup(false)}
+          onDone={() => { setShowGlobalCleanup(false); fetchUsers(); }}
         />
       )}
     </div>

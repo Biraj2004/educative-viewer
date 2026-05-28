@@ -3,7 +3,7 @@
 import { useState, useEffect, type ChangeEvent } from "react";
 import AppNavbar from "@/components/edu-viewer/AppNavbar";
 import UserMenu from "@/components/edu-viewer/UserMenu";
-import { adminGetSettings, adminSaveSettings } from "@/utils/authClient";
+import { adminCleanupAllReaderState, adminGetSettings, adminSaveSettings } from "@/utils/authClient";
 
 type AdminSettings = Record<string, string>;
 
@@ -52,6 +52,7 @@ export default function GlobalSettingsPage() {
   const [jsonError, setJsonError] = useState("");
   const [featureFlagsJsonError, setFeatureFlagsJsonError] = useState("");
   const [roleOverridesJsonError, setRoleOverridesJsonError] = useState("");
+  const [globalCleanupLoading, setGlobalCleanupLoading] = useState(false);
 
   useEffect(() => {
     adminGetSettings()
@@ -144,6 +145,22 @@ export default function GlobalSettingsPage() {
     setLoading(false);
   };
 
+  const handleGlobalReaderDataCleanup = async () => {
+    if (!window.confirm("This will remove all reader data (bookmarks, highlights, notes, drawings) for all users across all courses. Continue?")) {
+      return;
+    }
+    setGlobalCleanupLoading(true);
+    try {
+      await adminCleanupAllReaderState("all");
+      alert("All reader data has been cleaned.");
+    } catch (e: unknown) {
+      console.error(e);
+      alert(e instanceof Error ? e.message : "Failed to cleanup reader data.");
+    } finally {
+      setGlobalCleanupLoading(false);
+    }
+  };
+
   if (!settings) return <div>Loading...</div>;
 
   return (
@@ -234,6 +251,23 @@ export default function GlobalSettingsPage() {
               <textarea name="course_sqlite_db_paths_json" rows={5} value={settings.course_sqlite_db_paths_json || ''} onChange={handleChange} className={`mt-1 block w-full rounded-md border ${jsonError ? 'border-red-500 focus:border-red-500 focus:ring-red-500' : 'border-gray-300 dark:border-gray-700 focus:border-indigo-500 focus:ring-indigo-500'} bg-gray-50 dark:bg-gray-950 py-3 px-4 shadow-sm sm:text-sm dark:text-gray-300 font-mono resize-y`} placeholder="[\n  &quot;C:\\path\\to\\db.sqlite3&quot;\n]" />
               {jsonError && <p className="mt-1 text-xs text-red-500">{jsonError}</p>}
             </div>
+          </div>
+
+          <hr className="border-gray-200 dark:border-gray-800 my-6" />
+
+          <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100">Reader Data Maintenance</h2>
+          <div className="rounded-lg border border-red-300/40 bg-red-50/30 dark:bg-red-900/10 p-4">
+            <p className="text-sm text-gray-700 dark:text-gray-300 mb-3">
+              Global cleanup will permanently clear all per-user reader data for every course.
+            </p>
+            <button
+              type="button"
+              onClick={handleGlobalReaderDataCleanup}
+              disabled={globalCleanupLoading}
+              className="inline-flex justify-center rounded-md border border-red-500/50 bg-red-600 py-2 px-4 text-sm font-medium text-white shadow-sm hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {globalCleanupLoading ? "Cleaning..." : "Clean All Reader Data"}
+            </button>
           </div>
 
           <div className="mt-8">
