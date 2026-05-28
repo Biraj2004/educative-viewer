@@ -438,8 +438,31 @@ export default function CourseDetailPage() {
       const next = await updateViewerCourseSettings({
         course_id: courseId,
         upsert_course_drawing_note: { scene },
+      }, { includeCourse: false });
+      setViewerCourseState((prev) => ({
+        ...prev,
+        drawing_note: {
+          scene,
+          updated_at: new Date().toISOString(),
+        },
+      }));
+    } finally {
+      setCourseDrawingSaveBusy(false);
+    }
+  };
+
+  const handleDeleteCourseDrawing = async () => {
+    setCourseDrawingSaveBusy(true);
+    try {
+      await updateViewerCourseSettings({
+        course_id: courseId,
+        remove_course_drawing_note: {},
+      }, { includeCourse: false });
+      setViewerCourseState((prev) => {
+        const next = { ...prev };
+        delete next.drawing_note;
+        return next;
       });
-      applyViewerCourseState(next);
     } finally {
       setCourseDrawingSaveBusy(false);
     }
@@ -1076,6 +1099,7 @@ export default function CourseDetailPage() {
                 initialScene={viewerCourseState.drawing_note?.scene ?? null}
                 saveBusy={courseDrawingSaveBusy}
                 onSave={handleSaveCourseDrawing}
+                onDelete={handleDeleteCourseDrawing}
                 onClose={closeReaderPanel}
               />
             ) : (
