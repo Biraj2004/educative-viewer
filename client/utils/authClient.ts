@@ -708,19 +708,22 @@ export async function updateViewerCourseSettings(
   const isOnlyLastTopicUpdate = payloadKeys.length === 2
     && payloadKeys.includes("course_id")
     && payloadKeys.includes("last_topic_index");
-  const syncKey = isOnlyLastTopicUpdate && typeof payload.last_topic_index === "number"
+  const lastTopicIndex = typeof payload.last_topic_index === "number"
+    ? payload.last_topic_index
+    : undefined;
+  const syncKey = isOnlyLastTopicUpdate && lastTopicIndex !== undefined
     ? `last-topic:${payload.course_id}`
     : null;
-  if (syncKey && typeof window !== "undefined") {
+  if (syncKey && typeof window !== "undefined" && lastTopicIndex !== undefined) {
     const inflightMap = (window as Window & { __evLastTopicSyncInflight?: Record<string, number> }).__evLastTopicSyncInflight ?? {};
-    if (inflightMap[syncKey] === payload.last_topic_index) {
+    if (inflightMap[syncKey] === lastTopicIndex) {
       return null;
     }
     const syncedMap = (window as Window & { __evLastTopicSynced?: Record<string, number> }).__evLastTopicSynced ?? {};
-    if (syncedMap[syncKey] === payload.last_topic_index) {
+    if (syncedMap[syncKey] === lastTopicIndex) {
       return null;
     }
-    inflightMap[syncKey] = payload.last_topic_index;
+    inflightMap[syncKey] = lastTopicIndex;
     (window as Window & { __evLastTopicSyncInflight?: Record<string, number> }).__evLastTopicSyncInflight = inflightMap;
   }
   try {
@@ -742,9 +745,9 @@ export async function updateViewerCourseSettings(
       }
       throw new ApiError(data?.error ?? `Request failed (${res.status})`, res.status);
     }
-    if (syncKey && typeof payload.last_topic_index === "number" && typeof window !== "undefined") {
+    if (syncKey && lastTopicIndex !== undefined && typeof window !== "undefined") {
       const syncedMap = (window as Window & { __evLastTopicSynced?: Record<string, number> }).__evLastTopicSynced ?? {};
-      syncedMap[syncKey] = payload.last_topic_index;
+      syncedMap[syncKey] = lastTopicIndex;
       (window as Window & { __evLastTopicSynced?: Record<string, number> }).__evLastTopicSynced = syncedMap;
     }
     return (data?.course as CourseViewerSettings) ?? null;
