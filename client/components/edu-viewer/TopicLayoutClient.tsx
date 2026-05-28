@@ -2131,6 +2131,14 @@ export default function TopicLayoutClient({
     setDrawingPadOpen(true);
   }, [drawingsEnabled]);
 
+  useEffect(() => {
+    if (!drawingsEnabled || drawingPadOpen) return;
+    if (typeof window === "undefined") return;
+    const hash = new URLSearchParams(window.location.hash.slice(1));
+    if (!hash.get("addLibrary")) return;
+    handleOpenDrawingPad();
+  }, [drawingsEnabled, drawingPadOpen, handleOpenDrawingPad]);
+
   const handleToggleHighlightDrawer = useCallback(() => {
     if (!notesDrawerEnabled) return;
     setDrawerOpen(false);

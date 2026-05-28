@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
+import { useHandleLibrary } from "@excalidraw/excalidraw";
 import type {
   ExcalidrawImperativeAPI,
   ExcalidrawInitialDataState,
@@ -150,6 +151,11 @@ export default function TopicDrawingPad({
     if (typeof window === "undefined") return undefined;
     return `${window.location.origin}${window.location.pathname}${window.location.search}`;
   }, []);
+
+  // Official handler for `#addLibrary=...&token=...` return flow.
+  useHandleLibrary({
+    excalidrawAPI: api,
+  });
 
   const initialData = useMemo<ExcalidrawInitialDataState | undefined>(() => {
     const rawAppState =
