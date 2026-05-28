@@ -81,6 +81,7 @@ class SQLiteAuthDatabase:
                     password_hash TEXT NOT NULL DEFAULT '',
                     two_factor_secret TEXT,
                     two_factor_confirmed INTEGER NOT NULL DEFAULT 0,
+                    max_active_sessions INTEGER NOT NULL DEFAULT 1,
                     session_id TEXT,
                     last_login_ip TEXT,
                     last_login_at TEXT,
@@ -167,6 +168,17 @@ class SQLiteAuthDatabase:
         finally:
             conn.close()
 
+    def ensure_max_active_sessions_column(self) -> None:
+        """Lazily add max_active_sessions column to users_sensitive if it doesn't exist."""
+        conn = self.get_connection()
+        try:
+            conn.execute("ALTER TABLE users_sensitive ADD COLUMN max_active_sessions INTEGER NOT NULL DEFAULT 1")
+            conn.commit()
+        except sqlite3.OperationalError:
+            pass  # Column already exists
+        finally:
+            conn.close()
+
     def ensure_course_reader_state_table(self) -> None:
         """Ensure normalized per-user per-course reader state table exists."""
         conn = self.get_connection()
@@ -196,6 +208,7 @@ class SQLiteAuthDatabase:
     def get_all_users(self) -> list[sqlite3.Row]:
         self.ensure_is_active_column()
         self.ensure_first_login_columns()
+        self.ensure_max_active_sessions_column()
         conn = self.get_connection()
         try:
             return conn.execute(
@@ -203,6 +216,7 @@ class SQLiteAuthDatabase:
                 SELECT u.id, u.email, u.name, u.username, u.role_id, r.name as role_name,
                        u.is_active, u.created_at, u.two_factor_enabled,
                        COALESCE(u.is_first_login, 0) as is_first_login,
+                       COALESCE(s.max_active_sessions, 1) as max_active_sessions,
                        COALESCE(s.failed_attempts, 0) as failed_attempts,
                        s.locked_until
                 FROM users u
@@ -237,6 +251,7 @@ class SQLiteAuthDatabase:
         role_id: int,
         password_hash: str,
         temp_password_expires_at: str,
+        max_active_sessions: int = 1,
     ) -> int:
         """Create an admin-provisioned user with a temporary password. Returns the new user id."""
         self.ensure_first_login_columns()
@@ -248,17 +263,25 @@ class SQLiteAuthDatabase:
             )
             user_id = cur.lastrowid
             conn.execute(
-                "INSERT INTO users_sensitive (user_id, password_hash, temp_password_expires_at, onboarding_temp_password_hash) "
-                "VALUES (?, ?, ?, ?)",
-                (user_id, password_hash, temp_password_expires_at, password_hash),
+                "INSERT INTO users_sensitive (user_id, password_hash, temp_password_expires_at, onboarding_temp_password_hash, max_active_sessions) "
+                "VALUES (?, ?, ?, ?, ?)",
+                (user_id, password_hash, temp_password_expires_at, password_hash, max_active_sessions),
             )
             conn.commit()
             return user_id
         finally:
             conn.close()
 
-    def update_user_profile(self, user_id: int, name: str | None, email: str, role_id: int | None = None) -> bool:
+    def update_user_profile(
+        self,
+        user_id: int,
+        name: str | None,
+        email: str,
+        role_id: int | None = None,
+        max_active_sessions: int | None = None,
+    ) -> bool:
         """Update a user's display name and email."""
+        self.ensure_max_active_sessions_column()
         conn = self.get_connection()
         try:
             if role_id is not None:
@@ -270,6 +293,11 @@ class SQLiteAuthDatabase:
                 cur = conn.execute(
                     "UPDATE users SET name = ?, email = ? WHERE id = ?",
                     (name, email, user_id),
+                )
+            if max_active_sessions is not None:
+                conn.execute(
+                    "UPDATE users_sensitive SET max_active_sessions = ? WHERE user_id = ?",
+                    (max_active_sessions, user_id),
                 )
             conn.commit()
             return cur.rowcount > 0

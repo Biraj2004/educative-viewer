@@ -23,6 +23,7 @@ from backend.routes.admin.helpers import require_admin, get_json_body, parse_int
 EMAIL_RE = __import__("re").compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 TEMP_PW_EXPIRES_HOURS = 1
 READER_DATA_CLEANUP_SCOPES = {"bookmarks", "highlights", "notes", "drawing", "all"}
+MAX_ACTIVE_SESSIONS_LIMIT = 20
 
 
 def _gen_temp_password(length: int = 12) -> str:
@@ -65,6 +66,12 @@ def _cleanup_reader_state_by_scope(state: dict[str, Any], scope: str) -> tuple[d
     return next_state, changed
 
 
+def _trim_session_queue_json(auth_service: AuthService, queue_raw: Any, max_active_sessions: int) -> str:
+    queue = auth_service.parse_session_queue(queue_raw)
+    trimmed = queue[-max_active_sessions:]
+    return auth_service.serialize_session_queue(trimmed)
+
+
 def register_user_routes(bp: Blueprint, auth_service: AuthService, db_manager: DBManager) -> None:
     """Register user management routes into the provided admin blueprint."""
 
@@ -87,6 +94,7 @@ def register_user_routes(bp: Blueprint, auth_service: AuthService, db_manager: D
                 "is_active": bool(row["is_active"]),
                 "two_factor_enabled": bool(row["two_factor_enabled"]),
                 "is_first_login": bool(row["is_first_login"]),
+                "max_active_sessions": int(row.get("max_active_sessions") or 1),
                 "failed_attempts": int(row["failed_attempts"] or 0),
                 "locked_until": row["locked_until"],
                 "created_at": row["created_at"],
@@ -126,11 +134,14 @@ def register_user_routes(bp: Blueprint, auth_service: AuthService, db_manager: D
         email = str(body.get("email", "")).strip().lower()
         name = str(body.get("name", "")).strip() or None
         role_id = int(body.get("role_id", 1))
+        max_active_sessions = int(body.get("max_active_sessions", 1))
 
         if not email or not EMAIL_RE.match(email):
             abort(400, description="A valid email address is required")
         if role_id not in (1, 2):
             abort(400, description="role_id must be 1 (user) or 2 (admin)")
+        if max_active_sessions < 1 or max_active_sessions > MAX_ACTIVE_SESSIONS_LIMIT:
+            abort(400, description=f"max_active_sessions must be between 1 and {MAX_ACTIVE_SESSIONS_LIMIT}")
 
         temp_pw = _gen_temp_password()
         pw_hash = bcrypt.hashpw(temp_pw.encode(), bcrypt.gensalt(rounds=12)).decode()
@@ -146,6 +157,7 @@ def register_user_routes(bp: Blueprint, auth_service: AuthService, db_manager: D
                 role_id=role_id,
                 password_hash=pw_hash,
                 temp_password_expires_at=expires_at,
+                max_active_sessions=max_active_sessions,
             )
         except Exception as exc:
             if db_manager.auth_backend.is_integrity_error(exc):
@@ -158,6 +170,7 @@ def register_user_routes(bp: Blueprint, auth_service: AuthService, db_manager: D
             "email": email,
             "name": name,
             "role_id": role_id,
+            "max_active_sessions": max_active_sessions,
             "temp_password": temp_pw,
             "temp_password_expires_at": expires_at,
         }), 201
@@ -174,21 +187,59 @@ def register_user_routes(bp: Blueprint, auth_service: AuthService, db_manager: D
         # Don't allow an admin to change their own role
         current_admin, _ = auth_service.resolve_user(require_full=True)
         role_id = None
+        max_active_sessions = None
         if "role_id" in body:
             raw_role_id = parse_int_field(body, "role_id")
             if current_admin and current_admin.get("id") == user_id:
-                # Prevent self role-change
-                abort(403, description="Cannot change your own role")
+                # Allow self-update payloads that include the same role_id, but block actual role changes.
+                current_role_id = int(current_admin.get("role_id") or 0)
+                if raw_role_id != current_role_id:
+                    abort(403, description="Cannot change your own role")
+                raw_role_id = current_role_id
             # Only allow roles 1 (user) or 2 (admin)
             if raw_role_id not in (1, 2):
                 abort(400, description="Invalid role_id")
-            role_id = raw_role_id
+            if not (current_admin and current_admin.get("id") == user_id):
+                role_id = raw_role_id
+        if "max_active_sessions" in body:
+            raw_max_sessions = parse_int_field(body, "max_active_sessions")
+            if raw_max_sessions < 1 or raw_max_sessions > MAX_ACTIVE_SESSIONS_LIMIT:
+                abort(400, description=f"max_active_sessions must be between 1 and {MAX_ACTIVE_SESSIONS_LIMIT}")
+            max_active_sessions = raw_max_sessions
 
         if not email or not EMAIL_RE.match(email):
             abort(400, description="A valid email address is required")
 
         try:
-            success = db_manager.auth_backend.update_user_profile(user_id, name=name, email=email, role_id=role_id)
+            success = db_manager.auth_backend.update_user_profile(
+                user_id,
+                name=name,
+                email=email,
+                role_id=role_id,
+                max_active_sessions=max_active_sessions,
+            )
+            if success and max_active_sessions is not None:
+                conn = db_manager.get_auth_connection()
+                try:
+                    row = fetch_all_dict(
+                        conn,
+                        "SELECT current_token FROM users_sensitive WHERE user_id = :user_id",
+                        {"user_id": user_id},
+                    )
+                    current_token_raw = row[0]["current_token"] if row else None
+                    trimmed_token_queue = _trim_session_queue_json(
+                        auth_service,
+                        current_token_raw,
+                        max_active_sessions=max_active_sessions,
+                    )
+                    execute(
+                        conn,
+                        "UPDATE users_sensitive SET current_token = :current_token WHERE user_id = :user_id",
+                        {"current_token": trimmed_token_queue, "user_id": user_id},
+                    )
+                    conn.commit()
+                finally:
+                    conn.close()
         except Exception as exc:
             if db_manager.auth_backend.is_integrity_error(exc):
                 abort(409, description="That email is already in use by another account")

@@ -44,6 +44,13 @@ def _normalize_highlight_color(value: Any) -> str:
     return "yellow"
 
 
+def _remove_token_from_session_queue(auth_service: AuthService, queue_raw: Any, token: str | None) -> str:
+    queue = auth_service.parse_session_queue(queue_raw)
+    if token:
+        queue = [row for row in queue if row.get("token") != token]
+    return auth_service.serialize_session_queue(queue)
+
+
 def _to_int(value: Any, field: str) -> int:
     try:
         return int(value)
@@ -658,23 +665,25 @@ def create_auth_blueprint(auth_service: AuthService, db_manager: DBManager) -> B
                 200,
             )
 
-        new_session_id = str(uuid.uuid4())
         client_ip = auth_service.get_client_ip()
 
         conn2 = db_manager.get_auth_connection()
         try:
             auth_service.check_ip_restriction(conn2, user, client_ip)
-            user["session_id"] = new_session_id
             token = auth_service.make_full_token(user)
+            token_queue_json = auth_service.append_session_token(
+                user.get("current_token"),
+                token=token,
+                max_active_sessions=user.get("max_active_sessions"),
+            )
             execute(
                 conn2,
-                "UPDATE users_sensitive SET session_id = :session_id, last_login_ip = :ip, "
+                "UPDATE users_sensitive SET last_login_ip = :ip, "
                 "last_login_at = :login_at, current_token = :token WHERE user_id = :user_id",
                 {
-                    "session_id": new_session_id,
                     "ip": client_ip,
                     "login_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-                    "token": token,
+                    "token": token_queue_json,
                     "user_id": user["id"],
                 },
             )
@@ -700,13 +709,20 @@ def create_auth_blueprint(auth_service: AuthService, db_manager: DBManager) -> B
     def auth_logout():
         user, _ = auth_service.resolve_user(require_full=False)
         if user:
+            bearer = auth_service.bearer_token()
             conn = db_manager.get_auth_connection()
             try:
+                current_row = fetch_one_dict(
+                    conn,
+                    "SELECT current_token FROM users_sensitive WHERE user_id = :user_id",
+                    {"user_id": user["id"]},
+                ) or {}
+                next_queue = _remove_token_from_session_queue(auth_service, current_row.get("current_token"), bearer)
                 execute(
                     conn,
-                    "UPDATE users_sensitive SET session_id = NULL, current_token = NULL "
+                    "UPDATE users_sensitive SET current_token = :current_token "
                     "WHERE user_id = :user_id",
-                    {"user_id": user["id"]},
+                    {"current_token": next_queue, "user_id": user["id"]},
                 )
                 conn.commit()
             except Exception:
@@ -1467,7 +1483,6 @@ def create_auth_blueprint(auth_service: AuthService, db_manager: DBManager) -> B
         if not pyotp.TOTP(user["two_factor_secret"]).verify(code, valid_window=1):
             abort(400, description="Invalid authenticator code")
 
-        new_session_id = str(uuid.uuid4())
         client_ip = auth_service.get_client_ip()
 
         conn = db_manager.get_auth_connection()
@@ -1483,21 +1498,24 @@ def create_auth_blueprint(auth_service: AuthService, db_manager: DBManager) -> B
                 abort(401, description="Not authenticated")
 
             auth_service.check_ip_restriction(conn, user, client_ip)
-            user["session_id"] = new_session_id
             token = auth_service.make_full_token(user)
+            token_queue_json = auth_service.append_session_token(
+                user.get("current_token"),
+                token=token,
+                max_active_sessions=user.get("max_active_sessions"),
+            )
 
             execute(
                 conn,
                 "UPDATE users_sensitive SET two_factor_confirmed = 1, "
                 "onboarding_temp_password_hash = NULL, "
-                "session_id = :session_id, last_login_ip = :ip, "
+                "last_login_ip = :ip, "
                 "last_login_at = :login_at, current_token = :token "
                 "WHERE user_id = :user_id",
                 {
-                    "session_id": new_session_id,
                     "ip": client_ip,
                     "login_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-                    "token": token,
+                    "token": token_queue_json,
                     "user_id": user["id"],
                 },
             )
@@ -1526,24 +1544,26 @@ def create_auth_blueprint(auth_service: AuthService, db_manager: DBManager) -> B
         if not pyotp.TOTP(user["two_factor_secret"]).verify(code, valid_window=1):
             abort(401, description="Invalid authenticator code")
 
-        new_session_id = str(uuid.uuid4())
         client_ip = auth_service.get_client_ip()
 
         conn = db_manager.get_auth_connection()
         try:
             auth_service.check_ip_restriction(conn, user, client_ip)
-            user["session_id"] = new_session_id
             token = auth_service.make_full_token(user)
+            token_queue_json = auth_service.append_session_token(
+                user.get("current_token"),
+                token=token,
+                max_active_sessions=user.get("max_active_sessions"),
+            )
 
             execute(
                 conn,
-                "UPDATE users_sensitive SET session_id = :session_id, last_login_ip = :ip, "
+                "UPDATE users_sensitive SET last_login_ip = :ip, "
                 "last_login_at = :login_at, current_token = :token WHERE user_id = :user_id",
                 {
-                    "session_id": new_session_id,
                     "ip": client_ip,
                     "login_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-                    "token": token,
+                    "token": token_queue_json,
                     "user_id": user["id"],
                 },
             )
@@ -1662,7 +1682,7 @@ def create_auth_blueprint(auth_service: AuthService, db_manager: DBManager) -> B
             execute(
                 conn,
                 "UPDATE users_sensitive "
-                "SET password_hash = :pw_hash, session_id = NULL, current_token = NULL "
+                "SET password_hash = :pw_hash, current_token = NULL "
                 "WHERE user_id = :user_id",
                 {"pw_hash": pw_hash, "user_id": int(payload["id"])},
             )

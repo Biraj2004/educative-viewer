@@ -143,6 +143,7 @@ class OracleAuthDatabase:
                         password_hash              VARCHAR2(200 CHAR) DEFAULT '' NOT NULL,
                         two_factor_secret          VARCHAR2(64 CHAR),
                         two_factor_confirmed       NUMBER(1,0) DEFAULT 0 NOT NULL,
+                        max_active_sessions        NUMBER DEFAULT 1 NOT NULL,
                         session_id                 VARCHAR2(64 CHAR),
                         last_login_ip              VARCHAR2(50 CHAR),
                         last_login_at              VARCHAR2(30 CHAR),
@@ -258,6 +259,25 @@ class OracleAuthDatabase:
         finally:
             conn.close()
 
+    def ensure_max_active_sessions_column(self) -> None:
+        """Lazily add max_active_sessions column to users_sensitive if missing."""
+        if not self.is_configured:
+            return
+        conn = self.get_connection()
+        try:
+            cursor = conn.cursor()
+            try:
+                cursor.execute("ALTER TABLE users_sensitive ADD max_active_sessions NUMBER DEFAULT 1 NOT NULL")
+                conn.commit()
+            except oracledb.DatabaseError as exc:
+                (err,) = exc.args
+                if err.code != 1430:
+                    raise
+            finally:
+                cursor.close()
+        finally:
+            conn.close()
+
     def ensure_course_reader_state_table(self) -> None:
         """Ensure normalized per-user per-course reader state table exists."""
         if not self.is_configured:
@@ -296,6 +316,7 @@ class OracleAuthDatabase:
     def get_all_users(self) -> list[dict]:
         self.ensure_is_active_column()
         self.ensure_first_login_columns()
+        self.ensure_max_active_sessions_column()
         conn = self.get_connection()
         try:
             cursor = conn.cursor()
@@ -305,6 +326,7 @@ class OracleAuthDatabase:
                     SELECT u.id, u.email, u.name, u.username, u.role_id, r.name as role_name,
                            u.is_active, u.created_at, u.two_factor_enabled,
                            COALESCE(u.is_first_login, 0) as is_first_login,
+                           COALESCE(s.max_active_sessions, 1) as max_active_sessions,
                            COALESCE(s.failed_attempts, 0) as failed_attempts,
                            s.locked_until
                     FROM users u
@@ -344,8 +366,10 @@ class OracleAuthDatabase:
         role_id: int,
         password_hash: str,
         temp_password_expires_at: str,
+        max_active_sessions: int = 1,
     ) -> int:
         self.ensure_first_login_columns()
+        self.ensure_max_active_sessions_column()
         conn = self.get_connection()
         try:
             cursor = conn.cursor()
@@ -358,9 +382,9 @@ class OracleAuthDatabase:
                 )
                 user_id = int(user_id_var.getvalue()[0])
                 cursor.execute(
-                    "INSERT INTO users_sensitive (user_id, password_hash, temp_password_expires_at, onboarding_temp_password_hash) "
-                    "VALUES (:1, :2, :3, :4)",
-                    (user_id, password_hash, temp_password_expires_at, password_hash),
+                    "INSERT INTO users_sensitive (user_id, password_hash, temp_password_expires_at, onboarding_temp_password_hash, max_active_sessions) "
+                    "VALUES (:1, :2, :3, :4, :5)",
+                    (user_id, password_hash, temp_password_expires_at, password_hash, max_active_sessions),
                 )
                 conn.commit()
                 return user_id
@@ -369,8 +393,16 @@ class OracleAuthDatabase:
         finally:
             conn.close()
 
-    def update_user_profile(self, user_id: int, name: str | None, email: str, role_id: int | None = None) -> bool:
+    def update_user_profile(
+        self,
+        user_id: int,
+        name: str | None,
+        email: str,
+        role_id: int | None = None,
+        max_active_sessions: int | None = None,
+    ) -> bool:
         """Update a user's display name, email, and optionally role_id."""
+        self.ensure_max_active_sessions_column()
         conn = self.get_connection()
         try:
             cursor = conn.cursor()
@@ -384,6 +416,11 @@ class OracleAuthDatabase:
                     cursor.execute(
                         "UPDATE users SET name = :1, email = :2 WHERE id = :3",
                         (name, email, user_id),
+                    )
+                if max_active_sessions is not None:
+                    cursor.execute(
+                        "UPDATE users_sensitive SET max_active_sessions = :1 WHERE user_id = :2",
+                        (max_active_sessions, user_id),
                     )
                 conn.commit()
                 return cursor.rowcount > 0

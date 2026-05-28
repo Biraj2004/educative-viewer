@@ -3,11 +3,10 @@
  * All calls go directly from the browser to NEXT_PUBLIC_BACKEND_API_BASE (Flask).
  * JWT is stored in localStorage — stateless, no cookies.
  *
- * Single-session enforcement:
- *   The Flask backend embeds a `sessionId` (UUID) in every JWT and stores the same
- *   value in the `users_sensitive` table. On each new login the DB value is rotated,
- *   so any old JWT that still carries the previous sessionId gets a 401 from the
- *   backend on the very next API call → the global 401 handler fires → sign-in page.
+ * Session enforcement:
+ *   The Flask backend tracks active auth tokens in a bounded queue per user
+ *   (`users_sensitive.current_token`). Tokens that fall out of the queue are
+ *   rejected with 401 on next API call → global 401 handler fires → sign-in page.
  */
 
 import { getBackendApiBase } from "./runtime-config";
@@ -812,6 +811,7 @@ export interface AdminUser {
   is_active: boolean;
   two_factor_enabled: boolean;
   is_first_login: boolean;
+  max_active_sessions: number;
   failed_attempts: number;
   locked_until: string | null;
   created_at: string;
@@ -823,6 +823,7 @@ export interface AdminCreateResult {
   email: string;
   name: string | null;
   role_id: number;
+  max_active_sessions: number;
   temp_password: string;
   temp_password_expires_at: string;
 }
@@ -871,11 +872,13 @@ export async function adminCreateUser(
   email: string,
   name: string | null,
   role_id: number,
+  max_active_sessions: number,
 ): Promise<AdminCreateResult> {
   return adminApiCall<AdminCreateResult>(`${getAdminAPI()}/users/create`, "POST", {
     email,
     name,
     role_id,
+    max_active_sessions,
   });
 }
 
@@ -883,12 +886,17 @@ export async function adminEditUser(
   userId: number,
   email: string,
   name: string | null,
-  role_id: number,
+  role_id: number | undefined,
+  max_active_sessions: number,
 ): Promise<{ success: boolean }> {
+  const payload: Record<string, unknown> = { email, name, max_active_sessions };
+  if (typeof role_id === "number") {
+    payload.role_id = role_id;
+  }
   return adminApiCall<{ success: boolean }>(
     `${getAdminAPI()}/users/${userId}/edit`,
     "PATCH",
-    { email, name, role_id },
+    payload,
   );
 }
 

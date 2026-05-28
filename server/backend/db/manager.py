@@ -138,6 +138,7 @@ class DBManager:
         self.auth_backend.init_schema()
         self.auth_backend.ensure_is_active_column()
         self.auth_backend.ensure_first_login_columns()
+        self.auth_backend.ensure_max_active_sessions_column()
         self.auth_backend.ensure_course_reader_state_table()
 
     def keep_auth_db_alive(self) -> None:

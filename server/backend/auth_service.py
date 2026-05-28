@@ -16,6 +16,7 @@ from backend.db.manager import DBManager
 from backend.db.sql_helpers import execute, fetch_all_dict, fetch_one_dict
 
 log = logging.getLogger(__name__)
+MAX_ACTIVE_SESSIONS_LIMIT = 20
 
 
 _USER_JOIN = """
@@ -24,7 +25,8 @@ _USER_JOIN = """
            u.role_id, u.two_factor_enabled, u.login_ip_log, u.theme, u.created_at,
            COALESCE(u.is_first_login, 0) AS is_first_login,
            s.password_hash, s.two_factor_secret, s.two_factor_confirmed,
-           s.session_id, s.last_login_ip, s.last_login_at, s.current_token,
+           COALESCE(s.max_active_sessions, 1) AS max_active_sessions,
+           s.last_login_ip, s.last_login_at, s.current_token,
            COALESCE(s.failed_attempts, 0) AS failed_attempts, s.locked_until,
            s.temp_password_expires_at, s.onboarding_temp_password_hash
     FROM users u
@@ -124,7 +126,6 @@ class AuthService:
             "twoFactorEnabled": bool(user.get("two_factor_enabled")),
             "isFirstLogin": bool(user.get("is_first_login")),
             "createdAt": user.get("created_at"),
-            "sessionId": user.get("session_id"),
             "iat": now,
             "exp": now + self.config.jwt_expires_days * 86400,
         }
@@ -145,6 +146,77 @@ class AuthService:
             return pyjwt.decode(token, self.config.jwt_secret, algorithms=["HS256"])
         except pyjwt.PyJWTError:
             return None
+
+    @staticmethod
+    def clamp_max_active_sessions(value: Any) -> int:
+        try:
+            parsed = int(value)
+        except (TypeError, ValueError):
+            return 1
+        if parsed < 1:
+            return 1
+        if parsed > MAX_ACTIVE_SESSIONS_LIMIT:
+            return MAX_ACTIVE_SESSIONS_LIMIT
+        return parsed
+
+    @staticmethod
+    def parse_session_queue(raw: Any) -> list[dict[str, str]]:
+        if not raw:
+            return []
+        try:
+            parsed = json.loads(raw)
+        except (TypeError, ValueError, json.JSONDecodeError):
+            return []
+        if not isinstance(parsed, dict):
+            return []
+        tokens = parsed.get("tokens")
+        if not isinstance(tokens, list):
+            return []
+        cleaned: list[dict[str, str]] = []
+        seen_tokens: set[str] = set()
+        for item in tokens:
+            if not isinstance(item, dict):
+                continue
+            token = str(item.get("token", "") or "").strip()
+            if not token or token in seen_tokens:
+                continue
+            seen_tokens.add(token)
+            cleaned.append(
+                {
+                    "token": token,
+                    "issued_at": str(item.get("issued_at", "") or ""),
+                }
+            )
+        return cleaned
+
+    @staticmethod
+    def serialize_session_queue(tokens: list[dict[str, str]]) -> str:
+        return json.dumps({"tokens": tokens}, separators=(",", ":"))
+
+    def append_session_token(
+        self,
+        existing_raw: Any,
+        *,
+        token: str,
+        max_active_sessions: Any,
+    ) -> str:
+        queue = self.parse_session_queue(existing_raw)
+        queue = [row for row in queue if row.get("token") != token]
+        queue.append(
+            {
+                "token": token,
+                "issued_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+            }
+        )
+        limit = self.clamp_max_active_sessions(max_active_sessions)
+        queue = queue[-limit:]
+        return self.serialize_session_queue(queue)
+
+    def token_in_session_queue(self, token: str, queue_raw: Any) -> bool:
+        if not token:
+            return False
+        queue = self.parse_session_queue(queue_raw)
+        return any(row.get("token") == token for row in queue)
 
     @staticmethod
     def bearer_token() -> str | None:
@@ -227,7 +299,7 @@ class AuthService:
             abort(403, description="Account is deactivated. Please contact an administrator.")
 
         if not payload.get("partial"):
-            if payload.get("sessionId") != user.get("session_id"):
+            if not self.token_in_session_queue(token, user.get("current_token")):
                 abort(401, description="Session superseded by a newer login. Please sign in again.")
 
         return user, payload

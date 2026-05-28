@@ -125,6 +125,7 @@ function CreateUserModal({ onClose, onCreated }: { onClose: () => void; onCreate
   const [email, setEmail] = useState("");
   const [name, setName] = useState("");
   const [roleId, setRoleId] = useState(1);
+  const [maxActiveSessions, setMaxActiveSessions] = useState(1);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -133,7 +134,12 @@ function CreateUserModal({ onClose, onCreated }: { onClose: () => void; onCreate
     setError("");
     setLoading(true);
     try {
-      const result = await adminCreateUser(email.trim().toLowerCase(), name.trim() || null, roleId);
+      const result = await adminCreateUser(
+        email.trim().toLowerCase(),
+        name.trim() || null,
+        roleId,
+        maxActiveSessions,
+      );
       onCreated({ password: result.temp_password, expiresAt: result.temp_password_expires_at });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to create user");
@@ -159,6 +165,17 @@ function CreateUserModal({ onClose, onCreated }: { onClose: () => void; onCreate
             <option value={1}>User</option>
             <option value={2}>Admin</option>
           </select>
+        </div>
+        <div>
+          <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1.5">Max Active Sessions</label>
+          <input
+            type="number"
+            min={1}
+            max={20}
+            value={maxActiveSessions}
+            onChange={(e) => setMaxActiveSessions(Math.max(1, Number(e.target.value) || 1))}
+            className={inputCls}
+          />
         </div>
         {error && <p className="text-xs text-red-600 dark:text-red-400">{error}</p>}
         <div className="flex gap-2 justify-end pt-1">
@@ -186,6 +203,7 @@ function EditUserModal({
   const [email, setEmail] = useState(user.email);
   const [name, setName] = useState(user.name ?? "");
   const [roleId, setRoleId] = useState(user.role_id);
+  const [maxActiveSessions, setMaxActiveSessions] = useState(user.max_active_sessions || 1);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -196,7 +214,13 @@ function EditUserModal({
     setError("");
     setLoading(true);
     try {
-      await adminEditUser(user.id, email.trim().toLowerCase(), name.trim() || null, roleId);
+      await adminEditUser(
+        user.id,
+        email.trim().toLowerCase(),
+        name.trim() || null,
+        isSelf ? undefined : roleId,
+        maxActiveSessions,
+      );
       onSaved();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to update user");
@@ -229,6 +253,17 @@ function EditUserModal({
             <option value={2}>Admin</option>
           </select>
           {isSelf && <p className="text-[10px] text-gray-500 mt-1">You cannot change your own role.</p>}
+        </div>
+        <div>
+          <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1.5">Max Active Sessions</label>
+          <input
+            type="number"
+            min={1}
+            max={20}
+            value={maxActiveSessions}
+            onChange={(e) => setMaxActiveSessions(Math.max(1, Number(e.target.value) || 1))}
+            className={inputCls}
+          />
         </div>
         {error && <p className="text-xs text-red-600 dark:text-red-400">{error}</p>}
         <div className="flex gap-2 justify-end pt-1">
