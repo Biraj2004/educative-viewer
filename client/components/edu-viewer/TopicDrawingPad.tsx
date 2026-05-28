@@ -127,6 +127,31 @@ export default function TopicDrawingPad({
   onDelete,
   onClose,
 }: Props) {
+  const ensureLibraryWindowName = useCallback(() => {
+    if (typeof window === "undefined") return;
+    const key = "edu_viewer_window_name";
+    let name = "";
+    try {
+      name = sessionStorage.getItem(key) ?? "";
+    } catch {
+      // ignore storage errors
+    }
+    if (!name) {
+      const suffix = typeof crypto !== "undefined" && "randomUUID" in crypto
+        ? crypto.randomUUID()
+        : Math.random().toString(36).slice(2);
+      name = `edu-viewer-${suffix}`;
+      try {
+        sessionStorage.setItem(key, name);
+      } catch {
+        // ignore storage errors
+      }
+    }
+    if (name && window.name !== name) {
+      window.name = name;
+    }
+  }, []);
+
   const rootRef = useRef<HTMLDivElement | null>(null);
   const [api, setApi] = useState<ExcalidrawImperativeAPI | null>(null);
   const [dirty, setDirty] = useState(false);
@@ -151,7 +176,8 @@ export default function TopicDrawingPad({
         w.EXCALIDRAW_ASSET_PATH = "/";
       }
     }
-  }, []);
+    ensureLibraryWindowName();
+  }, [ensureLibraryWindowName]);
 
   useEffect(() => {
     if (typeof document === "undefined") return;
@@ -202,7 +228,7 @@ export default function TopicDrawingPad({
 
   const libraryReturnUrl = useMemo(() => {
     if (typeof window === "undefined") return undefined;
-    return `${window.location.origin}${window.location.pathname}${window.location.search}`;
+    return window.location.href;
   }, []);
 
   const initialData = useMemo<ExcalidrawInitialDataState | undefined>(() => {
