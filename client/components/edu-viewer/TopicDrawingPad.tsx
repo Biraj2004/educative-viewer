@@ -114,27 +114,6 @@ function contentSignatureFromUnknown(
   }
 }
 
-function buildCurrentContentKey(
-  api: ExcalidrawImperativeAPI | null,
-  fallbackElements: readonly unknown[],
-  fallbackFiles: Record<string, unknown>,
-): string {
-  try {
-    if (api) {
-      return contentSignatureFromUnknown(
-        api.getSceneElements() as readonly unknown[],
-        api.getFiles() as unknown as Record<string, unknown>,
-      );
-    }
-    return contentSignatureFromUnknown(
-      fallbackElements,
-      fallbackFiles,
-    );
-  } catch {
-    return "";
-  }
-}
-
 export default function TopicDrawingPad({
   topicTitle,
   initialScene,
@@ -148,6 +127,11 @@ export default function TopicDrawingPad({
   const [saveError, setSaveError] = useState<string | null>(null);
   const [confirmCloseOpen, setConfirmCloseOpen] = useState(false);
   const lastSavedContentKeyRef = useRef<string>("");
+  const latestContentKeyRef = useRef<string>("");
+  const latestSceneRef = useRef<ViewerDrawingScene | null>(null);
+  const baselineInitializedRef = useRef(false);
+  const saveRevisionRef = useRef(0);
+  const suppressDirtyUntilRef = useRef(0);
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -177,21 +161,32 @@ export default function TopicDrawingPad({
   }, [initialScene]);
 
   useEffect(() => {
+    if (baselineInitializedRef.current) return;
     if (!initialData) {
       lastSavedContentKeyRef.current = "";
+      latestContentKeyRef.current = "";
+      latestSceneRef.current = null;
+      baselineInitializedRef.current = true;
       return;
     }
-    try {
-      lastSavedContentKeyRef.current = contentSignatureFromUnknown(
-        (initialData.elements ?? []) as readonly unknown[],
-        (initialData.files ?? {}) as Record<string, unknown>,
-      );
-    } catch {
-      lastSavedContentKeyRef.current = "";
-    }
+    const scene = buildSerializableScene(
+      (initialData.elements ?? []) as readonly unknown[],
+      (initialData.appState ?? {}) as Record<string, unknown>,
+      (initialData.files ?? {}) as Record<string, unknown>,
+    );
+    const key = contentSignatureFromScene(scene);
+    lastSavedContentKeyRef.current = key;
+    latestContentKeyRef.current = key;
+    latestSceneRef.current = scene;
+    baselineInitializedRef.current = true;
   }, [initialData]);
 
   useEffect(() => {
+    // Keep editor clean when freshly opened.
+    if (!baselineInitializedRef.current) {
+      setDirty(false);
+      return;
+    }
     setDirty(false);
     setSaveError(null);
     setConfirmCloseOpen(false);
@@ -199,16 +194,29 @@ export default function TopicDrawingPad({
 
   const handleSave = useCallback(async (): Promise<boolean> => {
     if (!api) return false;
+    const revision = saveRevisionRef.current + 1;
+    saveRevisionRef.current = revision;
     setLocalSaveBusy(true);
     setSaveError(null);
     try {
-      const nextScene = buildSerializableScene(
+      await new Promise<void>((resolve) => {
+        requestAnimationFrame(() => resolve());
+      });
+      const nextScene = latestSceneRef.current ?? buildSerializableScene(
         api.getSceneElements() as readonly unknown[],
         api.getAppState() as unknown as Record<string, unknown>,
         api.getFiles() as unknown as Record<string, unknown>,
       );
+      const sceneKey = latestContentKeyRef.current || contentSignatureFromScene(nextScene);
       await onSave(nextScene);
-      lastSavedContentKeyRef.current = contentSignatureFromScene(nextScene);
+      if (saveRevisionRef.current !== revision) {
+        return false;
+      }
+      lastSavedContentKeyRef.current = sceneKey;
+      latestContentKeyRef.current = sceneKey;
+      latestSceneRef.current = nextScene;
+      suppressDirtyUntilRef.current = Date.now() + 300;
+      setConfirmCloseOpen(false);
       setDirty(false);
       return true;
     } catch (err: unknown) {
@@ -310,14 +318,24 @@ export default function TopicDrawingPad({
         <Excalidraw
           excalidrawAPI={(editorApi) => setApi(editorApi)}
           initialData={initialData}
-          onChange={(elements, _appState, files) => {
-            const currentKey = buildCurrentContentKey(
-              api,
+          onChange={(elements, appState, files) => {
+            const currentScene = buildSerializableScene(
+              elements as readonly unknown[],
+              appState as unknown as Record<string, unknown>,
+              files as unknown as Record<string, unknown>,
+            );
+            const currentKey = contentSignatureFromUnknown(
               elements as readonly unknown[],
               files as unknown as Record<string, unknown>,
             );
+            latestSceneRef.current = currentScene;
+            latestContentKeyRef.current = currentKey;
             if (!lastSavedContentKeyRef.current) {
               lastSavedContentKeyRef.current = currentKey;
+              setDirty(false);
+              return;
+            }
+            if (Date.now() < suppressDirtyUntilRef.current && currentKey === lastSavedContentKeyRef.current) {
               setDirty(false);
               return;
             }
