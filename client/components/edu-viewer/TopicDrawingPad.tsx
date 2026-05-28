@@ -135,10 +135,12 @@ export default function TopicDrawingPad({
   const [saveError, setSaveError] = useState<string | null>(null);
   const [confirmCloseOpen, setConfirmCloseOpen] = useState(false);
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
+  const [excalidrawTheme, setExcalidrawTheme] = useState<"dark" | "light">("light");
   const lastSavedContentKeyRef = useRef<string>("");
   const latestContentKeyRef = useRef<string>("");
   const latestSceneRef = useRef<ViewerDrawingScene | null>(null);
   const baselineInitializedRef = useRef(false);
+  const initialSyncPendingRef = useRef(true);
   const saveRevisionRef = useRef(0);
   const suppressDirtyUntilRef = useRef(0);
 
@@ -149,6 +151,18 @@ export default function TopicDrawingPad({
         w.EXCALIDRAW_ASSET_PATH = "/";
       }
     }
+  }, []);
+
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    const root = document.documentElement;
+    const syncTheme = () => {
+      setExcalidrawTheme(root.classList.contains("dark") ? "dark" : "light");
+    };
+    syncTheme();
+    const observer = new MutationObserver(syncTheme);
+    observer.observe(root, { attributes: true, attributeFilter: ["class"] });
+    return () => observer.disconnect();
   }, []);
 
   useEffect(() => {
@@ -217,6 +231,7 @@ export default function TopicDrawingPad({
       latestContentKeyRef.current = "";
       latestSceneRef.current = null;
       baselineInitializedRef.current = true;
+      initialSyncPendingRef.current = true;
       return;
     }
     const scene = buildSerializableScene(
@@ -229,6 +244,7 @@ export default function TopicDrawingPad({
     latestContentKeyRef.current = key;
     latestSceneRef.current = scene;
     baselineInitializedRef.current = true;
+    initialSyncPendingRef.current = true;
   }, [initialData]);
 
   useEffect(() => {
@@ -242,6 +258,16 @@ export default function TopicDrawingPad({
     setConfirmCloseOpen(false);
     setConfirmDeleteOpen(false);
   }, [initialData]);
+
+  useEffect(() => {
+    if (!api) return;
+    api.updateScene({
+      appState: {
+        ...(api.getAppState() as unknown as Record<string, unknown>),
+        theme: excalidrawTheme,
+      } as never,
+    });
+  }, [api, excalidrawTheme]);
 
   const handleSave = useCallback(async (): Promise<boolean> => {
     if (!api) return false;
@@ -450,6 +476,7 @@ export default function TopicDrawingPad({
           excalidrawAPI={(editorApi) => setApi(editorApi)}
           initialData={initialData}
           libraryReturnUrl={libraryReturnUrl}
+          theme={excalidrawTheme}
           onChange={(elements, appState, files) => {
             const currentScene = buildSerializableScene(
               elements as readonly unknown[],
@@ -462,6 +489,12 @@ export default function TopicDrawingPad({
             );
             latestSceneRef.current = currentScene;
             latestContentKeyRef.current = currentKey;
+            if (initialSyncPendingRef.current) {
+              initialSyncPendingRef.current = false;
+              lastSavedContentKeyRef.current = currentKey;
+              setDirty(false);
+              return;
+            }
             if (!lastSavedContentKeyRef.current) {
               lastSavedContentKeyRef.current = currentKey;
               setDirty(false);
