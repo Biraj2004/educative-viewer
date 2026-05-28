@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useAuth } from "@/components/edu-viewer/AuthProvider";
 import { setTheme as syncThemeToBackend } from "@/utils/authClient";
 
 export function saveTheme(theme: "dark" | "light") {
@@ -20,7 +19,6 @@ export function readSavedTheme(): "dark" | "light" | null {
 }
 
 export default function DarkModeToggle() {
-  const { user } = useAuth();
   // Keep first render deterministic for SSR hydration; sync actual DOM theme after mount.
   const [isDark, setIsDark] = useState(false);
 
@@ -37,18 +35,6 @@ export default function DarkModeToggle() {
     if (!saved) saveTheme("light");
     requestAnimationFrame(syncFromDom);
   }, []);
-
-  // The DB hydration logic has been moved to AuthProvider so it happens globally
-  // immediately after login, instead of waiting for the UserMenu to be opened.
-  // We keep the local hook here so the toggle button stays in sync if AuthProvider changes it.
-  useEffect(() => {
-    if (user?.theme) {
-      const useDark = user.theme === "dark";
-      document.documentElement.classList.toggle("dark", useDark);
-      saveTheme(useDark ? "dark" : "light");
-      requestAnimationFrame(syncFromDom);
-    }
-  }, [user?.theme]);
 
   // Keep toggle UI in sync even if some other part of app toggles the root class.
   useEffect(() => {
