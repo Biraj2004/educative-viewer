@@ -268,7 +268,6 @@ export default function TopicLayoutClient({
     if (typeof window === "undefined") return 420;
     return Math.max(340, Math.floor(window.innerWidth * 0.3));
   });
-  const [drawingPanelEverOpened, setDrawingPanelEverOpened] = useState(false);
   const [drawingPanelVisible, setDrawingPanelVisible] = useState(false);
   const [drawingPanelWidth, setDrawingPanelWidth] = useState(() => {
     if (typeof window === "undefined") return 560;
@@ -1831,6 +1830,7 @@ export default function TopicLayoutClient({
   }, [currentTopic.topic_index, handleTopicNav]);
 
   useEffect(() => {
+    if (drawingPadOpen) return;
     const container = contentRef.current;
     if (!container) return;
 
@@ -1877,9 +1877,10 @@ export default function TopicLayoutClient({
       if (rafId !== null) window.cancelAnimationFrame(rafId);
       if (touchTimer !== null) window.clearTimeout(touchTimer);
     };
-  }, [captureSelectionFromTopicContent, currentTopic.topic_index]);
+  }, [captureSelectionFromTopicContent, currentTopic.topic_index, drawingPadOpen]);
 
   useEffect(() => {
+    if (drawingPadOpen) return;
     const onOutsidePointerDown = (event: MouseEvent) => {
       const target = event.target as Node | null;
       if (!target) return;
@@ -1901,7 +1902,23 @@ export default function TopicLayoutClient({
       document.removeEventListener("mousedown", onOutsidePointerDown);
       window.removeEventListener("scroll", onScroll);
     };
-  }, []);
+  }, [drawingPadOpen]);
+
+  useEffect(() => {
+    if (!drawingPadOpen) return;
+    const body = document.body;
+    const html = document.documentElement;
+    const prevBodyOverscroll = body.style.overscrollBehavior;
+    const prevHtmlOverscroll = html.style.overscrollBehavior;
+
+    body.style.overscrollBehavior = "contain";
+    html.style.overscrollBehavior = "contain";
+
+    return () => {
+      body.style.overscrollBehavior = prevBodyOverscroll;
+      html.style.overscrollBehavior = prevHtmlOverscroll;
+    };
+  }, [drawingPadOpen]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -2153,7 +2170,7 @@ export default function TopicLayoutClient({
         upsert_course_drawing_note: {
           scene,
         },
-      });
+      }, { includeCourse: false });
       if (courseState?.drawing_note && typeof courseState.drawing_note === "object") {
         setCourseDrawingNote(courseState.drawing_note);
       } else {
@@ -2162,6 +2179,20 @@ export default function TopicLayoutClient({
           updated_at: new Date().toISOString(),
         });
       }
+    } finally {
+      setDrawingSaveBusy(false);
+    }
+  }, [courseId, drawingsEnabled]);
+
+  const handleDeleteDrawingScene = useCallback(async () => {
+    if (!drawingsEnabled) return;
+    setDrawingSaveBusy(true);
+    try {
+      await updateViewerCourseSettings({
+        course_id: courseId,
+        remove_course_drawing_note: {},
+      }, { includeCourse: false });
+      setCourseDrawingNote(null);
     } finally {
       setDrawingSaveBusy(false);
     }
@@ -2199,7 +2230,6 @@ export default function TopicLayoutClient({
 
   useEffect(() => {
     if (drawingPadOpen) {
-      setDrawingPanelEverOpened(true);
       setDrawingPanelVisible(false);
       const timeoutId = window.setTimeout(() => setDrawingPanelVisible(true), 18);
       return () => window.clearTimeout(timeoutId);
@@ -2284,9 +2314,9 @@ export default function TopicLayoutClient({
     };
   }, [highlightPanelWidth]);
 
-  const activeRightPanelWidth = drawingPanelVisible
+  const activeRightPanelWidth = drawingPadOpen
     ? drawingPanelWidth
-    : (highlightDrawerVisible ? highlightPanelWidth : 0);
+    : (highlightDrawerOpen ? highlightPanelWidth : 0);
   const contentShiftStyle = activeRightPanelWidth > 0
     ? { marginRight: `${activeRightPanelWidth}px` }
     : undefined;
@@ -3034,11 +3064,12 @@ export default function TopicLayoutClient({
           </div>
       )}
 
-      {drawingsEnabled && drawingPanelEverOpened && (
+      {drawingsEnabled && drawingPadOpen && (
         <div
           className={`fixed top-14 bottom-0 right-0 z-50 border-l border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-950 shadow-2xl will-change-transform transition-transform duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] ${drawingPanelVisible ? "pointer-events-auto translate-x-0" : "pointer-events-none translate-x-full"}`}
           style={{
             width: `${drawingPanelWidth}px`,
+            opacity: drawingPanelVisible ? 1 : 0,
           }}
         >
           <div
@@ -3055,6 +3086,7 @@ export default function TopicLayoutClient({
             initialScene={currentCourseDrawing?.scene ?? null}
             saveBusy={drawingSaveBusy}
             onSave={handleSaveDrawingScene}
+            onDelete={handleDeleteDrawingScene}
             onClose={handleCloseDrawingPad}
           />
         </div>

@@ -722,9 +722,11 @@ export interface UpdateViewerCourseSettingsPayload {
 
 export async function updateViewerCourseSettings(
   payload: UpdateViewerCourseSettingsPayload,
+  options?: { includeCourse?: boolean },
 ): Promise<CourseViewerSettings | null> {
   const token = getAuthToken();
   if (!token) return null;
+  const includeCourse = options?.includeCourse !== false;
   const payloadKeys = Object.keys(payload);
   const isOnlyLastTopicUpdate = payloadKeys.length === 2
     && payloadKeys.includes("course_id")
@@ -748,14 +750,17 @@ export async function updateViewerCourseSettings(
     (window as Window & { __evLastTopicSyncInflight?: Record<string, number> }).__evLastTopicSyncInflight = inflightMap;
   }
   try {
-    const res = await fetch(`${getAPI()}/viewer-settings/course`, {
+    const res = await fetch(
+      `${getAPI()}/viewer-settings/course?include_course=${includeCourse ? "1" : "0"}`,
+      {
       method: "PUT",
       headers: {
         "Content-Type": "application/json",
         Authorization: `Bearer ${token}`,
       },
       body: JSON.stringify(payload),
-    });
+      },
+    );
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
       if (res.status === 401) {
@@ -771,6 +776,7 @@ export async function updateViewerCourseSettings(
       syncedMap[syncKey] = lastTopicIndex;
       (window as Window & { __evLastTopicSynced?: Record<string, number> }).__evLastTopicSynced = syncedMap;
     }
+    if (!includeCourse) return null;
     return (data?.course as CourseViewerSettings) ?? null;
   } finally {
     if (syncKey && typeof window !== "undefined") {

@@ -328,6 +328,7 @@ def _filter_settings_by_features(
     for course_state in courses.values():
         if not isinstance(course_state, dict):
             continue
+        course_state.pop("drawing_notes", None)
         if not bookmarks_enabled:
             course_state.pop("bookmarks", None)
         if not highlights_enabled:
@@ -365,6 +366,8 @@ def _filter_course_state_by_features(
     features: dict[str, bool],
 ) -> dict[str, Any]:
     filtered = dict(course_state)
+    # Deprecated legacy key: never expose in API responses.
+    filtered.pop("drawing_notes", None)
     highlights_enabled = bool(features.get("highlights_enabled", True))
     bookmarks_enabled = bool(features.get("bookmarks_enabled", True))
     notes_enabled = bool(features.get("notes_enabled", True))
@@ -906,6 +909,8 @@ def create_auth_blueprint(auth_service: AuthService, db_manager: DBManager) -> B
             abort(401, description="Not authenticated")
 
         body = request.get_json(force=True, silent=True) or {}
+        include_course_raw = str(request.args.get("include_course", "1") or "").strip().lower()
+        include_course = include_course_raw not in ("0", "false", "no", "off")
         course_id_raw = body.get("course_id")
         if course_id_raw is None:
             abort(400, description="course_id is required")
@@ -934,6 +939,8 @@ def create_auth_blueprint(auth_service: AuthService, db_manager: DBManager) -> B
             course_state = courses.get(course_key, {})
             if not isinstance(course_state, dict):
                 course_state = {}
+            # Deprecated legacy key: remove it on write path as well.
+            course_state.pop("drawing_notes", None)
 
             bookmarks = _clean_topic_list(course_state.get("bookmarks"))
             highlights = _clean_highlights_map(course_state.get("highlights"))
@@ -1380,6 +1387,9 @@ def create_auth_blueprint(auth_service: AuthService, db_manager: DBManager) -> B
             conn.commit()
         finally:
             conn.close()
+
+        if not include_course:
+            return jsonify({"ok": True}), 200
 
         if isinstance(course_state, dict):
             course_state = _filter_course_state_by_features(course_state, features)

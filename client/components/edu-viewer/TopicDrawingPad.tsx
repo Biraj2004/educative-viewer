@@ -18,6 +18,7 @@ interface Props {
   initialScene: ViewerDrawingScene | null;
   saveBusy: boolean;
   onSave: (scene: ViewerDrawingScene) => Promise<void>;
+  onDelete: () => Promise<void>;
   onClose: () => void;
 }
 
@@ -119,13 +120,16 @@ export default function TopicDrawingPad({
   initialScene,
   saveBusy,
   onSave,
+  onDelete,
   onClose,
 }: Props) {
   const [api, setApi] = useState<ExcalidrawImperativeAPI | null>(null);
   const [dirty, setDirty] = useState(false);
   const [localSaveBusy, setLocalSaveBusy] = useState(false);
+  const [localDeleteBusy, setLocalDeleteBusy] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [confirmCloseOpen, setConfirmCloseOpen] = useState(false);
+  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const lastSavedContentKeyRef = useRef<string>("");
   const latestContentKeyRef = useRef<string>("");
   const latestSceneRef = useRef<ViewerDrawingScene | null>(null);
@@ -142,21 +146,27 @@ export default function TopicDrawingPad({
     }
   }, []);
 
+  const libraryReturnUrl = useMemo(() => {
+    if (typeof window === "undefined") return undefined;
+    return `${window.location.origin}${window.location.pathname}${window.location.search}`;
+  }, []);
+
   const initialData = useMemo<ExcalidrawInitialDataState | undefined>(() => {
-    if (!initialScene) return undefined;
     const rawAppState =
-      initialScene.appState && typeof initialScene.appState === "object"
+      initialScene?.appState && typeof initialScene.appState === "object"
         ? { ...initialScene.appState }
         : {};
+    // Always default to the thinnest stroke when opening the drawing pad.
+    rawAppState.currentItemStrokeWidth = 1;
     // These collaboration-specific fields are Map/Set in runtime and break
     // when rehydrated from plain JSON.
     delete (rawAppState as Record<string, unknown>).collaborators;
     delete (rawAppState as Record<string, unknown>).followedBy;
     delete (rawAppState as Record<string, unknown>).userToFollow;
     return {
-      elements: Array.isArray(initialScene.elements) ? (initialScene.elements as never[]) : [],
+      elements: Array.isArray(initialScene?.elements) ? (initialScene.elements as never[]) : [],
       appState: rawAppState as ExcalidrawInitialDataState["appState"],
-      files: (initialScene.files ?? {}) as ExcalidrawInitialDataState["files"],
+      files: (initialScene?.files ?? {}) as ExcalidrawInitialDataState["files"],
     };
   }, [initialScene]);
 
@@ -190,6 +200,7 @@ export default function TopicDrawingPad({
     setDirty(false);
     setSaveError(null);
     setConfirmCloseOpen(false);
+    setConfirmDeleteOpen(false);
   }, [initialData]);
 
   const handleSave = useCallback(async (): Promise<boolean> => {
@@ -238,7 +249,47 @@ export default function TopicDrawingPad({
     onClose();
   }, [dirty, onClose]);
 
-  const busy = saveBusy || localSaveBusy;
+  const performDelete = useCallback(async (): Promise<boolean> => {
+    if (!api) return false;
+    setLocalDeleteBusy(true);
+    setSaveError(null);
+    try {
+      await onDelete();
+      const nextAppState = {
+        ...(api.getAppState() as unknown as Record<string, unknown>),
+        currentItemStrokeWidth: 1,
+      };
+      api.updateScene({
+        elements: [],
+        appState: nextAppState as never,
+      });
+      const clearedScene = buildSerializableScene([], nextAppState, {});
+      const clearedKey = contentSignatureFromScene(clearedScene);
+      lastSavedContentKeyRef.current = clearedKey;
+      latestContentKeyRef.current = clearedKey;
+      latestSceneRef.current = clearedScene;
+      suppressDirtyUntilRef.current = Date.now() + 300;
+      setConfirmCloseOpen(false);
+      setConfirmDeleteOpen(false);
+      setDirty(false);
+      return true;
+    } catch (err: unknown) {
+      const message = err instanceof Error && err.message
+        ? err.message
+        : "Could not delete drawing notes. Please try again.";
+      setSaveError(message);
+      return false;
+    } finally {
+      setLocalDeleteBusy(false);
+    }
+  }, [api, onDelete]);
+
+  const busy = saveBusy || localSaveBusy || localDeleteBusy;
+
+  const handleDelete = useCallback(() => {
+    if (busy || !api) return;
+    setConfirmDeleteOpen(true);
+  }, [api, busy]);
 
   return (
     <div className="h-full bg-white dark:bg-gray-950 flex flex-col">
@@ -264,6 +315,14 @@ export default function TopicDrawingPad({
             className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-sky-300 dark:border-sky-700 text-sky-700 dark:text-sky-300 hover:bg-sky-50 dark:hover:bg-sky-900/30 disabled:opacity-50 disabled:cursor-not-allowed text-xs font-semibold transition-colors cursor-pointer"
           >
             Save
+          </button>
+          <button
+            type="button"
+            onClick={handleDelete}
+            disabled={busy || !api}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-red-300 dark:border-red-700 text-red-700 dark:text-red-300 hover:bg-red-50 dark:hover:bg-red-900/30 disabled:opacity-50 disabled:cursor-not-allowed text-xs font-semibold transition-colors cursor-pointer"
+          >
+            Delete
           </button>
           <button
             type="button"
@@ -314,10 +373,42 @@ export default function TopicDrawingPad({
         </div>
       )}
 
+      {confirmDeleteOpen && (
+        <div className="absolute inset-0 z-[70] bg-black/45 flex items-center justify-center px-4">
+          <div className="w-full max-w-sm rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 shadow-2xl p-4">
+            <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+              Delete drawing?
+            </p>
+            <p className="mt-1 text-xs text-gray-600 dark:text-gray-300">
+              This will remove the drawing from this course and clear the board.
+            </p>
+            <div className="mt-4 flex items-center justify-end gap-2">
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => setConfirmDeleteOpen(false)}
+                className="inline-flex items-center px-3 py-1.5 rounded-md border border-gray-300 dark:border-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 text-xs font-semibold transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={busy || !api}
+                onClick={() => { void performDelete(); }}
+                className="inline-flex items-center px-3 py-1.5 rounded-md border border-red-300 dark:border-red-700 text-red-700 dark:text-red-300 hover:bg-red-50 dark:hover:bg-red-900/30 text-xs font-semibold transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="flex-1 min-h-0">
         <Excalidraw
           excalidrawAPI={(editorApi) => setApi(editorApi)}
           initialData={initialData}
+          libraryReturnUrl={libraryReturnUrl}
           onChange={(elements, appState, files) => {
             const currentScene = buildSerializableScene(
               elements as readonly unknown[],
