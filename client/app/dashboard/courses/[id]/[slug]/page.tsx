@@ -686,11 +686,16 @@ export default function CourseDetailPage() {
       },
     });
     const highlightRef = { id: row.id };
-    const canRestore =
-      typeof row.start_offset === "number"
-      && typeof row.end_offset === "number"
-      && typeof row.component_index === "number";
-    if (!canRestore) return;
+    const startOffset = row.start_offset;
+    const endOffset = row.end_offset;
+    const componentIndex = row.component_index;
+    if (
+      typeof startOffset !== "number"
+      || typeof endOffset !== "number"
+      || typeof componentIndex !== "number"
+    ) {
+      return;
+    }
     pushNoteHistory({
       undo: async () => {
         const next = await mutateViewerCourse({
@@ -703,18 +708,18 @@ export default function CourseDetailPage() {
             quote_suffix: row.quote_suffix,
             note: row.note,
             color: row.color,
-            start_offset: row.start_offset,
-            end_offset: row.end_offset,
-            component_index: row.component_index,
+            start_offset: startOffset,
+            end_offset: endOffset,
+            component_index: componentIndex,
           },
         });
         const rows = getHighlightsFromState(next, topicIndex);
         const restored = rows.find((item) => (
           item.id !== highlightRef.id
           && item.text.trim() === row.text.trim()
-          && item.start_offset === row.start_offset
-          && item.end_offset === row.end_offset
-          && item.component_index === row.component_index
+          && item.start_offset === startOffset
+          && item.end_offset === endOffset
+          && item.component_index === componentIndex
         ));
         highlightRef.id = restored?.id ?? highlightRef.id;
         return true;
