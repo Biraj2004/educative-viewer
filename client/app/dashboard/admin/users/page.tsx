@@ -705,7 +705,14 @@ export default function AdminUsersPage() {
                           {/* Active toggle */}
                           <td className="px-4 py-3 text-right">
                             {isSelf ? (
-                              <span className="text-xs text-gray-400">—</span>
+                              <div className="relative inline-flex items-center justify-center">
+                                {/* Hidden placeholder to match width of ActiveToggle */}
+                                <div className="inline-flex items-center gap-2 px-1.5 py-0.5 text-[10px] font-semibold opacity-0 select-none pointer-events-none">
+                                  <span className="h-5 w-9 shrink-0 border border-transparent" />
+                                  <span className="uppercase tracking-wider">Active</span>
+                                </div>
+                                <span className="absolute inset-0 flex items-center justify-center text-xs text-gray-400">—</span>
+                              </div>
                             ) : (
                               <ActiveToggle
                                 entity="user"
@@ -741,7 +748,11 @@ export default function AdminUsersPage() {
                               >
                                 <DatabaseIcon className="w-4 h-4" />
                               </button>
-                              {!isSelf && (
+                              {isSelf ? (
+                                <div className="p-1.5 opacity-0 select-none pointer-events-none shrink-0" aria-hidden="true">
+                                  <TrashIcon className="w-4 h-4" />
+                                </div>
+                              ) : (
                                 <button
                                   onClick={() => setDeleteUser(u)}
                                   title="Delete user"
