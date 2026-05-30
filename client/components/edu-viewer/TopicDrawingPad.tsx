@@ -249,6 +249,127 @@ export default function TopicDrawingPad({
       files: (initialScene?.files ?? {}) as ExcalidrawInitialDataState["files"],
     };
   }, [initialScene]);
+ 
+  // ── Pinch-to-Zoom Fix for iPad (Active when Pen Mode is turned on) ──
+  const isPinchingRef = useRef(false);
+  useEffect(() => {
+    if (!api) return;
+    const root = rootRef.current;
+    if (!root) return;
+
+    const preventDefault = (e: Event) => {
+      e.preventDefault();
+    };
+
+    const onPointerMove = (e: PointerEvent) => {
+      // If we are actively pinching with 2 fingers, block touch pointers
+      // so Excalidraw's default panning doesn't conflict with our manual zoom.
+      if (e.pointerType === "touch" && isPinchingRef.current) {
+        e.preventDefault();
+        e.stopImmediatePropagation();
+      }
+    };
+
+    let initialPinchDistance = 0;
+    let initialZoom = 1;
+    let initialScrollX = 0;
+    let initialScrollY = 0;
+    let initialMidpoint = { x: 0, y: 0 };
+
+    const getPinchDistance = (touches: TouchList) => {
+      const dx = touches[0].clientX - touches[1].clientX;
+      const dy = touches[0].clientY - touches[1].clientY;
+      return Math.sqrt(dx * dx + dy * dy);
+    };
+
+    const onTouchStart = (e: TouchEvent) => {
+      if (e.touches.length === 2) {
+        isPinchingRef.current = true;
+        initialPinchDistance = getPinchDistance(e.touches);
+        const appState = api.getAppState();
+        initialZoom = appState.zoom.value;
+        initialScrollX = appState.scrollX;
+        initialScrollY = appState.scrollY;
+
+        const rect = root.getBoundingClientRect();
+        initialMidpoint = {
+          x: (e.touches[0].clientX + e.touches[1].clientX) / 2 - rect.left,
+          y: (e.touches[0].clientY + e.touches[1].clientY) / 2 - rect.top,
+        };
+      } else {
+        isPinchingRef.current = false;
+        initialPinchDistance = 0;
+      }
+    };
+
+    const onTouchMove = (e: TouchEvent) => {
+      if (e.touches.length === 2 && initialPinchDistance > 0) {
+        const appState = api.getAppState();
+
+        // When Pen Mode is active, Excalidraw ignores touch-zoom. We calculate it manually.
+        if (appState.penMode) {
+          e.preventDefault();
+          e.stopPropagation();
+
+          const currentDistance = getPinchDistance(e.touches);
+          const scale = currentDistance / initialPinchDistance;
+
+          const MIN_ZOOM = 0.1;
+          const MAX_ZOOM = 30;
+          const newZoomValue = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, initialZoom * scale));
+          const zoomRatio = newZoomValue / initialZoom;
+
+          const rect = root.getBoundingClientRect();
+          const currentMidpointX = (e.touches[0].clientX + e.touches[1].clientX) / 2 - rect.left;
+          const currentMidpointY = (e.touches[0].clientY + e.touches[1].clientY) / 2 - rect.top;
+
+          const dx = currentMidpointX - initialMidpoint.x;
+          const dy = currentMidpointY - initialMidpoint.y;
+
+          // Focal zoom and translation calculation
+          const scrollX = initialMidpoint.x - (initialMidpoint.x - initialScrollX) * zoomRatio + dx;
+          const scrollY = initialMidpoint.y - (initialMidpoint.y - initialScrollY) * zoomRatio + dy;
+
+          api.updateScene({
+            appState: {
+              ...appState,
+              zoom: { value: newZoomValue },
+              scrollX,
+              scrollY,
+            } as any,
+          });
+        }
+      }
+    };
+
+    const onTouchEnd = (e: TouchEvent) => {
+      if (e.touches.length < 2) {
+        isPinchingRef.current = false;
+        initialPinchDistance = 0;
+      }
+    };
+
+    // Prevent Safari iOS from hijacking the pinch-to-zoom gesture
+    root.addEventListener("gesturestart", preventDefault, { passive: false });
+    root.addEventListener("gesturechange", preventDefault, { passive: false });
+
+    // Custom touch and pointer interception
+    window.addEventListener("pointermove", onPointerMove, { capture: true, passive: false });
+    root.addEventListener("touchstart", onTouchStart, { capture: true, passive: false });
+    root.addEventListener("touchmove", onTouchMove, { capture: true, passive: false });
+    root.addEventListener("touchend", onTouchEnd, { capture: true, passive: false });
+    root.addEventListener("touchcancel", onTouchEnd, { capture: true, passive: false });
+
+    return () => {
+      root.removeEventListener("gesturestart", preventDefault);
+      root.removeEventListener("gesturechange", preventDefault);
+      window.removeEventListener("pointermove", onPointerMove, { capture: true });
+      root.removeEventListener("touchstart", onTouchStart, { capture: true });
+      root.removeEventListener("touchmove", onTouchMove, { capture: true });
+      root.removeEventListener("touchend", onTouchEnd, { capture: true });
+      root.removeEventListener("touchcancel", onTouchEnd, { capture: true });
+    };
+  }, [api]);
 
   useEffect(() => {
     if (baselineInitializedRef.current) return;
