@@ -384,7 +384,7 @@ export default function TopicDrawingPad({
   }, [api, busy]);
 
   return (
-    <div ref={rootRef} className="h-full bg-white dark:bg-gray-950 flex flex-col">
+    <div ref={rootRef} className="h-full bg-white dark:bg-gray-950 flex flex-col" style={{ touchAction: "none" }}>
       <ExcalidrawLibraryHandler excalidrawAPI={api} />
       <div className="h-14 px-4 border-b border-gray-200 dark:border-gray-800 bg-white/95 dark:bg-gray-950/95 backdrop-blur flex items-center justify-between gap-3">
         <div className="min-w-0">
