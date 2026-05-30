@@ -161,6 +161,16 @@ export default function TopicDrawingPad({
   const [confirmCloseOpen, setConfirmCloseOpen] = useState(false);
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const [excalidrawTheme, setExcalidrawTheme] = useState<"dark" | "light">("light");
+  const [debugInfo, setDebugInfo] = useState<{
+    pointers: { id: number; type: string; x: number; y: number; isPrimary: boolean }[];
+    touches: { id: number; type: string; x: number; y: number; rx: number; ry: number; force: number }[];
+    penModeActive: boolean;
+  }>({
+    pointers: [],
+    touches: [],
+    penModeActive: false,
+  });
+  const activePointersRef = useRef<Map<number, PointerEvent>>(new Map());
   const lastSavedContentKeyRef = useRef<string>("");
   const latestContentKeyRef = useRef<string>("");
   const latestSceneRef = useRef<ViewerDrawingScene | null>(null);
@@ -250,7 +260,7 @@ export default function TopicDrawingPad({
     };
   }, [initialScene]);
  
-  // ── Pinch-to-Zoom Fix for iPad (Active when Pen Mode is turned on) ──
+  // ── Pinch-to-Zoom Fix for iPad + Real-time Touch Debugging ──
   const isPinchingRef = useRef(false);
   useEffect(() => {
     if (!api) return;
@@ -261,13 +271,61 @@ export default function TopicDrawingPad({
       e.preventDefault();
     };
 
+    const syncDebug = (e: Event) => {
+      const appState = api.getAppState();
+      const penModeActive = appState ? !!appState.penMode : false;
+
+      const pointersList = Array.from(activePointersRef.current.values()).map(p => ({
+        id: p.pointerId,
+        type: p.pointerType,
+        x: Math.round(p.clientX),
+        y: Math.round(p.clientY),
+        isPrimary: p.isPrimary,
+      }));
+
+      let touchesList: any[] = [];
+      if ('touches' in e) {
+        touchesList = Array.from((e as TouchEvent).touches).map((t: any) => ({
+          id: t.identifier,
+          type: t.touchType || "direct",
+          x: Math.round(t.clientX),
+          y: Math.round(t.clientY),
+          rx: Math.round(t.radiusX || 0),
+          ry: Math.round(t.radiusY || 0),
+          force: t.force || 0,
+        }));
+      }
+
+      setDebugInfo(prev => ({
+        pointers: pointersList,
+        touches: 'touches' in e ? touchesList : prev.touches,
+        penModeActive,
+      }));
+    };
+
+    const onPointerDown = (e: PointerEvent) => {
+      activePointersRef.current.set(e.pointerId, e);
+      syncDebug(e);
+    };
+
     const onPointerMove = (e: PointerEvent) => {
-      // If we are actively pinching with 2 fingers, block touch pointers
-      // so Excalidraw's default panning doesn't conflict with our manual zoom.
+      activePointersRef.current.set(e.pointerId, e);
+      syncDebug(e);
+
       if (e.pointerType === "touch" && isPinchingRef.current) {
         e.preventDefault();
         e.stopImmediatePropagation();
       }
+    };
+
+    const onPointerUp = (e: PointerEvent) => {
+      activePointersRef.current.delete(e.pointerId);
+      syncDebug(e);
+    };
+
+    const onPointerCancel = (e: PointerEvent) => {
+      activePointersRef.current.delete(e.pointerId);
+      syncDebug(e);
     };
 
     let initialPinchDistance = 0;
@@ -283,6 +341,7 @@ export default function TopicDrawingPad({
     };
 
     const onTouchStart = (e: TouchEvent) => {
+      syncDebug(e);
       if (e.touches.length === 2) {
         isPinchingRef.current = true;
         initialPinchDistance = getPinchDistance(e.touches);
@@ -303,10 +362,10 @@ export default function TopicDrawingPad({
     };
 
     const onTouchMove = (e: TouchEvent) => {
+      syncDebug(e);
       if (e.touches.length === 2 && initialPinchDistance > 0) {
         const appState = api.getAppState();
 
-        // When Pen Mode is active, Excalidraw ignores touch-zoom. We calculate it manually.
         if (appState.penMode) {
           e.preventDefault();
           e.stopPropagation();
@@ -326,7 +385,6 @@ export default function TopicDrawingPad({
           const dx = currentMidpointX - initialMidpoint.x;
           const dy = currentMidpointY - initialMidpoint.y;
 
-          // Focal zoom and translation calculation
           const scrollX = initialMidpoint.x - (initialMidpoint.x - initialScrollX) * zoomRatio + dx;
           const scrollY = initialMidpoint.y - (initialMidpoint.y - initialScrollY) * zoomRatio + dy;
 
@@ -343,18 +401,21 @@ export default function TopicDrawingPad({
     };
 
     const onTouchEnd = (e: TouchEvent) => {
+      syncDebug(e);
       if (e.touches.length < 2) {
         isPinchingRef.current = false;
         initialPinchDistance = 0;
       }
     };
 
-    // Prevent Safari iOS from hijacking the pinch-to-zoom gesture
     root.addEventListener("gesturestart", preventDefault, { passive: false });
     root.addEventListener("gesturechange", preventDefault, { passive: false });
 
-    // Custom touch and pointer interception
+    window.addEventListener("pointerdown", onPointerDown, { capture: true });
+    window.addEventListener("pointerup", onPointerUp, { capture: true });
+    window.addEventListener("pointercancel", onPointerCancel, { capture: true });
     window.addEventListener("pointermove", onPointerMove, { capture: true, passive: false });
+
     root.addEventListener("touchstart", onTouchStart, { capture: true, passive: false });
     root.addEventListener("touchmove", onTouchMove, { capture: true, passive: false });
     root.addEventListener("touchend", onTouchEnd, { capture: true, passive: false });
@@ -363,6 +424,9 @@ export default function TopicDrawingPad({
     return () => {
       root.removeEventListener("gesturestart", preventDefault);
       root.removeEventListener("gesturechange", preventDefault);
+      window.removeEventListener("pointerdown", onPointerDown, { capture: true });
+      window.removeEventListener("pointerup", onPointerUp, { capture: true });
+      window.removeEventListener("pointercancel", onPointerCancel, { capture: true });
       window.removeEventListener("pointermove", onPointerMove, { capture: true });
       root.removeEventListener("touchstart", onTouchStart, { capture: true });
       root.removeEventListener("touchmove", onTouchMove, { capture: true });
@@ -655,6 +719,36 @@ export default function TopicDrawingPad({
             if (saveError) setSaveError(null);
           }}
         />
+      </div>
+
+      {/* Debug Overlay Box */}
+      <div className="absolute top-16 right-4 z-[60] bg-black/85 text-white font-mono text-[10px] p-3 rounded-lg border border-gray-700 shadow-xl max-w-[280px] pointer-events-none">
+        <div className="font-bold text-amber-400 mb-1 border-b border-gray-700 pb-1">Drawing Pad Debug Box</div>
+        <div>Pen Mode: <span className={debugInfo.penModeActive ? "text-green-400" : "text-red-400"}>{debugInfo.penModeActive ? "ACTIVE" : "INACTIVE"}</span></div>
+        <div className="mt-1 font-bold text-sky-400 border-b border-gray-800 pb-0.5">Active Touch Contacts ({debugInfo.touches.length})</div>
+        {debugInfo.touches.length === 0 ? (
+          <div className="text-gray-500 italic">No touch contacts</div>
+        ) : (
+          debugInfo.touches.map((t, idx) => (
+            <div key={t.id} className="pl-1 border-l border-sky-800 my-0.5">
+              T{idx}: ID={t.id} type={t.type === "stylus" ? "PEN" : "FINGER"}
+              <br />
+              x={t.x} y={t.y} rx={t.rx} ry={t.ry} force={t.force.toFixed(2)}
+            </div>
+          ))
+        )}
+        <div className="mt-1 font-bold text-purple-400 border-b border-gray-800 pb-0.5">Active Pointers ({debugInfo.pointers.length})</div>
+        {debugInfo.pointers.length === 0 ? (
+          <div className="text-gray-500 italic">No pointers</div>
+        ) : (
+          debugInfo.pointers.map((p, idx) => (
+            <div key={p.id} className="pl-1 border-l border-purple-800 my-0.5">
+              P{idx}: ID={p.id} type={p.type.toUpperCase()}
+              <br />
+              x={p.x} y={p.y} primary={p.isPrimary ? "Y" : "N"}
+            </div>
+          ))
+        )}
       </div>
     </div>
   );
