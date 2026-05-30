@@ -349,6 +349,16 @@ export default function TopicDrawingPad({
       const isPenActive = appState ? !!appState.penMode : false;
       const isHandToolActive = appState?.activeTool?.type === "hand";
 
+      // Scribble Protection: If a textarea is active, block pencil taps on the canvas.
+      // This stops Excalidraw from destroying the text box before iPadOS Scribble can inject the handwriting!
+      if (e.pointerType === "pen" && document.activeElement?.tagName === "TEXTAREA" && !isInteractiveElement(e.target)) {
+        e.stopPropagation();
+        e.stopImmediatePropagation();
+        addLog(`BLOCKED Scribble tap id=${e.pointerId}`);
+        syncDebug(e);
+        return;
+      }
+
       if (e.pointerType === "touch") {
         if (isPinchingRef.current) {
           blockedPointerIdsRef.current.add(e.pointerId);
