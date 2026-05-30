@@ -345,6 +345,13 @@ export default function TopicDrawingPad({
 
     // ── Pointer event handlers ──
     const onPointerDown = (e: PointerEvent) => {
+      if (!rootRef.current?.contains(e.target as Node)) {
+        if (e.pointerType === "touch") {
+          e.stopPropagation();
+          e.stopImmediatePropagation();
+        }
+        return;
+      }
       const appState = api.getAppState();
       const isPenActive = appState ? !!appState.penMode : false;
       const isHandToolActive = appState?.activeTool?.type === "hand";
@@ -391,6 +398,13 @@ export default function TopicDrawingPad({
         e.stopImmediatePropagation();
         return;
       }
+      if (!rootRef.current?.contains(e.target as Node)) {
+        if (e.pointerType === "touch") {
+          e.stopPropagation();
+          e.stopImmediatePropagation();
+        }
+        return;
+      }
 
       if (e.pointerType === "touch") {
         const appState = api.getAppState();
@@ -426,6 +440,13 @@ export default function TopicDrawingPad({
         syncDebug(e);
         return;
       }
+      if (!rootRef.current?.contains(e.target as Node)) {
+        if (e.pointerType === "touch") {
+          e.stopPropagation();
+          e.stopImmediatePropagation();
+        }
+        return;
+      }
 
       activePointersRef.current.delete(e.pointerId);
       addLog(`ptr↑ ${e.pointerType} id=${e.pointerId}`);
@@ -440,6 +461,13 @@ export default function TopicDrawingPad({
         e.stopImmediatePropagation();
         addLog(`BLOCKED ptr✗ touch id=${e.pointerId}`);
         syncDebug(e);
+        return;
+      }
+      if (!rootRef.current?.contains(e.target as Node)) {
+        if (e.pointerType === "touch") {
+          e.stopPropagation();
+          e.stopImmediatePropagation();
+        }
         return;
       }
 
@@ -462,14 +490,30 @@ export default function TopicDrawingPad({
     };
 
     const onTouchStart = (e: TouchEvent) => {
+      const stylusPresent = hasStylus(e.touches);
+      if (stylusPresent && e.touches.length > 1) {
+        e.preventDefault();
+        e.stopPropagation();
+        e.stopImmediatePropagation();
+        return;
+      }
+
+      if (!rootRef.current?.contains(e.target as Node)) {
+        if (e.touches.length >= 2) {
+          e.stopPropagation();
+          e.stopImmediatePropagation();
+        }
+        return;
+      }
       const appState = api.getAppState();
       const isPenActive = appState ? !!appState.penMode : false;
       const isHandToolActive = appState?.activeTool?.type === "hand";
-      const stylusPresent = hasStylus(e.touches);
 
-      // Count finger-only touches
+      // Count finger-only touches and verify they are inside the container
       let fingerCount = 0;
+      let allInside = true;
       for (let i = 0; i < e.touches.length; i++) {
+        if (!rootRef.current?.contains(e.touches[i].target as Node)) allInside = false;
         if ((e.touches[i] as any).touchType !== "stylus") fingerCount++;
       }
 
@@ -484,8 +528,8 @@ export default function TopicDrawingPad({
         return;
       }
 
-      // Pinch zoom when exactly 2 finger touches (allow even in pen mode for zoom)
-      if (fingerCount === 2 && !stylusPresent) {
+      // Pinch zoom when exactly 2 finger touches AND both are inside the container
+      if (fingerCount === 2 && allInside && !stylusPresent) {
         isPinchingRef.current = true;
         initialPinchDistance = getPinchDistance(e.touches);
         initialZoom = appState ? appState.zoom.value : 1;
@@ -511,7 +555,7 @@ export default function TopicDrawingPad({
                 clientY: p.clientY,
               });
               p.target?.dispatchEvent(cancelEvent);
-            } catch (err) {}
+            } catch (err) { }
             blockedPointerIdsRef.current.add(id);
           }
         });
@@ -522,14 +566,30 @@ export default function TopicDrawingPad({
     };
 
     const onTouchMove = (e: TouchEvent) => {
+      const stylusPresent = hasStylus(e.touches);
+      if (stylusPresent && e.touches.length > 1) {
+        e.preventDefault();
+        e.stopPropagation();
+        e.stopImmediatePropagation();
+        return;
+      }
+
+      if (!rootRef.current?.contains(e.target as Node)) {
+        if (e.touches.length >= 2) {
+          e.stopPropagation();
+          e.stopImmediatePropagation();
+        }
+        return;
+      }
       const appState = api.getAppState();
       const isPenActive = appState ? !!appState.penMode : false;
       const isHandToolActive = appState?.activeTool?.type === "hand";
-      const stylusPresent = hasStylus(e.touches);
 
-      // Count finger-only touches
+      // Count finger-only touches and verify they are inside the container
       let fingerCount = 0;
+      let allInside = true;
       for (let i = 0; i < e.touches.length; i++) {
+        if (!rootRef.current?.contains(e.touches[i].target as Node)) allInside = false;
         if ((e.touches[i] as any).touchType !== "stylus") fingerCount++;
       }
 
@@ -541,7 +601,7 @@ export default function TopicDrawingPad({
         return;
       }
 
-      if (fingerCount === 2 && !stylusPresent && initialPinchDistance > 0 && appState) {
+      if (fingerCount === 2 && allInside && !stylusPresent && initialPinchDistance > 0 && appState) {
         e.preventDefault();
         e.stopPropagation();
         e.stopImmediatePropagation();
@@ -556,8 +616,8 @@ export default function TopicDrawingPad({
 
         // Dampen the zoom sensitivity heavily so accidental distance changes during a pan are ignored
         const rawScale = currentDistance / initialPinchDistance;
-        const scale = 1 + (rawScale - 1) * 0.4; 
-        
+        const scale = 1 + (rawScale - 1) * 0.4;
+
         const MIN_ZOOM = 0.1;
         const MAX_ZOOM = 30;
         const newZoomValue = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, initialZoom * scale));
@@ -575,16 +635,24 @@ export default function TopicDrawingPad({
     };
 
     const onTouchEnd = (e: TouchEvent) => {
-      const appState = api.getAppState();
-      const isPenActive = appState ? !!appState.penMode : false;
-      const isHandToolActive = appState?.activeTool?.type === "hand";
       const stylusPresent = hasStylus(e.touches);
-
-      if (isPenActive && !isHandToolActive && !stylusPresent && e.touches.length === 1 && !isInteractiveElement(e.target)) {
+      if (stylusPresent && e.touches.length > 1) {
+        e.preventDefault();
         e.stopPropagation();
         e.stopImmediatePropagation();
         return;
       }
+
+      if (!rootRef.current?.contains(e.target as Node)) {
+        if (e.touches.length >= 2) {
+          e.stopPropagation();
+          e.stopImmediatePropagation();
+        }
+        return;
+      }
+      const appState = api.getAppState();
+      const isPenActive = appState ? !!appState.penMode : false;
+      const isHandToolActive = appState?.activeTool?.type === "hand";
 
       addLog(`te n=${e.touches.length}`);
       syncDebug(e);
@@ -596,6 +664,35 @@ export default function TopicDrawingPad({
 
     root.addEventListener("gesturestart", preventDefault, { passive: false });
     root.addEventListener("gesturechange", preventDefault, { passive: false });
+
+    // Protect Excalidraw's global window listeners from panicking over outside events (like left pane scrolling/gestures)
+    const stopOutsideEventPropagation = (e: Event) => {
+      // Excalidraw usually only cares about touch and pen for gestures. Let mouse clicks on outside UI bubble up safely.
+      if ('pointerType' in e && (e as PointerEvent).pointerType === 'mouse') return;
+      if (rootRef.current && !rootRef.current.contains(e.target as Node)) {
+        e.stopPropagation();
+        e.stopImmediatePropagation();
+      }
+    };
+    document.addEventListener("pointerdown", stopOutsideEventPropagation);
+    document.addEventListener("pointermove", stopOutsideEventPropagation);
+    document.addEventListener("pointerup", stopOutsideEventPropagation);
+    document.addEventListener("touchstart", stopOutsideEventPropagation, { passive: false });
+    document.addEventListener("touchmove", stopOutsideEventPropagation, { passive: false });
+    document.addEventListener("touchend", stopOutsideEventPropagation);
+    document.addEventListener("gesturestart", stopOutsideEventPropagation, { passive: false });
+    document.addEventListener("gesturechange", stopOutsideEventPropagation, { passive: false });
+    document.addEventListener("gestureend", stopOutsideEventPropagation);
+
+    const stopOutsideGesturePropagation = (e: Event) => {
+      if (rootRef.current && !rootRef.current.contains(e.target as Node)) {
+        e.stopPropagation();
+        e.stopImmediatePropagation();
+      }
+    };
+    window.addEventListener("gesturestart", stopOutsideGesturePropagation, { capture: true, passive: false });
+    window.addEventListener("gesturechange", stopOutsideGesturePropagation, { capture: true, passive: false });
+    window.addEventListener("gestureend", stopOutsideGesturePropagation, { capture: true });
 
     // Pointer events: capture phase for blocking/filtering
     window.addEventListener("pointerdown", onPointerDown, { capture: true });
@@ -612,6 +709,21 @@ export default function TopicDrawingPad({
     return () => {
       root.removeEventListener("gesturestart", preventDefault);
       root.removeEventListener("gesturechange", preventDefault);
+      
+      document.removeEventListener("pointerdown", stopOutsideEventPropagation);
+      document.removeEventListener("pointermove", stopOutsideEventPropagation);
+      document.removeEventListener("pointerup", stopOutsideEventPropagation);
+      document.removeEventListener("touchstart", stopOutsideEventPropagation);
+      document.removeEventListener("touchmove", stopOutsideEventPropagation);
+      document.removeEventListener("touchend", stopOutsideEventPropagation);
+      document.removeEventListener("gesturestart", stopOutsideEventPropagation);
+      document.removeEventListener("gesturechange", stopOutsideEventPropagation);
+      document.removeEventListener("gestureend", stopOutsideEventPropagation);
+
+      window.removeEventListener("gesturestart", stopOutsideGesturePropagation, { capture: true });
+      window.removeEventListener("gesturechange", stopOutsideGesturePropagation, { capture: true });
+      window.removeEventListener("gestureend", stopOutsideGesturePropagation, { capture: true });
+
       window.removeEventListener("pointerdown", onPointerDown, { capture: true });
       window.removeEventListener("pointerup", onPointerUp, { capture: true });
       window.removeEventListener("pointercancel", onPointerCancel, { capture: true });
@@ -774,11 +886,10 @@ export default function TopicDrawingPad({
             type="button"
             onClick={() => setShowDebug(!showDebug)}
             title={showDebug ? "Hide Debug Box" : "Show Debug Box"}
-            className={`inline-flex items-center justify-center p-2 rounded-lg border transition-all cursor-pointer ${
-              showDebug 
-                ? "bg-green-50/80 dark:bg-green-950/20 border-green-300 dark:border-green-800 text-green-700 dark:text-green-400" 
+            className={`inline-flex items-center justify-center p-2 rounded-lg border transition-all cursor-pointer ${showDebug
+                ? "bg-green-50/80 dark:bg-green-950/20 border-green-300 dark:border-green-800 text-green-700 dark:text-green-400"
                 : "bg-white dark:bg-gray-900 border-gray-300 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800"
-            }`}
+              }`}
           >
             <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" strokeWidth="2.2" fill="none" strokeLinecap="round" strokeLinejoin="round">
               <rect x="3" y="11" width="18" height="10" rx="2"></rect>
