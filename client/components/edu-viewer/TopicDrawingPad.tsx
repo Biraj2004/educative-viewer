@@ -296,6 +296,20 @@ export default function TopicDrawingPad({
       return el.tagName === "CANVAS" || el.closest(".excalidraw__canvas") !== null;
     };
 
+    const isInteractiveElement = (target: EventTarget | null): boolean => {
+      if (!target) return false;
+      const el = target as HTMLElement;
+      if (el.tagName === "BUTTON" || el.tagName === "INPUT" || el.tagName === "SELECT" || el.tagName === "TEXTAREA" || el.tagName === "A") {
+        return true;
+      }
+      if (typeof el.closest === "function") {
+        if (el.closest("button") || el.closest("a") || el.closest(".excalidraw-button") || el.closest("[role='button']")) {
+          return true;
+        }
+      }
+      return false;
+    };
+
     const syncDebug = (e: Event) => {
       const appState = api.getAppState();
       const penModeActive = appState ? !!appState.penMode : false;
@@ -332,16 +346,27 @@ export default function TopicDrawingPad({
     // ── Pointer event handlers ──
     const onPointerDown = (e: PointerEvent) => {
       const appState = api.getAppState();
-      const isDrawing = isDrawingArea(e.target);
       const isPenActive = appState ? !!appState.penMode : false;
+      const isHandToolActive = appState?.activeTool?.type === "hand";
 
-      if (e.pointerType === "touch" && isDrawing && isPenActive) {
-        blockedPointerIdsRef.current.add(e.pointerId);
-        e.preventDefault();
-        e.stopImmediatePropagation();
-        addLog(`BLOCKED ptr↓ touch id=${e.pointerId}`);
-        syncDebug(e);
-        return;
+      if (e.pointerType === "touch") {
+        if (isPinchingRef.current) {
+          blockedPointerIdsRef.current.add(e.pointerId);
+          e.preventDefault();
+          e.stopPropagation();
+          e.stopImmediatePropagation();
+          return;
+        }
+
+        if (isPenActive && !isHandToolActive && !isInteractiveElement(e.target)) {
+          blockedPointerIdsRef.current.add(e.pointerId);
+          e.preventDefault();
+          e.stopPropagation();
+          e.stopImmediatePropagation();
+          addLog(`BLOCKED ptr↓ touch id=${e.pointerId}`);
+          syncDebug(e);
+          return;
+        }
       }
 
       activePointersRef.current.set(e.pointerId, e);
@@ -352,16 +377,20 @@ export default function TopicDrawingPad({
     const onPointerMove = (e: PointerEvent) => {
       if (blockedPointerIdsRef.current.has(e.pointerId)) {
         e.preventDefault();
+        e.stopPropagation();
         e.stopImmediatePropagation();
         return;
       }
 
-      if (e.pointerType === "touch" && isDrawingArea(e.target)) {
+      if (e.pointerType === "touch") {
         const appState = api.getAppState();
         const isPenActive = appState ? !!appState.penMode : false;
-        if (isPenActive) {
+        const isHandToolActive = appState?.activeTool?.type === "hand";
+
+        if (isPenActive && !isHandToolActive && !isInteractiveElement(e.target)) {
           blockedPointerIdsRef.current.add(e.pointerId);
           e.preventDefault();
+          e.stopPropagation();
           e.stopImmediatePropagation();
           return;
         }
@@ -372,6 +401,7 @@ export default function TopicDrawingPad({
       // Block touch pointer movement from propagating if we are pinch-zooming
       if (e.pointerType === "touch" && isPinchingRef.current) {
         e.preventDefault();
+        e.stopPropagation();
         e.stopImmediatePropagation();
       }
     };
@@ -380,6 +410,7 @@ export default function TopicDrawingPad({
       if (blockedPointerIdsRef.current.has(e.pointerId)) {
         blockedPointerIdsRef.current.delete(e.pointerId);
         e.preventDefault();
+        e.stopPropagation();
         e.stopImmediatePropagation();
         addLog(`BLOCKED ptr↑ touch id=${e.pointerId}`);
         syncDebug(e);
@@ -395,6 +426,7 @@ export default function TopicDrawingPad({
       if (blockedPointerIdsRef.current.has(e.pointerId)) {
         blockedPointerIdsRef.current.delete(e.pointerId);
         e.preventDefault();
+        e.stopPropagation();
         e.stopImmediatePropagation();
         addLog(`BLOCKED ptr✗ touch id=${e.pointerId}`);
         syncDebug(e);
@@ -421,6 +453,8 @@ export default function TopicDrawingPad({
 
     const onTouchStart = (e: TouchEvent) => {
       const appState = api.getAppState();
+      const isPenActive = appState ? !!appState.penMode : false;
+      const isHandToolActive = appState?.activeTool?.type === "hand";
       const stylusPresent = hasStylus(e.touches);
 
       // Count finger-only touches
@@ -429,11 +463,19 @@ export default function TopicDrawingPad({
         if ((e.touches[i] as any).touchType !== "stylus") fingerCount++;
       }
 
-      addLog(`ts n=${e.touches.length} stylus=${stylusPresent} fingers=${fingerCount} pen=${appState ? appState.penMode : false}`);
+      addLog(`ts n=${e.touches.length} stylus=${stylusPresent} fingers=${fingerCount}`);
       syncDebug(e);
 
+      if (isPenActive && !isHandToolActive && !stylusPresent && e.touches.length === 1 && !isInteractiveElement(e.target)) {
+        e.stopPropagation();
+        e.stopImmediatePropagation();
+        addLog("BLOCKED finger touchstart");
+        syncDebug(e);
+        return;
+      }
+
       // Pinch zoom when exactly 2 finger touches (allow even in pen mode for zoom)
-      if (e.touches.length === 2) {
+      if (fingerCount === 2 && !stylusPresent) {
         isPinchingRef.current = true;
         initialPinchDistance = getPinchDistance(e.touches);
         initialZoom = appState ? appState.zoom.value : 1;
@@ -445,7 +487,25 @@ export default function TopicDrawingPad({
           x: (e.touches[0].clientX + e.touches[1].clientX) / 2 - rect.left,
           y: (e.touches[0].clientY + e.touches[1].clientY) / 2 - rect.top,
         };
-      } else if (e.touches.length < 2) {
+
+        // Cancel all active touch pointers in Excalidraw to prevent long-press/context-menu bugs!
+        activePointersRef.current.forEach((p, id) => {
+          if (p.pointerType === "touch") {
+            try {
+              const cancelEvent = new PointerEvent("pointercancel", {
+                pointerId: id,
+                pointerType: "touch",
+                bubbles: true,
+                cancelable: true,
+                clientX: p.clientX,
+                clientY: p.clientY,
+              });
+              p.target?.dispatchEvent(cancelEvent);
+            } catch (err) {}
+            blockedPointerIdsRef.current.add(id);
+          }
+        });
+      } else if (fingerCount < 2) {
         isPinchingRef.current = false;
         initialPinchDistance = 0;
       }
@@ -453,45 +513,69 @@ export default function TopicDrawingPad({
 
     const onTouchMove = (e: TouchEvent) => {
       const appState = api.getAppState();
+      const isPenActive = appState ? !!appState.penMode : false;
+      const isHandToolActive = appState?.activeTool?.type === "hand";
+      const stylusPresent = hasStylus(e.touches);
+
+      // Count finger-only touches
+      let fingerCount = 0;
+      for (let i = 0; i < e.touches.length; i++) {
+        if ((e.touches[i] as any).touchType !== "stylus") fingerCount++;
+      }
+
       syncDebug(e);
 
-      if (e.touches.length === 2 && initialPinchDistance > 0) {
-        if (appState && appState.penMode) {
-          e.preventDefault();
-          e.stopPropagation();
+      if (isPenActive && !isHandToolActive && !stylusPresent && e.touches.length === 1 && !isInteractiveElement(e.target)) {
+        e.stopPropagation();
+        e.stopImmediatePropagation();
+        return;
+      }
 
-          const currentDistance = getPinchDistance(e.touches);
-          const scale = currentDistance / initialPinchDistance;
+      if (fingerCount === 2 && !stylusPresent && initialPinchDistance > 0 && appState) {
+        e.preventDefault();
+        e.stopPropagation();
+        e.stopImmediatePropagation();
 
-          const MIN_ZOOM = 0.1;
-          const MAX_ZOOM = 30;
-          const newZoomValue = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, initialZoom * scale));
-          const zoomRatio = newZoomValue / initialZoom;
+        const currentDistance = getPinchDistance(e.touches);
+        const rect = root.getBoundingClientRect();
+        const currentMidpointX = (e.touches[0].clientX + e.touches[1].clientX) / 2 - rect.left;
+        const currentMidpointY = (e.touches[0].clientY + e.touches[1].clientY) / 2 - rect.top;
 
-          const rect = root.getBoundingClientRect();
-          const currentMidpointX = (e.touches[0].clientX + e.touches[1].clientX) / 2 - rect.left;
-          const currentMidpointY = (e.touches[0].clientY + e.touches[1].clientY) / 2 - rect.top;
+        const dx = currentMidpointX - initialMidpoint.x;
+        const dy = currentMidpointY - initialMidpoint.y;
 
-          const dx = currentMidpointX - initialMidpoint.x;
-          const dy = currentMidpointY - initialMidpoint.y;
+        // Dampen the zoom sensitivity heavily so accidental distance changes during a pan are ignored
+        const rawScale = currentDistance / initialPinchDistance;
+        const scale = 1 + (rawScale - 1) * 0.4; 
+        
+        const MIN_ZOOM = 0.1;
+        const MAX_ZOOM = 30;
+        const newZoomValue = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, initialZoom * scale));
 
-          const scrollX = initialMidpoint.x - (initialMidpoint.x - initialScrollX) * zoomRatio + dx;
-          const scrollY = initialMidpoint.y - (initialMidpoint.y - initialScrollY) * zoomRatio + dy;
+        // Coordinate transformation: Excalidraw's scrollX/Y is in un-zoomed CANVAS coordinates.
+        // We must translate the screen pixel changes into canvas space (by dividing by zoom).
+        const scrollX = initialScrollX + initialMidpoint.x * (1 / newZoomValue - 1 / initialZoom) + dx / newZoomValue;
+        const scrollY = initialScrollY + initialMidpoint.y * (1 / newZoomValue - 1 / initialZoom) + dy / newZoomValue;
 
-          api.updateScene({
-            appState: {
-              ...appState,
-              zoom: { value: newZoomValue },
-              scrollX,
-              scrollY,
-            } as any,
-          });
-          syncDebug(e);
-        }
+        api.updateScene({
+          appState: { ...appState, zoom: { value: newZoomValue }, scrollX, scrollY } as any,
+        });
+        syncDebug(e);
       }
     };
 
     const onTouchEnd = (e: TouchEvent) => {
+      const appState = api.getAppState();
+      const isPenActive = appState ? !!appState.penMode : false;
+      const isHandToolActive = appState?.activeTool?.type === "hand";
+      const stylusPresent = hasStylus(e.touches);
+
+      if (isPenActive && !isHandToolActive && !stylusPresent && e.touches.length === 1 && !isInteractiveElement(e.target)) {
+        e.stopPropagation();
+        e.stopImmediatePropagation();
+        return;
+      }
+
       addLog(`te n=${e.touches.length}`);
       syncDebug(e);
       if (e.touches.length < 2) {
@@ -509,11 +593,11 @@ export default function TopicDrawingPad({
     window.addEventListener("pointercancel", onPointerCancel, { capture: true });
     window.addEventListener("pointermove", onPointerMove, { capture: true, passive: false });
 
-    // Touch events: capture phase for tracking pinch-zoom
-    root.addEventListener("touchstart", onTouchStart, { capture: true, passive: false });
-    root.addEventListener("touchmove", onTouchMove, { capture: true, passive: false });
-    root.addEventListener("touchend", onTouchEnd, { capture: true, passive: false });
-    root.addEventListener("touchcancel", onTouchEnd, { capture: true, passive: false });
+    // Touch events: capture phase globally on window to intercept all regions
+    window.addEventListener("touchstart", onTouchStart, { capture: true, passive: false });
+    window.addEventListener("touchmove", onTouchMove, { capture: true, passive: false });
+    window.addEventListener("touchend", onTouchEnd, { capture: true, passive: false });
+    window.addEventListener("touchcancel", onTouchEnd, { capture: true, passive: false });
 
     return () => {
       root.removeEventListener("gesturestart", preventDefault);
@@ -522,10 +606,10 @@ export default function TopicDrawingPad({
       window.removeEventListener("pointerup", onPointerUp, { capture: true });
       window.removeEventListener("pointercancel", onPointerCancel, { capture: true });
       window.removeEventListener("pointermove", onPointerMove, { capture: true });
-      root.removeEventListener("touchstart", onTouchStart, { capture: true });
-      root.removeEventListener("touchmove", onTouchMove, { capture: true });
-      root.removeEventListener("touchend", onTouchEnd, { capture: true });
-      root.removeEventListener("touchcancel", onTouchEnd, { capture: true });
+      window.removeEventListener("touchstart", onTouchStart, { capture: true });
+      window.removeEventListener("touchmove", onTouchMove, { capture: true });
+      window.removeEventListener("touchend", onTouchEnd, { capture: true });
+      window.removeEventListener("touchcancel", onTouchEnd, { capture: true });
     };
   }, [api]);
 
