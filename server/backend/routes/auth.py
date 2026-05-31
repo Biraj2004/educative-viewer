@@ -674,6 +674,7 @@ def create_auth_blueprint(auth_service: AuthService, db_manager: DBManager) -> B
                 user.get("current_token"),
                 token=token,
                 max_active_sessions=user.get("max_active_sessions"),
+                client_ip=client_ip,
             )
             execute(
                 conn2,
@@ -1555,6 +1556,7 @@ def create_auth_blueprint(auth_service: AuthService, db_manager: DBManager) -> B
                 user.get("current_token"),
                 token=token,
                 max_active_sessions=user.get("max_active_sessions"),
+                client_ip=client_ip,
             )
 
             execute(
@@ -1606,6 +1608,7 @@ def create_auth_blueprint(auth_service: AuthService, db_manager: DBManager) -> B
                 user.get("current_token"),
                 token=token,
                 max_active_sessions=user.get("max_active_sessions"),
+                client_ip=client_ip,
             )
 
             execute(

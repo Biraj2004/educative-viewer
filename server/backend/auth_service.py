@@ -185,6 +185,7 @@ class AuthService:
                 {
                     "token": token,
                     "issued_at": str(item.get("issued_at", "") or ""),
+                    "ip": str(item.get("ip", "") or ""),
                 }
             )
         return cleaned
@@ -199,13 +200,16 @@ class AuthService:
         *,
         token: str,
         max_active_sessions: Any,
+        client_ip: str | None = None,
     ) -> str:
         queue = self.parse_session_queue(existing_raw)
         queue = [row for row in queue if row.get("token") != token]
+        normalized_ip = str(client_ip or "").strip()
         queue.append(
             {
                 "token": token,
                 "issued_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+                "ip": normalized_ip,
             }
         )
         limit = self.clamp_max_active_sessions(max_active_sessions)
@@ -217,6 +221,34 @@ class AuthService:
             return False
         queue = self.parse_session_queue(queue_raw)
         return any(row.get("token") == token for row in queue)
+
+    def refresh_session_token_ip(
+        self,
+        queue_raw: Any,
+        *,
+        token: str,
+        client_ip: str | None,
+    ) -> tuple[bool, str, bool]:
+        """
+        Return (found, serialized_queue, changed).
+        If the token exists and client_ip is non-empty and differs, update that session row IP.
+        """
+        queue = self.parse_session_queue(queue_raw)
+        normalized_ip = str(client_ip or "").strip()
+        found = False
+        changed = False
+
+        for row in queue:
+            if row.get("token") != token:
+                continue
+            found = True
+            existing_ip = str(row.get("ip", "") or "").strip()
+            if normalized_ip and existing_ip != normalized_ip:
+                row["ip"] = normalized_ip
+                changed = True
+            break
+
+        return found, self.serialize_session_queue(queue), changed
 
     @staticmethod
     def bearer_token() -> str | None:
@@ -273,7 +305,7 @@ class AuthService:
         if client_ip and client_ip not in ips:
             if len(ips) >= 2:
                 abort(
-                    403,
+                    401,
                     description=(
                         "Login restricted: you have already signed in from 2 different IP addresses "
                         "today. Try again tomorrow or log in from an IP you have used today."
@@ -303,20 +335,47 @@ class AuthService:
         conn = self.db_manager.get_auth_connection()
         try:
             user = self.fetch_user_by_id(conn, int(payload["id"]))
+            if not user:
+                return None, payload
+
+            if not user.get("is_active", True):
+                abort(403, description="Account is deactivated. Please contact an administrator.")
+
+            if not payload.get("partial"):
+                client_ip = self.get_client_ip()
+                found, next_queue_raw, changed = self.refresh_session_token_ip(
+                    user.get("current_token"),
+                    token=token,
+                    client_ip=client_ip,
+                )
+                if not found:
+                    abort(401, description="Session superseded by a newer login. Please sign in again.")
+
+                if changed:
+                    params: dict[str, Any] = {
+                        "current_token": next_queue_raw,
+                        "user_id": user["id"],
+                    }
+                    if client_ip:
+                        params["last_login_ip"] = client_ip
+                        execute(
+                            conn,
+                            "UPDATE users_sensitive SET current_token = :current_token, last_login_ip = :last_login_ip WHERE user_id = :user_id",
+                            params,
+                        )
+                        user["last_login_ip"] = client_ip
+                    else:
+                        execute(
+                            conn,
+                            "UPDATE users_sensitive SET current_token = :current_token WHERE user_id = :user_id",
+                            params,
+                        )
+                    conn.commit()
+                    user["current_token"] = next_queue_raw
+
+            return user, payload
         finally:
             conn.close()
-
-        if not user:
-            return None, payload
-
-        if not user.get("is_active", True):
-            abort(403, description="Account is deactivated. Please contact an administrator.")
-
-        if not payload.get("partial"):
-            if not self.token_in_session_queue(token, user.get("current_token")):
-                abort(401, description="Session superseded by a newer login. Please sign in again.")
-
-        return user, payload
 
     def get_compact_progress(self, conn: Any, user_id: int) -> dict[str, Any]:
         rows = fetch_all_dict(

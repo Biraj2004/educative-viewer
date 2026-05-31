@@ -1,5 +1,5 @@
 {
-  "generated_at_utc": "2026-05-31T12:41:23Z",
+  "generated_at_utc": "2026-05-31T22:51:51Z",
   "backend_api_rules": [
     "/api/admin/reader-state/cleanup",
     "/api/admin/set-course-status",
@@ -12,6 +12,8 @@
     "/api/admin/users/<int:user_id>/edit",
     "/api/admin/users/<int:user_id>/reader-state/cleanup",
     "/api/admin/users/<int:user_id>/reset-password",
+    "/api/admin/users/<int:user_id>/sessions",
+    "/api/admin/users/<int:user_id>/sessions/clear",
     "/api/admin/users/create",
     "/api/ai/generate",
     "/api/auth/2fa/enable",
@@ -53,6 +55,8 @@
     "^/api/admin/users/[0-9]+/edit/?$",
     "^/api/admin/users/[0-9]+/reader\\-state/cleanup/?$",
     "^/api/admin/users/[0-9]+/reset\\-password/?$",
+    "^/api/admin/users/[0-9]+/sessions/?$",
+    "^/api/admin/users/[0-9]+/sessions/clear/?$",
     "^/api/admin/users/create/?$",
     "^/api/ai/generate/?$",
     "^/api/auth/2fa/enable/?$",
@@ -82,5 +86,5 @@
     "^/api/search/?$",
     "^/api/topic\\-details/?$"
   ],
-  "count": 39
+  "count": 41
 }

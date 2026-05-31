@@ -7,6 +7,7 @@ Endpoints for administrators to list and manage user accounts.
 from __future__ import annotations
 
 import json
+import hashlib
 import secrets
 import string
 import time
@@ -72,6 +73,10 @@ def _trim_session_queue_json(auth_service: AuthService, queue_raw: Any, max_acti
     return auth_service.serialize_session_queue(trimmed)
 
 
+def _session_key_from_token(token: str) -> str:
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()[:24]
+
+
 def register_user_routes(bp: Blueprint, auth_service: AuthService, db_manager: DBManager) -> None:
     """Register user management routes into the provided admin blueprint."""
 
@@ -101,6 +106,130 @@ def register_user_routes(bp: Blueprint, auth_service: AuthService, db_manager: D
             })
 
         return jsonify(users)
+
+    @bp.route("/users/<int:user_id>/sessions", methods=["GET"])
+    def get_user_sessions(user_id: int):
+        """List active sessions for a user with issued time and IP info."""
+        require_admin(auth_service)
+
+        conn = db_manager.get_auth_connection()
+        try:
+            rows = fetch_all_dict(
+                conn,
+                """
+                SELECT u.id, u.email, u.name, s.current_token, s.last_login_ip, s.last_login_at
+                FROM users u
+                LEFT JOIN users_sensitive s ON s.user_id = u.id
+                WHERE u.id = :user_id
+                """,
+                {"user_id": user_id},
+            )
+        finally:
+            conn.close()
+
+        if not rows:
+            abort(404, description=f"User id={user_id} not found")
+
+        row = rows[0]
+        queue = auth_service.parse_session_queue(row.get("current_token"))
+        sessions: list[dict[str, Any]] = []
+
+        for idx, item in enumerate(reversed(queue)):
+            token = str(item.get("token", "") or "").strip()
+            if not token:
+                continue
+            session_ip = str(item.get("ip", "") or "").strip()
+            if not session_ip and idx == 0:
+                session_ip = str(row.get("last_login_ip", "") or "").strip()
+            sessions.append(
+                {
+                    "session_key": _session_key_from_token(token),
+                    "issued_at": str(item.get("issued_at", "") or ""),
+                    "ip": session_ip or None,
+                    "token_hint": token[-8:],
+                    "is_most_recent": idx == 0,
+                }
+            )
+
+        return jsonify(
+            {
+                "success": True,
+                "user_id": user_id,
+                "user_email": row.get("email"),
+                "user_name": row.get("name"),
+                "last_login_ip": row.get("last_login_ip"),
+                "last_login_at": row.get("last_login_at"),
+                "session_count": len(sessions),
+                "sessions": sessions,
+            }
+        )
+
+    @bp.route("/users/<int:user_id>/sessions/clear", methods=["POST"])
+    def clear_user_sessions(user_id: int):
+        """Clear selected active sessions (or all) for a user."""
+        require_admin(auth_service)
+        body = get_json_body()
+        clear_all = bool(body.get("clear_all"))
+
+        selected_keys: set[str] = set()
+        if not clear_all:
+            raw_keys = body.get("session_keys")
+            if not isinstance(raw_keys, list) or len(raw_keys) == 0:
+                abort(400, description="session_keys must be a non-empty array when clear_all is false")
+            for raw in raw_keys:
+                key = str(raw or "").strip()
+                if key:
+                    selected_keys.add(key)
+            if len(selected_keys) == 0:
+                abort(400, description="No valid session_keys provided")
+
+        conn = db_manager.get_auth_connection()
+        try:
+            rows = fetch_all_dict(
+                conn,
+                """
+                SELECT u.id, s.current_token
+                FROM users u
+                LEFT JOIN users_sensitive s ON s.user_id = u.id
+                WHERE u.id = :user_id
+                """,
+                {"user_id": user_id},
+            )
+            if not rows:
+                abort(404, description=f"User id={user_id} not found")
+
+            current_queue = auth_service.parse_session_queue(rows[0].get("current_token"))
+            if clear_all:
+                next_queue: list[dict[str, str]] = []
+            else:
+                next_queue = [
+                    entry for entry in current_queue
+                    if _session_key_from_token(str(entry.get("token", "") or "")) not in selected_keys
+                ]
+
+            removed_count = len(current_queue) - len(next_queue)
+            if removed_count > 0:
+                execute(
+                    conn,
+                    "UPDATE users_sensitive SET current_token = :current_token WHERE user_id = :user_id",
+                    {
+                        "current_token": auth_service.serialize_session_queue(next_queue),
+                        "user_id": user_id,
+                    },
+                )
+                conn.commit()
+        finally:
+            conn.close()
+
+        return jsonify(
+            {
+                "success": True,
+                "user_id": user_id,
+                "clear_all": clear_all,
+                "removed_sessions": removed_count,
+                "remaining_sessions": len(next_queue),
+            }
+        )
 
     @bp.route("/set-user-status", methods=["PATCH"])
     def set_user_status():

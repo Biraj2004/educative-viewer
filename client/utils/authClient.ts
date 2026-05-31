@@ -809,6 +809,33 @@ export interface AdminResetResult {
   temp_password_expires_at: string;
 }
 
+export interface AdminUserSession {
+  session_key: string;
+  issued_at: string;
+  ip: string | null;
+  token_hint: string;
+  is_most_recent: boolean;
+}
+
+export interface AdminUserSessionListResult {
+  success: boolean;
+  user_id: number;
+  user_email: string;
+  user_name: string | null;
+  last_login_ip: string | null;
+  last_login_at: string | null;
+  session_count: number;
+  sessions: AdminUserSession[];
+}
+
+export interface AdminClearUserSessionsResult {
+  success: boolean;
+  user_id: number;
+  clear_all: boolean;
+  removed_sessions: number;
+  remaining_sessions: number;
+}
+
 export type ReaderDataCleanupScope = "bookmarks" | "highlights" | "notes" | "drawing" | "all";
 
 export interface ReaderDataCleanupResult {
@@ -880,6 +907,22 @@ export async function adminDeleteUser(userId: number): Promise<{ success: boolea
 
 export async function adminResetUserPassword(userId: number): Promise<AdminResetResult> {
   return adminApiCall<AdminResetResult>(`${getAdminAPI()}/users/${userId}/reset-password`, "POST");
+}
+
+export async function adminGetUserSessions(userId: number): Promise<AdminUserSessionListResult> {
+  return adminApiCall<AdminUserSessionListResult>(`${getAdminAPI()}/users/${userId}/sessions`, "GET");
+}
+
+export async function adminClearUserSessions(
+  userId: number,
+  sessionKeys: string[],
+  clearAll = false,
+): Promise<AdminClearUserSessionsResult> {
+  return adminApiCall<AdminClearUserSessionsResult>(
+    `${getAdminAPI()}/users/${userId}/sessions/clear`,
+    "POST",
+    clearAll ? { clear_all: true } : { clear_all: false, session_keys: sessionKeys },
+  );
 }
 
 export async function adminCleanupUserReaderState(

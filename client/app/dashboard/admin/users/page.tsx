@@ -11,9 +11,12 @@ import {
   adminEditUser,
   adminDeleteUser,
   adminResetUserPassword,
+  adminGetUserSessions,
+  adminClearUserSessions,
   adminCleanupUserReaderState,
   adminCleanupAllReaderState,
   type AdminUser,
+  type AdminUserSession,
   type ReaderDataCleanupScope,
 } from "@/utils/authClient";
 
@@ -37,6 +40,7 @@ const EyeIcon = ({ className }: { className?: string }) => <svg className={class
 const EyeOffIcon = ({ className }: { className?: string }) => <svg className={className ?? "w-4 h-4"} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" /><line x1="1" y1="1" x2="23" y2="23" /></svg>;
 const CopyIcon = ({ className }: { className?: string }) => <Icon d="M8 4H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2h-2M8 4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2H8z" className={className} />;
 const DatabaseIcon = ({ className }: { className?: string }) => <Icon d="M12 2C7 2 3 3.79 3 6v12c0 2.21 4 4 9 4s9-1.79 9-4V6c0-2.21-4-4-9-4zm0 0v16m-9-6c0 2.21 4 4 9 4s9-1.79 9-4" className={className} />;
+const SessionIcon = ({ className }: { className?: string }) => <Icon d="M20 16V8a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8m16 0H4m16 0 2 3H2l2-3" className={className} />;
 
 // ─── Shared input/button styles ───────────────────────────────────────────────
 
@@ -338,6 +342,168 @@ function ResetPasswordModal({ user, onClose, onReset }: { user: AdminUser; onClo
   );
 }
 
+function UserSessionsModal({ user, onClose, onDone }: { user: AdminUser; onClose: () => void; onDone: () => void }) {
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const [sessions, setSessions] = useState<AdminUserSession[]>([]);
+  const [lastLoginIp, setLastLoginIp] = useState<string | null>(null);
+  const [lastLoginAt, setLastLoginAt] = useState<string | null>(null);
+  const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set());
+
+  const fetchSessions = useCallback(async () => {
+    setLoading(true);
+    setError("");
+    try {
+      const result = await adminGetUserSessions(user.id);
+      setSessions(result.sessions ?? []);
+      setLastLoginIp(result.last_login_ip ?? null);
+      setLastLoginAt(result.last_login_at ?? null);
+      setSelectedKeys(new Set());
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load sessions");
+    } finally {
+      setLoading(false);
+    }
+  }, [user.id]);
+
+  useEffect(() => {
+    void fetchSessions();
+  }, [fetchSessions]);
+
+  const selectedCount = selectedKeys.size;
+  const allSelected = sessions.length > 0 && selectedCount === sessions.length;
+
+  const toggleAll = () => {
+    if (allSelected) {
+      setSelectedKeys(new Set());
+      return;
+    }
+    setSelectedKeys(new Set(sessions.map((session) => session.session_key)));
+  };
+
+  const toggleOne = (sessionKey: string) => {
+    setSelectedKeys((prev) => {
+      const next = new Set(prev);
+      if (next.has(sessionKey)) next.delete(sessionKey);
+      else next.add(sessionKey);
+      return next;
+    });
+  };
+
+  const clearSelected = async () => {
+    if (selectedCount === 0) return;
+    setSaving(true);
+    setError("");
+    try {
+      await adminClearUserSessions(user.id, Array.from(selectedKeys), false);
+      await fetchSessions();
+      onDone();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to clear selected sessions");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const clearAll = async () => {
+    setSaving(true);
+    setError("");
+    try {
+      await adminClearUserSessions(user.id, [], true);
+      await fetchSessions();
+      onDone();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to clear all sessions");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Modal title="User Sessions" onClose={onClose}>
+      <div className="text-sm text-gray-600 dark:text-gray-400">
+        Active sessions for <strong className="text-gray-900 dark:text-gray-100">{user.name || user.email}</strong>.
+      </div>
+      <div className="rounded-lg border border-gray-200 dark:border-gray-800 bg-gray-50/70 dark:bg-gray-950/50 px-3 py-2">
+        <p className="text-xs text-gray-500 dark:text-gray-400">
+          Last login IP: <span className="font-medium text-gray-800 dark:text-gray-200">{lastLoginIp || "Unknown"}</span>
+        </p>
+        <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+          Last login time: <span className="font-medium text-gray-800 dark:text-gray-200">{lastLoginAt ? new Date(lastLoginAt).toLocaleString() : "Unknown"}</span>
+        </p>
+      </div>
+
+      {loading ? (
+        <div className="flex items-center justify-center py-8">
+          <div className="w-6 h-6 rounded-full border-2 border-indigo-600 border-t-transparent animate-spin" />
+        </div>
+      ) : sessions.length === 0 ? (
+        <div className="rounded-lg border border-dashed border-gray-300 dark:border-gray-700 px-3 py-5 text-xs text-gray-500 dark:text-gray-400 text-center">
+          No active sessions found.
+        </div>
+      ) : (
+        <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
+          <label className="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-300">
+            <input
+              type="checkbox"
+              checked={allSelected}
+              onChange={toggleAll}
+              className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+            />
+            Select all sessions ({sessions.length})
+          </label>
+          {sessions.map((session) => (
+            <label
+              key={session.session_key}
+              className="flex items-start gap-2 rounded-lg border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 px-3 py-2"
+            >
+              <input
+                type="checkbox"
+                checked={selectedKeys.has(session.session_key)}
+                onChange={() => toggleOne(session.session_key)}
+                className="mt-0.5 h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+              />
+              <div className="min-w-0">
+                <p className="text-xs font-medium text-gray-900 dark:text-gray-100">
+                  {session.is_most_recent ? "Most recent session" : "Active session"} - token ...{session.token_hint}
+                </p>
+                <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5">
+                  Issued: {session.issued_at ? new Date(session.issued_at).toLocaleString() : "Unknown"}
+                </p>
+                <p className="text-[11px] text-gray-500 dark:text-gray-400">
+                  IP: {session.ip || "Unknown"}
+                </p>
+              </div>
+            </label>
+          ))}
+        </div>
+      )}
+
+      {error && <p className="text-xs text-red-600 dark:text-red-400">{error}</p>}
+      <div className="flex flex-wrap gap-2 justify-end">
+        <button type="button" onClick={onClose} className={btnGhost}>Close</button>
+        <button
+          type="button"
+          onClick={clearSelected}
+          disabled={saving || selectedCount === 0 || sessions.length === 0}
+          className={btnPrimary}
+        >
+          {saving ? "Clearing..." : `Clear Selected${selectedCount > 0 ? ` (${selectedCount})` : ""}`}
+        </button>
+        <button
+          type="button"
+          onClick={clearAll}
+          disabled={saving || sessions.length === 0}
+          className={btnDanger}
+        >
+          {saving ? "Clearing..." : "Clear All"}
+        </button>
+      </div>
+    </Modal>
+  );
+}
+
 const CLEANUP_NON_ALL_KEYS: Array<Exclude<ReaderDataCleanupScope, "all">> = ["notes", "highlights", "drawing", "bookmarks"];
 const CLEANUP_SCOPE_OPTIONS: Array<{ key: ReaderDataCleanupScope; label: string; description: string }> = [
   { key: "all", label: "All", description: "Clear bookmarks, highlights, notes, and drawings." },
@@ -521,6 +687,7 @@ export default function AdminUsersPage() {
   const [deleteUser, setDeleteUser] = useState<AdminUser | null>(null);
   const [resetUser, setResetUser] = useState<AdminUser | null>(null);
   const [cleanupUser, setCleanupUser] = useState<AdminUser | null>(null);
+  const [sessionUser, setSessionUser] = useState<AdminUser | null>(null);
   const [showGlobalCleanup, setShowGlobalCleanup] = useState(false);
   const [tempPwResult, setTempPwResult] = useState<{ password: string; expiresAt: string } | null>(null);
 
@@ -748,6 +915,13 @@ export default function AdminUsersPage() {
                               >
                                 <DatabaseIcon className="w-4 h-4" />
                               </button>
+                              <button
+                                onClick={() => setSessionUser(u)}
+                                title="Manage sessions"
+                                className="p-1.5 rounded-lg text-gray-400 hover:text-cyan-600 dark:hover:text-cyan-400 hover:bg-cyan-50 dark:hover:bg-cyan-900/20 cursor-pointer transition-colors"
+                              >
+                                <SessionIcon className="w-4 h-4" />
+                              </button>
                               {isSelf ? (
                                 <div className="p-1.5 opacity-0 select-none pointer-events-none shrink-0" aria-hidden="true">
                                   <TrashIcon className="w-4 h-4" />
@@ -812,6 +986,13 @@ export default function AdminUsersPage() {
           user={cleanupUser}
           onClose={() => setCleanupUser(null)}
           onDone={() => { setCleanupUser(null); fetchUsers(); }}
+        />
+      )}
+      {sessionUser && (
+        <UserSessionsModal
+          user={sessionUser}
+          onClose={() => setSessionUser(null)}
+          onDone={() => { fetchUsers(); }}
         />
       )}
       {showGlobalCleanup && (
