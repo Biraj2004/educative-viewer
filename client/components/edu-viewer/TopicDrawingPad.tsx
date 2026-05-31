@@ -1654,15 +1654,50 @@ export default function TopicDrawingPad({
         .excalidraw .mobile-misc-tools-container .ToolIcon__icon {
           width: 36px !important;
           height: 36px !important;
-          background: transparent !important;
-          border: none !important;
-          box-shadow: none !important;
           border-radius: 0 !important;
         }
 
         .excalidraw .mobile-misc-tools-container .ToolIcon__icon svg {
           width: 18px !important;
           height: 18px !important;
+        }
+
+        /* Give right-rail icons stronger default contrast */
+        .excalidraw .mobile-misc-tools-container .ToolIcon__icon,
+        .excalidraw .mobile-misc-tools-container .ToolIcon__icon svg,
+        .excalidraw .mobile-misc-tools-container button svg {
+          color: #d1d5e7 !important;
+        }
+
+        /* Preserve visual active/checked state for lock/pen/hand buttons */
+        .excalidraw .mobile-misc-tools-container .ToolIcon .ToolIcon_type_radio:checked + .ToolIcon__icon,
+        .excalidraw .mobile-misc-tools-container .ToolIcon .ToolIcon_type_checkbox:checked + .ToolIcon__icon,
+        .excalidraw .mobile-misc-tools-container .ToolIcon:has(input:checked) .ToolIcon__icon,
+        .excalidraw .mobile-misc-tools-container .ToolIcon.ToolIcon--selected .ToolIcon__icon,
+        .excalidraw .mobile-misc-tools-container .ToolIcon[aria-pressed="true"] .ToolIcon__icon,
+        .excalidraw .mobile-misc-tools-container button[aria-pressed="true"] .ToolIcon__icon {
+          background: rgba(105, 109, 185, 0.42) !important;
+          color: #eef1ff !important;
+        }
+
+        .excalidraw .mobile-misc-tools-container .ToolIcon.ToolIcon_type_button.ToolIcon--selected,
+        .excalidraw .mobile-misc-tools-container .ToolIcon_type_button.ToolIcon--selected,
+        .excalidraw .mobile-misc-tools-container button.standalone.active {
+          background: rgba(105, 109, 185, 0.42) !important;
+          color: #eef1ff !important;
+        }
+
+        .excalidraw .mobile-misc-tools-container .ToolIcon.ToolIcon_type_button.ToolIcon--selected .ToolIcon__icon,
+        .excalidraw .mobile-misc-tools-container .ToolIcon_type_button.ToolIcon--selected .ToolIcon__icon,
+        .excalidraw .mobile-misc-tools-container button.standalone.active svg,
+        .excalidraw .mobile-misc-tools-container .ToolIcon:has(input:checked) .ToolIcon__icon svg,
+        .excalidraw .mobile-misc-tools-container .ToolIcon .ToolIcon_type_radio:checked + .ToolIcon__icon svg,
+        .excalidraw .mobile-misc-tools-container .ToolIcon .ToolIcon_type_checkbox:checked + .ToolIcon__icon svg,
+        .excalidraw .mobile-misc-tools-container .ToolIcon.ToolIcon--selected .ToolIcon__icon svg,
+        .excalidraw .mobile-misc-tools-container .ToolIcon[aria-pressed="true"] .ToolIcon__icon svg,
+        .excalidraw .mobile-misc-tools-container button[aria-pressed="true"] .ToolIcon__icon svg {
+          color: #eef1ff !important;
+          stroke: currentColor !important;
         }
 
         /* Reclaim top empty strip by moving shape toolbar row up */

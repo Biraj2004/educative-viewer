@@ -2115,7 +2115,6 @@ export default function TopicLayoutClient({
     setSelectionColorPaletteOpen(false);
     setHighlightUndoStack([]);
     setHighlightRedoStack([]);
-    setDrawingPadOpen(false);
   }, [currentTopic.topic_index]);
 
   const handleOpenDrawingPad = useCallback(() => {

@@ -151,6 +151,18 @@ export default function AppNavbar({
 
   return (
     <div className="sticky top-0 z-[60] bg-white/60 dark:bg-[#030712]/60 backdrop-blur-2xl border-b border-gray-200/50 dark:border-white/5 dark:supports-backdrop-filter:bg-[#030712]/40 shadow-sm dark:shadow-[0_4px_24px_-8px_rgba(0,0,0,0.5)] transition-all duration-500">
+      <div className="absolute left-1/2 -translate-x-1/2 z-10" style={{ top: "calc(100% + 4px)" }}>
+        <button
+          type="button"
+          onClick={() => setNavbarCollapsed(true)}
+          aria-label="Hide navigation bar"
+          title="Hide navigation bar"
+          className="inline-flex items-center justify-center h-5 w-7 rounded-b-md border-x border-b border-gray-200/70 dark:border-white/10 bg-white/80 dark:bg-[#030712]/80 backdrop-blur-xl text-gray-500 dark:text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors cursor-pointer shadow-sm"
+        >
+          <ChevronUp />
+        </button>
+      </div>
+
       <div className="w-full px-8 h-14 flex items-center justify-between gap-5 relative">
         <div className="absolute bottom-0 left-0 w-full h-px bg-linear-to-r from-transparent via-gray-300 dark:via-white/12 to-transparent" />
 
@@ -220,15 +232,6 @@ export default function AppNavbar({
               <DarkModeToggle />
             </span>
           )}
-          <button
-            type="button"
-            onClick={() => setNavbarCollapsed(true)}
-            aria-label="Hide navigation bar"
-            title="Hide navigation bar"
-            className="inline-flex items-center justify-center h-7 w-7 rounded-md border border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 hover:border-indigo-300 dark:hover:border-indigo-700 transition-colors cursor-pointer"
-          >
-            <ChevronUp />
-          </button>
         </div>
       </div>
     </div>
