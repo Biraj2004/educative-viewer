@@ -2,7 +2,6 @@ const CACHE_NAME = "edu-viewer-cache-v1";
 
 const STATIC_ASSETS = [
   "/",
-  "/favicon.ico",
   "/icon-og.png",
   "/icon-192.png",
   "/icon-512.png",
@@ -12,9 +11,20 @@ const STATIC_ASSETS = [
 // Install event: cache initial shell assets
 self.addEventListener("install", (event) => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => {
+    caches.open(CACHE_NAME).then(async (cache) => {
       console.log("[Service Worker] Caching static shell");
-      return cache.addAll(STATIC_ASSETS);
+      await Promise.allSettled(
+        STATIC_ASSETS.map(async (asset) => {
+          try {
+            const response = await fetch(asset, { cache: "no-store" });
+            if (response.ok) {
+              await cache.put(asset, response);
+            }
+          } catch {
+            // Optional asset; continue install even if unavailable.
+          }
+        }),
+      );
     }).then(() => self.skipWaiting())
   );
 });

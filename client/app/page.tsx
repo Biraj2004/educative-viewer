@@ -8,6 +8,7 @@ import {
   HomeHeroCTA,
   HomeBottomCTA,
 } from "@/components/edu-viewer/HomeAuthSection";
+import HomePwaInstallButton from "@/components/edu-viewer/HomePwaInstallButton";
 import { motion, useScroll, useTransform, Variants } from "framer-motion";
 import { useRef } from "react";
 import { 
@@ -189,6 +190,7 @@ export default function LandingPage() {
             {/* CTAs */}
             <motion.div variants={itemVariants} className="flex flex-col sm:flex-row items-center justify-center gap-6">
               <HomeHeroCTA />
+              <HomePwaInstallButton />
               <Link
                 href="/about"
                 prefetch={false}

@@ -1,3 +1,5 @@
-// Static path served directly from client/public/icon-og.png
-export const BRAND_ICON_URL = "/icon-og.png";
+// In-app logo image.
+export const BRAND_LOGO_URL = "/icon-og.png";
 
+// Browser tab/favicon entry.
+export const BRAND_FAVICON_URL = "/icon-og.png";

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import DarkModeToggle from "./DarkModeToggle";
 import BackButton from "@/components/edu-viewer/BackButton";
-import { BRAND_ICON_URL } from "@/utils/branding";
+import { BRAND_LOGO_URL } from "@/utils/branding";
 import { useAuth } from "@/components/edu-viewer/AuthProvider";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -85,7 +85,7 @@ export default function AppNavbar({
           <Link href={logoHref || "/"} prefetch={false} onClick={onLogoClick as any} className="flex items-center gap-2 group shrink-0">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
-              src={BRAND_ICON_URL}
+              src={BRAND_LOGO_URL}
               alt="Edu-Viewer logo"
               width={28}
               height={28}

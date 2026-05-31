@@ -7,7 +7,7 @@ import NavigationEvents from "@/components/edu-viewer/NavigationEvents";
 import NavProgressBar from "@/components/edu-viewer/NavProgressBar";
 import PWARegistration from "@/components/edu-viewer/PWARegistration";
 import AuthFlowGuard from "@/utils/AuthFlowGuard";
-import { BRAND_ICON_URL } from "@/utils/branding";
+import { BRAND_FAVICON_URL, BRAND_LOGO_URL } from "@/utils/branding";
 import {
   RUNTIME_PUBLIC_ENV_KEYS,
   type RuntimePublicEnvMap,
@@ -35,11 +35,11 @@ export const metadata: Metadata = {
   description: "An interactive content viewer for code-first learning.",
   icons: {
     icon: [
-      { url: BRAND_ICON_URL, sizes: "16x16", type: "image/png" },
-      { url: BRAND_ICON_URL, sizes: "32x32", type: "image/png" },
-      { url: BRAND_ICON_URL, sizes: "96x96", type: "image/png" },
+      { url: BRAND_FAVICON_URL, sizes: "32x32", type: "image/png" },
+      { url: BRAND_FAVICON_URL, sizes: "16x16", type: "image/png" },
+      { url: BRAND_LOGO_URL, sizes: "96x96", type: "image/png" },
     ],
-    shortcut: [{ url: BRAND_ICON_URL }],
+    shortcut: [{ url: BRAND_FAVICON_URL, type: "image/png" }],
     apple: [{ url: "/apple-touch-icon.png", sizes: "180x180", type: "image/png" }],
   },
   appleWebApp: {
@@ -67,6 +67,11 @@ export default async function RootLayout({
       className={theme === "dark" ? "dark" : ""}
       suppressHydrationWarning
     >
+      <head>
+        <link rel="icon" href={BRAND_FAVICON_URL} type="image/png" sizes="32x32" />
+        <link rel="shortcut icon" href={BRAND_FAVICON_URL} type="image/png" />
+        <link rel="manifest" href="/manifest.webmanifest" crossOrigin="use-credentials" />
+      </head>
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
         suppressHydrationWarning
@@ -81,4 +86,3 @@ export default async function RootLayout({
     </html>
   );
 }
-
