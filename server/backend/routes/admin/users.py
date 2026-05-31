@@ -117,7 +117,7 @@ def register_user_routes(bp: Blueprint, auth_service: AuthService, db_manager: D
             rows = fetch_all_dict(
                 conn,
                 """
-                SELECT u.id, u.email, u.name, s.current_token, s.last_login_ip, s.last_login_at
+                SELECT u.id, u.email, u.name, s.current_token
                 FROM users u
                 LEFT JOIN users_sensitive s ON s.user_id = u.id
                 WHERE u.id = :user_id
@@ -139,8 +139,6 @@ def register_user_routes(bp: Blueprint, auth_service: AuthService, db_manager: D
             if not token:
                 continue
             session_ip = str(item.get("ip", "") or "").strip()
-            if not session_ip and idx == 0:
-                session_ip = str(row.get("last_login_ip", "") or "").strip()
             sessions.append(
                 {
                     "session_key": _session_key_from_token(token),
@@ -151,14 +149,15 @@ def register_user_routes(bp: Blueprint, auth_service: AuthService, db_manager: D
                 }
             )
 
+        most_recent = sessions[0] if sessions else None
         return jsonify(
             {
                 "success": True,
                 "user_id": user_id,
                 "user_email": row.get("email"),
                 "user_name": row.get("name"),
-                "last_login_ip": row.get("last_login_ip"),
-                "last_login_at": row.get("last_login_at"),
+                "last_login_ip": most_recent.get("ip") if most_recent else None,
+                "last_login_at": most_recent.get("issued_at") if most_recent else None,
                 "session_count": len(sessions),
                 "sessions": sessions,
             }

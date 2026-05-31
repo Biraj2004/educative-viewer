@@ -668,7 +668,6 @@ def create_auth_blueprint(auth_service: AuthService, db_manager: DBManager) -> B
 
         conn2 = db_manager.get_auth_connection()
         try:
-            auth_service.check_ip_restriction(conn2, user, client_ip)
             token = auth_service.make_full_token(user)
             token_queue_json = auth_service.append_session_token(
                 user.get("current_token"),
@@ -678,11 +677,8 @@ def create_auth_blueprint(auth_service: AuthService, db_manager: DBManager) -> B
             )
             execute(
                 conn2,
-                "UPDATE users_sensitive SET last_login_ip = :ip, "
-                "last_login_at = :login_at, current_token = :token WHERE user_id = :user_id",
+                "UPDATE users_sensitive SET current_token = :token WHERE user_id = :user_id",
                 {
-                    "ip": client_ip,
-                    "login_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
                     "token": token_queue_json,
                     "user_id": user["id"],
                 },
@@ -1550,7 +1546,6 @@ def create_auth_blueprint(auth_service: AuthService, db_manager: DBManager) -> B
             if not user:
                 abort(401, description="Not authenticated")
 
-            auth_service.check_ip_restriction(conn, user, client_ip)
             token = auth_service.make_full_token(user)
             token_queue_json = auth_service.append_session_token(
                 user.get("current_token"),
@@ -1563,12 +1558,9 @@ def create_auth_blueprint(auth_service: AuthService, db_manager: DBManager) -> B
                 conn,
                 "UPDATE users_sensitive SET two_factor_confirmed = 1, "
                 "onboarding_temp_password_hash = NULL, "
-                "last_login_ip = :ip, "
-                "last_login_at = :login_at, current_token = :token "
+                "current_token = :token "
                 "WHERE user_id = :user_id",
                 {
-                    "ip": client_ip,
-                    "login_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
                     "token": token_queue_json,
                     "user_id": user["id"],
                 },
@@ -1602,7 +1594,6 @@ def create_auth_blueprint(auth_service: AuthService, db_manager: DBManager) -> B
 
         conn = db_manager.get_auth_connection()
         try:
-            auth_service.check_ip_restriction(conn, user, client_ip)
             token = auth_service.make_full_token(user)
             token_queue_json = auth_service.append_session_token(
                 user.get("current_token"),
@@ -1613,11 +1604,8 @@ def create_auth_blueprint(auth_service: AuthService, db_manager: DBManager) -> B
 
             execute(
                 conn,
-                "UPDATE users_sensitive SET last_login_ip = :ip, "
-                "last_login_at = :login_at, current_token = :token WHERE user_id = :user_id",
+                "UPDATE users_sensitive SET current_token = :token WHERE user_id = :user_id",
                 {
-                    "ip": client_ip,
-                    "login_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
                     "token": token_queue_json,
                     "user_id": user["id"],
                 },

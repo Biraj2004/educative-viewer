@@ -64,7 +64,6 @@ class SQLiteAuthDatabase:
                     is_active INTEGER NOT NULL DEFAULT 1,
                     is_first_login INTEGER NOT NULL DEFAULT 0,
                     two_factor_enabled INTEGER NOT NULL DEFAULT 0,
-                    login_ip_log TEXT,
                     theme TEXT NOT NULL DEFAULT 'light',
                     created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
                 )
@@ -83,8 +82,6 @@ class SQLiteAuthDatabase:
                     two_factor_confirmed INTEGER NOT NULL DEFAULT 0,
                     max_active_sessions INTEGER NOT NULL DEFAULT 1,
                     session_id TEXT,
-                    last_login_ip TEXT,
-                    last_login_at TEXT,
                     current_token TEXT,
                     failed_attempts INTEGER NOT NULL DEFAULT 0,
                     locked_until TEXT,

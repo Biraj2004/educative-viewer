@@ -125,7 +125,6 @@ class OracleAuthDatabase:
                         is_active          NUMBER(1,0) DEFAULT 1 NOT NULL,
                         is_first_login     NUMBER(1,0) DEFAULT 0 NOT NULL,
                         two_factor_enabled NUMBER(1,0) DEFAULT 0 NOT NULL,
-                        login_ip_log       CLOB,
                         theme              VARCHAR2(20 CHAR) DEFAULT 'light' NOT NULL,
                         created_at         VARCHAR2(30 CHAR) DEFAULT
                             TO_CHAR(SYSTIMESTAMP AT TIME ZONE 'UTC',
@@ -145,8 +144,6 @@ class OracleAuthDatabase:
                         two_factor_confirmed       NUMBER(1,0) DEFAULT 0 NOT NULL,
                         max_active_sessions        NUMBER DEFAULT 1 NOT NULL,
                         session_id                 VARCHAR2(64 CHAR),
-                        last_login_ip              VARCHAR2(50 CHAR),
-                        last_login_at              VARCHAR2(30 CHAR),
                         current_token              CLOB,
                         failed_attempts            NUMBER DEFAULT 0 NOT NULL,
                         locked_until               VARCHAR2(30 CHAR),
