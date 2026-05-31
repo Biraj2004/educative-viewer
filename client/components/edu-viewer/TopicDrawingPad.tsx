@@ -48,6 +48,8 @@ interface SourceLibraryMeta {
   names: string[];
 }
 
+type TouchWithType = Touch & { touchType?: string };
+
 const EXCALIDRAW_LIBRARIES_BASE_URL = "https://libraries.excalidraw.com";
 const LIBRARY_SOURCE_SIGNATURES_STORAGE_KEY = "ev_library_source_signatures_v1";
 const LIBRARY_SOURCE_PRESENCE_STORAGE_KEY = "ev_library_source_presence_v1";
@@ -536,7 +538,6 @@ export default function TopicDrawingPad({
   }, [initialScene]);
 
   // ── Pinch-to-Zoom Fix for iPad + Real-time Touch Debugging ──
-  const isPinchingRef = useRef(false);
   useEffect(() => {
     if (!api) return;
     const root = rootRef.current;
@@ -557,15 +558,9 @@ export default function TopicDrawingPad({
     // Detect if touches contain a stylus
     const hasStylus = (touches: TouchList): boolean => {
       for (let i = 0; i < touches.length; i++) {
-        if ((touches[i] as any).touchType === "stylus") return true;
+        if ((touches[i] as TouchWithType).touchType === "stylus") return true;
       }
       return false;
-    };
-
-    const isDrawingArea = (target: EventTarget | null) => {
-      if (!target) return false;
-      const el = target as HTMLElement;
-      return el.tagName === "CANVAS" || el.closest(".excalidraw__canvas") !== null;
     };
 
     const isInteractiveElement = (target: EventTarget | null): boolean => {
@@ -598,17 +593,20 @@ export default function TopicDrawingPad({
         isPrimary: p.isPrimary,
       }));
 
-      let touchesList: any[] = [];
+      let touchesList: { id: number; type: string; x: number; y: number; rx: number; ry: number; force: number }[] = [];
       if ('touches' in e) {
-        touchesList = Array.from((e as TouchEvent).touches).map((t: any) => ({
-          id: t.identifier,
-          type: t.touchType || "direct",
-          x: Math.round(t.clientX),
-          y: Math.round(t.clientY),
-          rx: Math.round(t.radiusX || 0),
-          ry: Math.round(t.radiusY || 0),
-          force: t.force || 0,
-        }));
+        touchesList = Array.from((e as TouchEvent).touches).map((t) => {
+          const touch = t as TouchWithType;
+          return {
+            id: t.identifier,
+            type: touch.touchType || "direct",
+            x: Math.round(t.clientX),
+            y: Math.round(t.clientY),
+            rx: Math.round(t.radiusX || 0),
+            ry: Math.round(t.radiusY || 0),
+            force: t.force || 0,
+          };
+        });
       }
 
       setDebugInfo({
@@ -625,7 +623,6 @@ export default function TopicDrawingPad({
 
     const activateTwoFingerHand = () => {
       if (twoFingerHandActive) return;
-      isPinchingRef.current = true;
       const appState = api.getAppState();
       // If a finger was previously blocked in pen mode, unblock it before
       // entering two-finger navigation to avoid mixed zoom-only jitter.
@@ -648,7 +645,6 @@ export default function TopicDrawingPad({
     const restoreToolAfterTwoFinger = () => {
       if (!twoFingerHandActive) return;
       twoFingerHandActive = false;
-      isPinchingRef.current = false;
       const restore = handRestoreTool;
       handRestoreTool = null;
       if (!restore || restore.type === "hand") return;
@@ -796,7 +792,7 @@ export default function TopicDrawingPad({
       let allInside = true;
       for (let i = 0; i < e.touches.length; i++) {
         if (!rootRef.current?.contains(e.touches[i].target as Node)) allInside = false;
-        if ((e.touches[i] as any).touchType !== "stylus") fingerCount++;
+        if ((e.touches[i] as TouchWithType).touchType !== "stylus") fingerCount++;
       }
 
       addLog(`ts n=${e.touches.length} stylus=${stylusPresent} fingers=${fingerCount}`);
@@ -842,7 +838,7 @@ export default function TopicDrawingPad({
       let allInside = true;
       for (let i = 0; i < e.touches.length; i++) {
         if (!rootRef.current?.contains(e.touches[i].target as Node)) allInside = false;
-        if ((e.touches[i] as any).touchType !== "stylus") fingerCount++;
+        if ((e.touches[i] as TouchWithType).touchType !== "stylus") fingerCount++;
       }
 
       syncDebug(e);
