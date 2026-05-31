@@ -1699,7 +1699,7 @@ export default function TopicDrawingPad({
         .excalidraw.excalidraw--mobile .App-bottom-bar .dropdown-menu-container {
           position: absolute !important;
           left: 44px !important;
-          top: 40px !important; /* Start below the hamburger button */
+          top: 60px !important; /* Start below the hamburger button */
           width: 220px !important;
           height: auto !important;
           max-height: calc(100vh - 120px) !important;
@@ -1744,7 +1744,7 @@ export default function TopicDrawingPad({
         .excalidraw.excalidraw--mobile .App-bottom-bar .App-mobile-menu {
           position: absolute !important;
           left: 44px !important;
-          top: 10px !important;
+          top: 45px !important;
           width: 280px !important;
           height: auto !important;
           max-height: calc(100vh - 90px) !important;

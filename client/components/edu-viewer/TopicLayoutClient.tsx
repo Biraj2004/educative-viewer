@@ -2398,7 +2398,10 @@ export default function TopicLayoutClient({
       />
 
       {/* Reading Progress Indicator */}
-      <div className="sticky top-14 left-0 right-0 z-20 h-1 bg-gray-200 dark:bg-gray-800 pointer-events-none">
+      <div
+        className="sticky left-0 right-0 z-20 h-1 bg-gray-200 dark:bg-gray-800 pointer-events-none"
+        style={{ top: "var(--ev-navbar-offset, 56px)" }}
+      >
         <div
           className="h-full bg-emerald-500 transition-all duration-150 ease-out"
           style={{ width: `${scrollProgress}%` }}
@@ -2412,7 +2415,13 @@ export default function TopicLayoutClient({
             className="fixed inset-0 bg-black/40 z-30 lg:hidden"
             onClick={() => setDrawerOpen(false)}
           />
-          <div className="fixed left-0 top-14 h-[calc(100%-3.5rem)] z-40 lg:hidden shadow-2xl">
+          <div
+            className="fixed left-0 z-40 lg:hidden shadow-2xl"
+            style={{
+              top: "var(--ev-navbar-offset, 56px)",
+              height: "calc(100% - var(--ev-navbar-offset, 56px))",
+            }}
+          >
             <TopicSidebar
               courseId={courseId}
               courseSlug={slug}
@@ -2640,7 +2649,10 @@ export default function TopicLayoutClient({
 
       {/* Slide-out TOC Drawer */}
       {tocDrawerMounted && (
-        <div className={`fixed inset-x-0 bottom-0 top-14 z-40 transition-opacity duration-300 ${tocDrawerVisible ? "pointer-events-auto" : "pointer-events-none"}`}>
+        <div
+          className={`fixed inset-x-0 bottom-0 z-40 transition-opacity duration-300 ${tocDrawerVisible ? "pointer-events-auto" : "pointer-events-none"}`}
+          style={{ top: "var(--ev-navbar-offset, 56px)" }}
+        >
           <div
             className={`absolute inset-0 bg-black/40 transition-opacity duration-300 ${tocDrawerVisible ? "opacity-100" : "opacity-0"}`}
             onClick={() => setTocDrawerOpen(false)}
@@ -2713,8 +2725,9 @@ export default function TopicLayoutClient({
 
       {notesDrawerEnabled && highlightDrawerMounted && (
         <div
-          className={`fixed top-14 bottom-0 right-0 z-50 border-l border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-950 shadow-2xl will-change-transform transition-[transform,opacity] duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] ${highlightDrawerVisible ? "pointer-events-auto translate-x-0 opacity-100" : "pointer-events-none translate-x-full opacity-0"}`}
+          className={`fixed bottom-0 right-0 z-50 border-l border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-950 shadow-2xl will-change-transform transition-[transform,opacity] duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] ${highlightDrawerVisible ? "pointer-events-auto translate-x-0 opacity-100" : "pointer-events-none translate-x-full opacity-0"}`}
           style={{
+            top: "var(--ev-navbar-offset, 56px)",
             width: `${highlightPanelWidth}px`,
           }}
         >
@@ -3081,8 +3094,9 @@ export default function TopicLayoutClient({
 
       {drawingsEnabled && drawingPadOpen && (
         <div
-          className={`fixed top-14 bottom-0 right-0 z-50 border-l border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-950 shadow-2xl will-change-[opacity] transition-opacity duration-220 ease-out ${drawingPanelVisible ? "pointer-events-auto opacity-100" : "pointer-events-none opacity-0"}`}
+          className={`fixed bottom-0 right-0 z-50 border-l border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-950 shadow-2xl will-change-[opacity] transition-opacity duration-220 ease-out ${drawingPanelVisible ? "pointer-events-auto opacity-100" : "pointer-events-none opacity-0"}`}
           style={{
+            top: "var(--ev-navbar-offset, 56px)",
             width: `${drawingPanelWidth}px`,
             opacity: drawingPanelVisible ? 1 : 0,
           }}
