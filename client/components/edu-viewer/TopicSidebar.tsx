@@ -22,6 +22,7 @@ interface TopicSidebarProps {
     courseId: number;
     courseSlug: string;
     courseTitle: string;
+    courseHref?: string;
     toc: TocEntry[];
     currentTopicIndex: number;
     fromPath?: string | null;
@@ -42,6 +43,7 @@ export default function TopicSidebar({
     courseId,
     courseSlug,
     courseTitle,
+    courseHref,
     toc,
     currentTopicIndex,
     fromPath,
@@ -128,7 +130,20 @@ export default function TopicSidebar({
             <div className={`h-full flex flex-col overflow-hidden border-r border-gray-200 dark:border-gray-700 w-72 transition-opacity duration-300 ${isCollapsed ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
                 {/* Sidebar header */}
                 <div className="px-4 py-3 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 shrink-0">
-                    <p className="text-[11px] font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider">Contents</p>
+                    {courseHref ? (
+                        <Link
+                            href={courseHref}
+                            prefetch={false}
+                            className="block text-[11px] font-semibold text-indigo-600 dark:text-indigo-400 uppercase tracking-wider hover:text-indigo-700 dark:hover:text-indigo-300 transition-colors truncate"
+                            title={courseTitle}
+                        >
+                            {courseTitle}
+                        </Link>
+                    ) : (
+                        <p className="text-[11px] font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider truncate" title={courseTitle}>
+                            {courseTitle}
+                        </p>
+                    )}
                     <div className="mt-2 relative">
                         <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 dark:text-gray-500 pointer-events-none">
                             <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">

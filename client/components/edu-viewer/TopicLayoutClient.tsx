@@ -2335,31 +2335,60 @@ export default function TopicLayoutClient({
   const contentShiftStyle = activeRightPanelWidth > 0
     ? { marginRight: `${activeRightPanelWidth}px` }
     : undefined;
+  const chatRightOffsetPx = Math.max(24, activeRightPanelWidth + 24);
 
   // Track reading progress bar.
+  const updateScrollProgress = useCallback(() => {
+    const root = document.documentElement;
+    const winScroll = window.scrollY || root.scrollTop;
+    const height = root.scrollHeight - window.innerHeight;
+    const scrolled = height > 0 ? Math.min(100, Math.max(0, (winScroll / height) * 100)) : 0;
+    setScrollProgress((prev) => (Math.abs(prev - scrolled) < 0.05 ? prev : scrolled));
+  }, []);
+
   useEffect(() => {
     let rafId: number | null = null;
 
-    const handleScroll = () => {
-      if (rafId !== null) return; // already scheduled — skip
+    const scheduleProgressUpdate = () => {
+      if (rafId !== null) return; // already scheduled - skip
       rafId = requestAnimationFrame(() => {
         rafId = null;
-        const winScroll = document.documentElement.scrollTop;
-        const height = document.documentElement.scrollHeight - document.documentElement.clientHeight;
-        const scrolled = height > 0 ? (winScroll / height) * 100 : 0;
-        setScrollProgress(scrolled);
+        updateScrollProgress();
       });
     };
-    window.addEventListener("scroll", handleScroll, { passive: true });
+    window.addEventListener("scroll", scheduleProgressUpdate, { passive: true });
+    window.addEventListener("resize", scheduleProgressUpdate, { passive: true });
+
+    const root = document.documentElement;
+    const body = document.body;
+    const resizeObserver = typeof ResizeObserver !== "undefined"
+      ? new ResizeObserver(() => scheduleProgressUpdate())
+      : null;
+    if (resizeObserver) {
+      resizeObserver.observe(root);
+      if (body) resizeObserver.observe(body);
+      if (contentRef.current) resizeObserver.observe(contentRef.current);
+    }
+
     // Trigger once on mount to set initial progress bar width
-    handleScroll();
+    scheduleProgressUpdate();
 
     return () => {
-      window.removeEventListener("scroll", handleScroll);
+      window.removeEventListener("scroll", scheduleProgressUpdate);
+      window.removeEventListener("resize", scheduleProgressUpdate);
+      resizeObserver?.disconnect();
       if (rafId !== null) cancelAnimationFrame(rafId);
     };
-  }, []);
+  }, [updateScrollProgress]);
 
+  useEffect(() => {
+    const rafA = window.requestAnimationFrame(updateScrollProgress);
+    const rafB = window.requestAnimationFrame(() => window.requestAnimationFrame(updateScrollProgress));
+    return () => {
+      window.cancelAnimationFrame(rafA);
+      window.cancelAnimationFrame(rafB);
+    };
+  }, [updateScrollProgress, drawingPadOpen, highlightDrawerOpen, desktopSidebarCollapsed, currentTopic.topic_index]);
   // Keep TOC drawer dismissible via keyboard.
   useEffect(() => {
     if (!tocDrawerOpen && !highlightDrawerOpen) return;
@@ -2410,7 +2439,7 @@ export default function TopicLayoutClient({
         style={{ top: "var(--ev-navbar-offset, 56px)" }}
       >
         <div
-          className="h-full bg-emerald-500 transition-all duration-150 ease-out"
+          className="h-full bg-emerald-500 transition-[width] duration-75 ease-linear"
           style={{ width: `${scrollProgress}%` }}
         />
       </div>
@@ -2433,6 +2462,7 @@ export default function TopicLayoutClient({
               courseId={courseId}
               courseSlug={slug}
               courseTitle={course.title}
+              courseHref={courseHref}
               toc={course.toc}
               currentTopicIndex={currentTopic.topic_index}
               completedTopicIndices={completed}
@@ -2455,6 +2485,7 @@ export default function TopicLayoutClient({
             courseId={courseId}
             courseSlug={slug}
             courseTitle={course.title}
+            courseHref={courseHref}
             toc={course.toc}
             currentTopicIndex={currentTopic.topic_index}
             completedTopicIndices={completed}
@@ -3208,10 +3239,13 @@ export default function TopicLayoutClient({
         </>
       )}
 
-      {/* Floating Course Chatbot */}
-      {!drawingPadOpen && (
-        <CourseChatbot topicTitle={currentTopic.topic_name} topicContext={topicContext} />
-      )}
+      {/* Floating Course Chatbot (topic page only), shifted left while side drawers are open */}
+      <CourseChatbot
+        topicTitle={currentTopic.topic_name}
+        topicContext={topicContext}
+        rightOffsetPx={chatRightOffsetPx}
+      />
     </div>
   );
 }
+

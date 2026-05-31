@@ -12,6 +12,7 @@ interface Message {
 interface CourseChatbotProps {
   topicTitle: string;
   topicContext: string;
+  rightOffsetPx?: number;
 }
 
 function RobotIcon() {
@@ -30,7 +31,7 @@ function ChatIcon() {
   );
 }
 
-export default function CourseChatbot({ topicTitle, topicContext }: CourseChatbotProps) {
+export default function CourseChatbot({ topicTitle, topicContext, rightOffsetPx = 24 }: CourseChatbotProps) {
   const [isOpen, setIsOpen] = useState(false);
   const chatbotRef = useRef<HTMLDivElement>(null);
 
@@ -62,7 +63,7 @@ export default function CourseChatbot({ topicTitle, topicContext }: CourseChatbo
     if (messages.length <= 1) {
       setMessages([{ role: "model", content: `Hi! I'm your AI assistant for this topic (**${topicTitle}**). Ask me anything about it!` }]);
     }
-  }, [topicTitle]);
+  }, [messages.length, topicTitle]);
 
   useEffect(() => {
     if (scrollContainerRef.current) {
@@ -104,10 +105,11 @@ ${topicContext}
       });
 
       setMessages([...newMessages, { role: "model", content: response }]);
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Failed to generate response.";
       setMessages([
         ...newMessages,
-        { role: "model", content: `**Error:** ${err.message || "Failed to generate response."}` }
+        { role: "model", content: `**Error:** ${message}` }
       ]);
     } finally {
       setLoading(false);
@@ -142,7 +144,7 @@ ${topicContext}
   return (
     <div ref={chatbotRef}>
       {/* Floating Action Button */}
-      <div className="fixed bottom-6 right-6 z-50">
+      <div className="fixed bottom-6 z-50" style={{ right: `${rightOffsetPx}px` }}>
         <button
           onClick={() => setIsOpen(!isOpen)}
           className="bg-indigo-600 hover:bg-indigo-700 text-white rounded-full p-4 shadow-lg shadow-indigo-600/30 transition-transform transform hover:scale-105 active:scale-95 flex items-center justify-center cursor-pointer"
@@ -160,7 +162,10 @@ ${topicContext}
 
       {/* Chat Window */}
       {isOpen && (
-        <div className="fixed bottom-24 right-6 z-50 w-[400px] max-w-[calc(100vw-3rem)] h-[550px] max-h-[calc(100vh-8rem)] bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-2xl shadow-2xl flex flex-col overflow-hidden">
+        <div
+          className="fixed bottom-24 z-50 w-[400px] max-w-[calc(100vw-3rem)] h-[550px] max-h-[calc(100vh-8rem)] bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-2xl shadow-2xl flex flex-col overflow-hidden"
+          style={{ right: `${rightOffsetPx}px` }}
+        >
           
           {/* Header */}
           <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-800/50">

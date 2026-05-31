@@ -605,6 +605,46 @@ export default function TopicDrawingPad({
       e.preventDefault();
     };
 
+    const isFloatingMenuElement = (target: EventTarget | null): boolean => {
+      if (!(target instanceof HTMLElement)) return false;
+      return Boolean(
+        target.closest(".dropdown-menu-container") ||
+        target.closest(".dropdown-menu") ||
+        target.closest(".App-mobile-menu") ||
+        target.closest(".color-picker") ||
+        target.closest(".popover") ||
+        target.closest(".excalidraw-sidebar") ||
+        target.closest("[role='dialog']")
+      );
+    };
+
+    const hasOpenFloatingMenus = (): boolean => {
+      if (!api) return false;
+      const appState = api.getAppState() as Record<string, unknown>;
+      return Boolean(
+        appState.openMenu ||
+        appState.openPopup ||
+        appState.openSidebar ||
+        appState.contextMenu ||
+        appState.openDialog
+      );
+    };
+
+    const closeFloatingMenus = () => {
+      if (!api) return;
+      const appState = api.getAppState() as Record<string, unknown>;
+      api.updateScene({
+        appState: {
+          ...appState,
+          openMenu: null,
+          openPopup: null,
+          openSidebar: null,
+          contextMenu: null,
+          openDialog: null,
+        } as never,
+      });
+    };
+
     // Rolling event log for debug (keep last 8 entries)
     const logLines: string[] = [];
     const addLog = (msg: string) => {
@@ -757,6 +797,10 @@ export default function TopicDrawingPad({
         }
         return;
       }
+      if (!isFloatingMenuElement(e.target) && hasOpenFloatingMenus()) {
+        window.requestAnimationFrame(() => closeFloatingMenus());
+        return;
+      }
       // Scribble Protection: If a textarea is active, block pencil taps on the canvas.
       // This stops Excalidraw from destroying the text box before iPadOS Scribble can inject the handwriting!
       if (e.pointerType === "pen" && document.activeElement?.tagName === "TEXTAREA" && !isInteractiveElement(e.target)) {
@@ -882,6 +926,10 @@ export default function TopicDrawingPad({
           e.stopPropagation();
           e.stopImmediatePropagation();
         }
+        return;
+      }
+      if (!isFloatingMenuElement(e.target) && hasOpenFloatingMenus()) {
+        window.requestAnimationFrame(() => closeFloatingMenus());
         return;
       }
       const appState = api.getAppState();
@@ -1882,6 +1930,20 @@ export default function TopicDrawingPad({
           padding: initial !important;
           margin: initial !important;
           display: inline-flex !important;
+        }
+
+        /* Hide Canvas background row in menu/palette */
+        .excalidraw .dropdown-menu [data-testid="canvas-background-label"],
+        .excalidraw .App-mobile-menu [data-testid="canvas-background-label"] {
+          display: none !important;
+        }
+        .excalidraw .dropdown-menu [data-testid="canvas-background-label"] + div,
+        .excalidraw .App-mobile-menu [data-testid="canvas-background-label"] + div {
+          display: none !important;
+        }
+        .excalidraw .dropdown-menu div:has(> [data-testid="canvas-background-label"]),
+        .excalidraw .App-mobile-menu div:has(> [data-testid="canvas-background-label"]) {
+          display: none !important;
         }
 
         /* Hide/show all three Excalidraw toolbars with one top-nav toggle */

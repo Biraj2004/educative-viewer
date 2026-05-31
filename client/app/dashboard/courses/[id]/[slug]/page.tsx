@@ -1340,11 +1340,12 @@ export default function CourseDetailPage() {
 
       {readerPanelMounted && (
         <div
-          className={`fixed inset-x-0 bottom-0 top-14 z-50 transition-opacity duration-200 ${
+          className={`fixed inset-x-0 bottom-0 z-50 transition-opacity duration-200 ${
             readerPanelVisible
               ? (readerPanelMode === "drawing" ? "pointer-events-none" : "pointer-events-auto")
               : "pointer-events-none"
           }`}
+          style={{ top: "var(--ev-navbar-offset, 56px)" }}
         >
           <div
             className={`absolute inset-0 bg-black/40 transition-opacity duration-200 ${
