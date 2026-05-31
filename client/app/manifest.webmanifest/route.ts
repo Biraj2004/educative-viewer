@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server";
 
-const ICON_VERSION = "20260531";
-const MANIFEST_ICON_URL = `/brand-icon.png?v=${ICON_VERSION}`;
+const ICON_VERSION = "20260601";
+const ICON_192_URL = `/icon-192.png?v=${ICON_VERSION}`;
+const ICON_512_URL = `/icon-512.png?v=${ICON_VERSION}`;
+const APPLE_ICON_URL = `/apple-touch-icon.png?v=${ICON_VERSION}`;
 
 const manifest = {
   name: "Edu-Viewer PRO",
@@ -15,19 +17,19 @@ const manifest = {
   orientation: "any",
   icons: [
     {
-      src: MANIFEST_ICON_URL,
+      src: ICON_192_URL,
       sizes: "192x192",
       type: "image/png",
       purpose: "any",
     },
     {
-      src: MANIFEST_ICON_URL,
+      src: ICON_512_URL,
       sizes: "512x512",
       type: "image/png",
       purpose: "any",
     },
     {
-      src: MANIFEST_ICON_URL,
+      src: APPLE_ICON_URL,
       sizes: "180x180",
       type: "image/png",
       purpose: "any",

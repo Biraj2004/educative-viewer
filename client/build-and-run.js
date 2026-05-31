@@ -181,12 +181,12 @@ function stepZip() {
   if (fs.existsSync(ZIP_PATH)) fs.unlinkSync(ZIP_PATH);
 
   if (process.platform === 'win32') {
-    run(`powershell -Command "Compress-Archive -Path '.next' -DestinationPath '.next.zip'"`);
+    run(`powershell -Command "Compress-Archive -Path '.next','public' -DestinationPath '.next.zip'"`);
   } else {
-    run(`zip -r .next.zip .next`);
+    run(`zip -r .next.zip .next public`);
   }
   const sizeMB = (fs.statSync(ZIP_PATH).size / 1024 / 1024).toFixed(2);
-  console.log(`[+] Created .next.zip (${sizeMB} MB)`);
+  console.log(`[+] Created .next.zip with .next + public (${sizeMB} MB)`);
 }
 
 function parseEnvFile(filePath) {

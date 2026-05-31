@@ -1,8 +1,11 @@
-const CACHE_NAME = "edu-viewer-cache-v2";
+const CACHE_NAME = "edu-viewer-cache-v3";
 
 const STATIC_ASSETS = [
   "/",
-  "/brand-icon.png",
+  "/icon-og.png",
+  "/icon-192.png",
+  "/icon-512.png",
+  "/apple-touch-icon.png",
 ];
 
 // Install event: cache initial shell assets

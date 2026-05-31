@@ -27,7 +27,7 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
-const MANIFEST_VERSION = "20260531";
+const MANIFEST_VERSION = "20260601";
 
 export const viewport: Viewport = {
   themeColor: "#0a0a0a",
