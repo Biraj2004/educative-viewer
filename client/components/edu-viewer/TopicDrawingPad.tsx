@@ -627,6 +627,11 @@ export default function TopicDrawingPad({
       if (twoFingerHandActive) return;
       isPinchingRef.current = true;
       const appState = api.getAppState();
+      // If a finger was previously blocked in pen mode, unblock it before
+      // entering two-finger navigation to avoid mixed zoom-only jitter.
+      if (blockedPointerIdsRef.current.size > 0) {
+        blockedPointerIdsRef.current.clear();
+      }
       const activeTool = appState?.activeTool as { type?: string; customType?: string } | undefined;
       if (activeTool?.type === "hand") {
         handRestoreTool = null;
@@ -659,10 +664,6 @@ export default function TopicDrawingPad({
         }
         return;
       }
-      const appState = api.getAppState();
-      const isPenActive = appState ? !!appState.penMode : false;
-      const isHandToolActive = appState?.activeTool?.type === "hand";
-
       // Scribble Protection: If a textarea is active, block pencil taps on the canvas.
       // This stops Excalidraw from destroying the text box before iPadOS Scribble can inject the handwriting!
       if (e.pointerType === "pen" && document.activeElement?.tagName === "TEXTAREA" && !isInteractiveElement(e.target)) {
@@ -678,23 +679,9 @@ export default function TopicDrawingPad({
           activePointersRef.current.set(e.pointerId, e);
           return;
         }
-        if (isPinchingRef.current) {
-          blockedPointerIdsRef.current.add(e.pointerId);
-          e.preventDefault();
-          e.stopPropagation();
-          e.stopImmediatePropagation();
-          return;
-        }
-
-        if (isPenActive && !isHandToolActive && !isInteractiveElement(e.target)) {
-          blockedPointerIdsRef.current.add(e.pointerId);
-          e.preventDefault();
-          e.stopPropagation();
-          e.stopImmediatePropagation();
-          addLog(`BLOCKED ptr↓ touch id=${e.pointerId}`);
-          syncDebug(e);
-          return;
-        }
+        // Let touch events drive pinch/pan flow to avoid pointer/touch conflicts on iPad.
+        activePointersRef.current.set(e.pointerId, e);
+        return;
       }
 
       activePointersRef.current.set(e.pointerId, e);
@@ -704,10 +691,14 @@ export default function TopicDrawingPad({
 
     const onPointerMove = (e: PointerEvent) => {
       if (blockedPointerIdsRef.current.has(e.pointerId)) {
-        e.preventDefault();
-        e.stopPropagation();
-        e.stopImmediatePropagation();
-        return;
+        if (e.pointerType === "touch" && twoFingerHandActive) {
+          blockedPointerIdsRef.current.delete(e.pointerId);
+        } else {
+          e.preventDefault();
+          e.stopPropagation();
+          e.stopImmediatePropagation();
+          return;
+        }
       }
       if (!rootRef.current?.contains(e.target as Node)) {
         if (e.pointerType === "touch") {
@@ -718,42 +709,26 @@ export default function TopicDrawingPad({
       }
 
       if (e.pointerType === "touch") {
-        if (twoFingerHandActive) {
-          activePointersRef.current.set(e.pointerId, e);
-          return;
-        }
-        const appState = api.getAppState();
-        const isPenActive = appState ? !!appState.penMode : false;
-        const isHandToolActive = appState?.activeTool?.type === "hand";
-
-        if (isPenActive && !isHandToolActive && !isInteractiveElement(e.target)) {
-          blockedPointerIdsRef.current.add(e.pointerId);
-          e.preventDefault();
-          e.stopPropagation();
-          e.stopImmediatePropagation();
-          return;
-        }
+        activePointersRef.current.set(e.pointerId, e);
+        return;
       }
 
       activePointersRef.current.set(e.pointerId, e);
-
-      // Block touch pointer movement from propagating if we are pinch-zooming
-      if (e.pointerType === "touch" && isPinchingRef.current) {
-        e.preventDefault();
-        e.stopPropagation();
-        e.stopImmediatePropagation();
-      }
     };
 
     const onPointerUp = (e: PointerEvent) => {
       if (blockedPointerIdsRef.current.has(e.pointerId)) {
-        blockedPointerIdsRef.current.delete(e.pointerId);
-        e.preventDefault();
-        e.stopPropagation();
-        e.stopImmediatePropagation();
-        addLog(`BLOCKED ptr↑ touch id=${e.pointerId}`);
-        syncDebug(e);
-        return;
+        if (e.pointerType === "touch" && twoFingerHandActive) {
+          blockedPointerIdsRef.current.delete(e.pointerId);
+        } else {
+          blockedPointerIdsRef.current.delete(e.pointerId);
+          e.preventDefault();
+          e.stopPropagation();
+          e.stopImmediatePropagation();
+          addLog(`BLOCKED ptr↑ touch id=${e.pointerId}`);
+          syncDebug(e);
+          return;
+        }
       }
       if (!rootRef.current?.contains(e.target as Node)) {
         if (e.pointerType === "touch") {
@@ -770,13 +745,17 @@ export default function TopicDrawingPad({
 
     const onPointerCancel = (e: PointerEvent) => {
       if (blockedPointerIdsRef.current.has(e.pointerId)) {
-        blockedPointerIdsRef.current.delete(e.pointerId);
-        e.preventDefault();
-        e.stopPropagation();
-        e.stopImmediatePropagation();
-        addLog(`BLOCKED ptr✗ touch id=${e.pointerId}`);
-        syncDebug(e);
-        return;
+        if (e.pointerType === "touch" && twoFingerHandActive) {
+          blockedPointerIdsRef.current.delete(e.pointerId);
+        } else {
+          blockedPointerIdsRef.current.delete(e.pointerId);
+          e.preventDefault();
+          e.stopPropagation();
+          e.stopImmediatePropagation();
+          addLog(`BLOCKED ptr✗ touch id=${e.pointerId}`);
+          syncDebug(e);
+          return;
+        }
       }
       if (!rootRef.current?.contains(e.target as Node)) {
         if (e.pointerType === "touch") {
@@ -824,6 +803,7 @@ export default function TopicDrawingPad({
       syncDebug(e);
 
       if (isPenActive && !isHandToolActive && !stylusPresent && e.touches.length === 1 && !isInteractiveElement(e.target)) {
+        e.preventDefault();
         e.stopPropagation();
         e.stopImmediatePropagation();
         addLog("BLOCKED finger touchstart");
@@ -834,9 +814,6 @@ export default function TopicDrawingPad({
       if (fingerCount === 2 && allInside && !stylusPresent) {
         activateTwoFingerHand();
         return;
-      }
-      if (fingerCount < 2) {
-        restoreToolAfterTwoFinger();
       }
     };
 
@@ -871,6 +848,7 @@ export default function TopicDrawingPad({
       syncDebug(e);
 
       if (isPenActive && !isHandToolActive && !stylusPresent && e.touches.length === 1 && !isInteractiveElement(e.target)) {
+        e.preventDefault();
         e.stopPropagation();
         e.stopImmediatePropagation();
         return;
@@ -883,6 +861,9 @@ export default function TopicDrawingPad({
     };
 
     const onTouchEnd = (e: TouchEvent) => {
+      if (e.touches.length === 0) {
+        restoreToolAfterTwoFinger();
+      }
       const stylusPresent = hasStylus(e.touches);
       if (stylusPresent && e.touches.length > 1) {
         e.preventDefault();
@@ -900,9 +881,6 @@ export default function TopicDrawingPad({
       }
       addLog(`te n=${e.touches.length}`);
       syncDebug(e);
-      if (e.touches.length < 2) {
-        restoreToolAfterTwoFinger();
-      }
     };
 
     root.addEventListener("gesturestart", preventDefault, { passive: false });
