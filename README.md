@@ -3,10 +3,11 @@
 A local viewer for structured educational content. One script starts everything.
 
 ## Updates
-- v1.0.148+ updates
-Please rebuild the project using --force-build command as environment variables were updated.
-Auth DB may need to be deleted if you face issues.
-- 
+- v1.0.182+ updates
+    ```
+    Please rebuild the project using --force-build command as environment variables were updated.
+    Auth DB may need to be deleted if you face issues.
+    ```
 
 ## Requirements
 
