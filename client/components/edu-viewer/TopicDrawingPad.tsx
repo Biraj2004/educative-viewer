@@ -333,6 +333,7 @@ export default function TopicDrawingPad({
   const [confirmCloseOpen, setConfirmCloseOpen] = useState(false);
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const [excalidrawTheme, setExcalidrawTheme] = useState<"dark" | "light">("light");
+  const [showDrawingToolbars, setShowDrawingToolbars] = useState(true);
   const [showDebug, setShowDebug] = useState(false);
   const [debugInfo, setDebugInfo] = useState<{
     pointers: { id: number; type: string; x: number; y: number; isPrimary: boolean }[];
@@ -1480,7 +1481,310 @@ export default function TopicDrawingPad({
   }, [api, importLibraryBlobWithDedupe, pendingLibraryImportUrl]);
 
   return (
-    <div ref={rootRef} className="relative h-full bg-white dark:bg-gray-950 flex flex-col" style={{ touchAction: "none" }}>
+    <div
+      ref={rootRef}
+      className={`relative h-full bg-white dark:bg-gray-950 flex flex-col ${showDrawingToolbars ? "" : "ev-hide-drawing-toolbars"}`}
+      style={{ touchAction: "none" }}
+    >
+      <style suppressHydrationWarning>{`
+        /* Move Excalidraw bottom toolbar (mobile bottom bar & desktop footer-center) to top-left */
+        .excalidraw .App-bottom-bar,
+        .excalidraw .footer-center,
+        .excalidraw .layer-ui__wrapper__footer-center {
+          position: absolute !important;
+          left: 12px !important;
+          right: auto !important;
+          bottom: auto !important;
+          top: 12px !important;
+          transform: none !important;
+          width: auto !important;
+          height: auto !important;
+          display: flex !important;
+          flex-direction: column !important;
+          align-items: center !important;
+          justify-content: center !important;
+          gap: 12px !important;
+          padding: 8px !important;
+          background: var(--island-bg-color, #ffffff) !important;
+          border: 1px solid var(--sidebar-border-color, #e0e0e0) !important;
+          border-radius: 12px !important;
+          box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05) !important;
+          z-index: 5 !important;
+        }
+
+        .theme--dark .excalidraw .App-bottom-bar,
+        .theme--dark .excalidraw .footer-center,
+        .theme--dark .excalidraw .layer-ui__wrapper__footer-center {
+          background: var(--island-bg-color, #1e1e1e) !important;
+          border-color: var(--sidebar-border-color, #333333) !important;
+          box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3), 0 4px 6px -2px rgba(0, 0, 0, 0.15) !important;
+        }
+
+        /* Stack internal container elements vertically, excluding popup menus/pickers */
+        .excalidraw .App-bottom-bar > *:not(.App-mobile-menu):not(.color-picker-container):not(.dropdown-menu):not(.popover):not([role="dialog"]),
+        .excalidraw .footer-center > *,
+        .excalidraw .layer-ui__wrapper__footer-center > *,
+        .excalidraw .undo-redo-buttons,
+        .excalidraw .zoom-actions,
+        .excalidraw .stack,
+        .excalidraw .island {
+          display: flex !important;
+          flex-direction: column !important;
+          align-items: center !important;
+          justify-content: center !important;
+          gap: 8px !important;
+          width: auto !important;
+          height: auto !important;
+          padding: 0 !important;
+          margin: 0 !important;
+          background: transparent !important;
+          border: none !important;
+          box-shadow: none !important;
+        }
+
+        /* mobile/tablet view left toolbar overrides: make it look EXACTLY like the right toolbar */
+        .excalidraw.excalidraw--mobile .App-bottom-bar,
+        .excalidraw.excalidraw--mobile .layer-ui__wrapper__footer-center {
+          margin: 0 !important;
+          position: absolute !important;
+          left: 0px !important;
+          right: auto !important;
+          bottom: auto !important;
+          top: 0px !important;
+          transform: none !important;
+          width: 36px !important;
+          height: auto !important;
+          display: flex !important;
+          flex-direction: column !important;
+          align-items: center !important;
+          justify-content: flex-start !important;
+          gap: 4px !important;
+          padding: 8px 0 !important;
+          background: var(--island-bg-color, rgb(35, 35, 41)) !important;
+          border: none !important;
+          border-radius: 0px 8px 8px 0px !important;
+          box-shadow: none !important;
+          z-index: 5 !important;
+          overflow: visible !important;
+        }
+
+        /* Inner containers inside mobile left toolbar */
+        .excalidraw.excalidraw--mobile .App-bottom-bar .Island,
+        .excalidraw.excalidraw--mobile .App-bottom-bar .App-toolbar,
+        .excalidraw.excalidraw--mobile .App-bottom-bar .App-toolbar-content,
+        .excalidraw.excalidraw--mobile .App-bottom-bar .undo-redo-buttons {
+          display: flex !important;
+          flex-direction: column !important;
+          align-items: center !important;
+          justify-content: center !important;
+          gap: 4px !important;
+          width: 36px !important;
+          height: auto !important;
+          padding: 0 !important;
+          margin: 0 !important;
+          background: transparent !important;
+          border: none !important;
+          box-shadow: none !important;
+          overflow: visible !important;
+        }
+
+        /* Force mobile toolbar content to stack vertically */
+        .excalidraw.excalidraw--mobile .App-bottom-bar .App-toolbar-content {
+          flex-direction: column !important;
+          overflow: visible !important;
+        }
+
+        /* Align & size individual mobile tool buttons precisely to match right bar - only direct children */
+        .excalidraw.excalidraw--mobile .App-bottom-bar .App-toolbar-content > button,
+        .excalidraw.excalidraw--mobile .App-bottom-bar .App-toolbar-content > .ToolIcon,
+        .excalidraw.excalidraw--mobile .App-bottom-bar .undo-redo-buttons > button {
+          width: 36px !important;
+          height: 36px !important;
+          min-width: 36px !important;
+          display: flex !important;
+          align-items: center !important;
+          justify-content: center !important;
+          background: transparent !important;
+          border: none !important;
+          box-shadow: none !important;
+          padding: 0 !important;
+          margin: 0 !important;
+        }
+
+        /* Adjust mobile left toolbar icons to look crisp and clean */
+        .excalidraw.excalidraw--mobile .App-bottom-bar .App-toolbar-content > button svg,
+        .excalidraw.excalidraw--mobile .App-bottom-bar .App-toolbar-content > .ToolIcon svg,
+        .excalidraw.excalidraw--mobile .App-bottom-bar .undo-redo-buttons > button svg {
+          width: 18px !important;
+          height: 18px !important;
+        }
+
+        /* Make right toolbar match left toolbar style */
+        .excalidraw .mobile-misc-tools-container {
+          position: absolute !important;
+          top: -10px !important;
+          right: calc(var(--editor-container-padding, 0px) * -1) !important;
+          width: 36px !important;
+          display: flex !important;
+          flex-direction: column !important;
+          align-items: center !important;
+          justify-content: flex-start !important;
+          gap: 4px !important;
+          background: var(--island-bg-color, rgb(35, 35, 41)) !important;
+          border: none !important;
+          border-radius: 8px 0px 0px 8px !important;
+          box-shadow: none !important;
+          overflow: visible !important;
+          z-index: 5 !important;
+        }
+
+        .excalidraw .mobile-misc-tools-container .ToolIcon,
+        .excalidraw .mobile-misc-tools-container button {
+          width: 36px !important;
+          height: 36px !important;
+          min-width: 36px !important;
+          margin: 0 !important;
+          padding: 0 !important;
+          background: transparent !important;
+          border: none !important;
+          box-shadow: none !important;
+          border-radius: 0 !important;
+        }
+
+        .excalidraw .mobile-misc-tools-container .ToolIcon__icon {
+          width: 36px !important;
+          height: 36px !important;
+          background: transparent !important;
+          border: none !important;
+          box-shadow: none !important;
+          border-radius: 0 !important;
+        }
+
+        .excalidraw .mobile-misc-tools-container .ToolIcon__icon svg {
+          width: 18px !important;
+          height: 18px !important;
+        }
+
+        /* Reclaim top empty strip by moving shape toolbar row up */
+        .excalidraw .App-menu_top {
+          margin-top: -10px !important;
+        }
+
+        /* Reset and prevent overrides from breaking other sidebars and dialogs */
+        .excalidraw.excalidraw--mobile .App-bottom-bar .excalidraw-sidebar,
+        .excalidraw.excalidraw--mobile .App-bottom-bar [role="dialog"]:not(.color-picker-container):not(.color-picker) {
+          position: absolute !important;
+          left: 44px !important;
+          top: 10px !important;
+          width: auto !important;
+          height: auto !important;
+          max-width: none !important;
+          max-height: none !important;
+          display: flex !important;
+          background: var(--island-bg-color, rgb(35, 35, 41)) !important;
+          box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3), 0 4px 6px -2px rgba(0, 0, 0, 0.15) !important;
+          z-index: 9999 !important;
+        }
+        
+        .excalidraw .App-toolbar.App-toolbar--mobile {
+          top: -10px !important;
+        }
+        
+        .excalidraw .undo-redo-buttons {
+          display: grid !important;
+          margin: 0 0 0 10px !important;
+        }
+
+        /* Style the main hamburger dropdown menu container specifically */
+        .excalidraw.excalidraw--mobile .App-bottom-bar .dropdown-menu-container {
+          position: absolute !important;
+          left: 44px !important;
+          top: 40px !important; /* Start below the hamburger button */
+          width: 220px !important;
+          height: auto !important;
+          max-height: calc(100vh - 120px) !important;
+          overflow-y: auto !important;
+          background: var(--island-bg-color, rgb(35, 35, 41)) !important;
+          border: 1px solid var(--sidebar-border-color, #333333) !important;
+          border-radius: 8px !important;
+          box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3), 0 4px 6px -2px rgba(0, 0, 0, 0.15) !important;
+          z-index: 9999 !important;
+          padding: 8px 0 !important;
+          display: flex !important;
+          flex-direction: column !important;
+        }
+
+        /* Reset the inner dropdown menu inside its container */
+        .excalidraw.excalidraw--mobile .App-bottom-bar .dropdown-menu {
+          position: relative !important;
+          left: auto !important;
+          top: auto !important;
+          width: 100% !important;
+          height: auto !important;
+          max-height: none !important;
+          background: transparent !important;
+          border: none !important;
+          box-shadow: none !important;
+          display: flex !important;
+          flex-direction: column !important;
+          padding: 0 !important;
+          margin: 0 !important;
+        }
+
+        /* Hide the Excalidraw links group inside the hamburger menu */
+        .excalidraw.excalidraw--mobile .App-bottom-bar .dropdown-menu-group {
+          display: none !important;
+        }
+        /* Hide the separator divider line next to it to prevent double-dividers */
+        .excalidraw.excalidraw--mobile .App-bottom-bar .dropdown-menu-group + div {
+          display: none !important;
+        }
+
+        /* Specifically style the properties menu (.App-mobile-menu) on mobile/tablet */
+        .excalidraw.excalidraw--mobile .App-bottom-bar .App-mobile-menu {
+          position: absolute !important;
+          left: 44px !important;
+          top: 10px !important;
+          width: 280px !important;
+          height: auto !important;
+          max-height: calc(100vh - 90px) !important;
+          overflow-y: auto !important;
+          display: flex !important;
+          flex-direction: column !important;
+          gap: 12px !important;
+          padding: 16px !important;
+          background: var(--island-bg-color, rgb(35, 35, 41)) !important;
+          border: 1px solid var(--sidebar-border-color, #333333) !important;
+          border-radius: 8px !important;
+          box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3), 0 4px 6px -2px rgba(0, 0, 0, 0.15) !important;
+          z-index: 9999 !important;
+        }
+
+        /* Excalidraw color picker and mobile menu need their grid/flex elements layout intact, excluding swatch buttons */
+        .excalidraw.excalidraw--mobile .App-bottom-bar .color-picker-container button:not(.color-picker__button):not(.active-color),
+        .excalidraw.excalidraw--mobile .App-bottom-bar .App-mobile-menu button:not(.color-picker__button):not(.active-color) {
+          width: auto !important;
+          height: auto !important;
+          min-width: 0 !important;
+          background: initial !important;
+          border: initial !important;
+          box-shadow: initial !important;
+          padding: initial !important;
+          margin: initial !important;
+          display: inline-flex !important;
+        }
+
+        /* Hide/show all three Excalidraw toolbars with one top-nav toggle */
+        .ev-hide-drawing-toolbars .excalidraw .App-bottom-bar,
+        .ev-hide-drawing-toolbars .excalidraw .footer-center,
+        .ev-hide-drawing-toolbars .excalidraw .layer-ui__wrapper__footer-center,
+        .ev-hide-drawing-toolbars .excalidraw .App-menu_top,
+        .ev-hide-drawing-toolbars .excalidraw .App-toolbar.App-toolbar--mobile,
+        .ev-hide-drawing-toolbars .excalidraw .mobile-misc-tools-container,
+        .ev-hide-drawing-toolbars .excalidraw .App-menu_bottom {
+          display: none !important;
+        }
+      `}</style>
       <ExcalidrawLibraryHandler excalidrawAPI={api} />
       <div className="h-14 px-4 border-b border-gray-200 dark:border-gray-800 bg-white/95 dark:bg-gray-950/95 backdrop-blur flex items-center justify-between gap-3">
         <div className="min-w-0">
@@ -1497,6 +1801,31 @@ export default function TopicDrawingPad({
               Unsaved
             </span>
           )}
+
+          <button
+            type="button"
+            onClick={() => setShowDrawingToolbars((prev) => !prev)}
+            title={showDrawingToolbars ? "Hide drawing toolbars" : "Show drawing toolbars"}
+            aria-label={showDrawingToolbars ? "Hide drawing toolbars" : "Show drawing toolbars"}
+            className={`inline-flex items-center justify-center p-2 rounded-lg border transition-all cursor-pointer ${showDrawingToolbars
+                ? "bg-white dark:bg-gray-900 border-gray-300 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800"
+                : "bg-amber-50/80 dark:bg-amber-950/20 border-amber-300 dark:border-amber-800 text-amber-700 dark:text-amber-300"
+              }`}
+          >
+            {showDrawingToolbars ? (
+              <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" strokeWidth="2.2" fill="none" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6-10-6-10-6z"></path>
+                <circle cx="12" cy="12" r="3"></circle>
+              </svg>
+            ) : (
+              <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" strokeWidth="2.2" fill="none" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M3 3l18 18"></path>
+                <path d="M10.5 10.5A3 3 0 0 0 13.5 13.5"></path>
+                <path d="M9.88 5.09A10.94 10.94 0 0 1 12 5c6.5 0 10 7 10 7a19.16 19.16 0 0 1-3.22 4.19"></path>
+                <path d="M6.53 6.53C4.55 7.96 3.17 9.88 2 12c0 0 3.5 7 10 7a9.77 9.77 0 0 0 4.47-1.03"></path>
+              </svg>
+            )}
+          </button>
 
           {/* Debug Toggle Button */}
           <button
