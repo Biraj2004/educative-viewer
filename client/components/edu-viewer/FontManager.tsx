@@ -87,15 +87,15 @@ export default function FontManager({ inline = false }: { inline?: boolean }) {
 
   const styleTag = (
     <style suppressHydrationWarning>{`
-      .topic-content-wrapper *:not(pre):not(code):not(.font-mono):not(svg):not(path) {
+      .topic-content-wrapper *:not(pre):not(code):not(.font-mono):not(svg):not(path):not(.monaco-editor):not(.monaco-editor *) {
          font-family: ${settings.fontFamily} !important;
       }
       .topic-content-wrapper p, 
-      .topic-content-wrapper span, 
+      .topic-content-wrapper span:not(.monaco-editor *), 
       .topic-content-wrapper li, 
       .topic-content-wrapper td, 
       .topic-content-wrapper th, 
-      .topic-content-wrapper div:not(.font-mono) {
+      .topic-content-wrapper div:not(.font-mono):not(.monaco-editor):not(.monaco-editor *) {
          font-size: ${settings.fontSize}px !important;
          line-height: ${settings.lineHeight} !important;
          font-weight: ${settings.fontWeight} !important;
@@ -269,15 +269,15 @@ export function FontInjector() {
 
   return (
     <style suppressHydrationWarning>{`
-      .topic-content-wrapper *:not(pre):not(code):not(.font-mono):not(svg):not(path) {
+      .topic-content-wrapper *:not(pre):not(code):not(.font-mono):not(svg):not(path):not(.monaco-editor):not(.monaco-editor *) {
          font-family: ${settings.fontFamily} !important;
       }
       .topic-content-wrapper p, 
-      .topic-content-wrapper span, 
+      .topic-content-wrapper span:not(.monaco-editor *), 
       .topic-content-wrapper li, 
       .topic-content-wrapper td, 
       .topic-content-wrapper th, 
-      .topic-content-wrapper div:not(.font-mono) {
+      .topic-content-wrapper div:not(.font-mono):not(.monaco-editor):not(.monaco-editor *) {
          font-size: ${settings.fontSize}px !important;
          line-height: ${settings.lineHeight} !important;
          font-weight: ${settings.fontWeight} !important;
