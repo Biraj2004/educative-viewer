@@ -1418,6 +1418,7 @@ export default function CourseDetailPage() {
               <TopicDrawingPad
                 topicTitle={course.title}
                 initialScene={viewerCourseState.drawing_note?.scene ?? null}
+                draftStorageKey={`ev:drawing-draft:v1:${courseId}`}
                 saveBusy={courseDrawingSaveBusy}
                 onSave={handleSaveCourseDrawing}
                 onDelete={handleDeleteCourseDrawing}

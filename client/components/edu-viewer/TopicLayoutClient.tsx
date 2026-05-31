@@ -3127,6 +3127,7 @@ export default function TopicLayoutClient({
           <TopicDrawingPad
             topicTitle={currentTopic.topic_name}
             initialScene={currentCourseDrawing?.scene ?? null}
+            draftStorageKey={`ev:drawing-draft:v1:${courseId}`}
             saveBusy={drawingSaveBusy}
             onSave={handleSaveDrawingScene}
             onDelete={handleDeleteDrawingScene}

@@ -22,6 +22,7 @@ const ExcalidrawLibraryHandler = dynamic(
 interface Props {
   topicTitle: string;
   initialScene: ViewerDrawingScene | null;
+  draftStorageKey?: string;
   saveBusy: boolean;
   onSave: (scene: ViewerDrawingScene) => Promise<void>;
   onDelete: () => Promise<void>;
@@ -308,6 +309,7 @@ async function parseLibraryItemsFromBlob(blob: Blob): Promise<LibraryItems> {
 export default function TopicDrawingPad({
   topicTitle,
   initialScene,
+  draftStorageKey,
   saveBusy,
   onSave,
   onDelete,
@@ -367,6 +369,60 @@ export default function TopicDrawingPad({
   const librarySourceMetaRef = useRef<Record<string, SourceLibraryMeta>>({});
   const librarySyncInitializedRef = useRef(false);
   const librarySnapshotReadyRef = useRef(false);
+  const draftPersistedKeyRef = useRef<string | null>(null);
+  const discardDraftOnCloseRef = useRef(false);
+
+  const persistedDraftScene = useMemo<ViewerDrawingScene | null>(() => {
+    if (!draftStorageKey || typeof window === "undefined") return null;
+    try {
+      const raw = window.localStorage.getItem(draftStorageKey);
+      if (!raw) return null;
+      const parsed = JSON.parse(raw) as unknown;
+      if (!parsed || typeof parsed !== "object") return null;
+      const row = parsed as Record<string, unknown>;
+      return {
+        elements: Array.isArray(row.elements) ? (row.elements as ViewerDrawingScene["elements"]) : [],
+        appState: row.appState && typeof row.appState === "object" ? (row.appState as ViewerDrawingScene["appState"]) : {},
+        files: row.files && typeof row.files === "object" ? (row.files as ViewerDrawingScene["files"]) : {},
+      };
+    } catch {
+      return null;
+    }
+  }, [draftStorageKey]);
+
+  const initialSavedContentKey = useMemo(() => {
+    if (!initialScene) return "";
+    return contentSignatureFromScene(initialScene);
+  }, [initialScene]);
+
+  const writeDraftScene = useCallback((scene: ViewerDrawingScene, contentKey: string, savedContentKey: string) => {
+    if (!draftStorageKey || typeof window === "undefined") return;
+    if (discardDraftOnCloseRef.current) return;
+    try {
+      if (!contentKey || contentKey === savedContentKey) {
+        if (draftPersistedKeyRef.current !== null) {
+          window.localStorage.removeItem(draftStorageKey);
+          draftPersistedKeyRef.current = null;
+        }
+        return;
+      }
+      if (draftPersistedKeyRef.current === contentKey) return;
+      window.localStorage.setItem(draftStorageKey, JSON.stringify(scene));
+      draftPersistedKeyRef.current = contentKey;
+    } catch {
+      // ignore storage errors
+    }
+  }, [draftStorageKey]);
+
+  const clearDraftScene = useCallback(() => {
+    if (!draftStorageKey || typeof window === "undefined") return;
+    try {
+      window.localStorage.removeItem(draftStorageKey);
+      draftPersistedKeyRef.current = null;
+    } catch {
+      // ignore storage errors
+    }
+  }, [draftStorageKey]);
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -520,9 +576,10 @@ export default function TopicDrawingPad({
   }, [showDebug]);
 
   const initialData = useMemo<ExcalidrawInitialDataState | undefined>(() => {
+    const seedScene = persistedDraftScene ?? initialScene;
     const rawAppState =
-      initialScene?.appState && typeof initialScene.appState === "object"
-        ? { ...initialScene.appState }
+      seedScene?.appState && typeof seedScene.appState === "object"
+        ? { ...seedScene.appState }
         : {};
     // Always default to the thinnest stroke when opening the drawing pad.
     rawAppState.currentItemStrokeWidth = 1;
@@ -532,11 +589,11 @@ export default function TopicDrawingPad({
     delete (rawAppState as Record<string, unknown>).followedBy;
     delete (rawAppState as Record<string, unknown>).userToFollow;
     return {
-      elements: Array.isArray(initialScene?.elements) ? (initialScene.elements as never[]) : [],
+      elements: Array.isArray(seedScene?.elements) ? (seedScene.elements as never[]) : [],
       appState: rawAppState as ExcalidrawInitialDataState["appState"],
-      files: (initialScene?.files ?? {}) as ExcalidrawInitialDataState["files"],
+      files: (seedScene?.files ?? {}) as ExcalidrawInitialDataState["files"],
     };
-  }, [initialScene]);
+  }, [initialScene, persistedDraftScene]);
 
   // ── Pinch-to-Zoom Fix for iPad + Real-time Touch Debugging ──
   useEffect(() => {
@@ -1026,12 +1083,12 @@ export default function TopicDrawingPad({
     latestAppStateRawRef.current = (initialData.appState ?? {}) as Record<string, unknown>;
     latestFilesRawRef.current = (initialData.files ?? {}) as Record<string, unknown>;
     const key = contentSignatureFromScene(scene);
-    lastSavedContentKeyRef.current = key;
+    lastSavedContentKeyRef.current = initialSavedContentKey;
     latestContentKeyRef.current = key;
     latestSceneRef.current = scene;
     baselineInitializedRef.current = true;
     initialSyncPendingRef.current = true;
-  }, [initialData]);
+  }, [initialData, initialSavedContentKey]);
 
   useEffect(() => {
     // Keep editor clean when freshly opened.
@@ -1065,24 +1122,28 @@ export default function TopicDrawingPad({
     latestContentKeyRef.current = currentKey;
     if (initialSyncPendingRef.current) {
       initialSyncPendingRef.current = false;
-      lastSavedContentKeyRef.current = currentKey;
-      setDirty(false);
+      setDirty(currentKey !== lastSavedContentKeyRef.current);
+      writeDraftScene(currentScene, currentKey, lastSavedContentKeyRef.current);
       return;
     }
     if (!lastSavedContentKeyRef.current) {
       lastSavedContentKeyRef.current = currentKey;
       setDirty(false);
+      writeDraftScene(currentScene, currentKey, lastSavedContentKeyRef.current);
       return;
     }
     if (Date.now() < suppressDirtyUntilRef.current && currentKey === lastSavedContentKeyRef.current) {
       setDirty(false);
+      writeDraftScene(currentScene, currentKey, lastSavedContentKeyRef.current);
       return;
     }
     setDirty(currentKey !== lastSavedContentKeyRef.current);
+    writeDraftScene(currentScene, currentKey, lastSavedContentKeyRef.current);
     setSaveError((prev) => (prev ? null : prev));
-  }, []);
+  }, [writeDraftScene]);
 
   const scheduleLatestChangeCommit = useCallback(() => {
+    if (discardDraftOnCloseRef.current) return;
     if (changeComputeTimerRef.current !== null) return;
     changeComputeTimerRef.current = window.setTimeout(() => {
       changeComputeTimerRef.current = null;
@@ -1109,6 +1170,7 @@ export default function TopicDrawingPad({
 
   const handleSave = useCallback(async (): Promise<boolean> => {
     if (!api) return false;
+    discardDraftOnCloseRef.current = false;
     const revision = saveRevisionRef.current + 1;
     saveRevisionRef.current = revision;
     setLocalSaveBusy(true);
@@ -1134,6 +1196,7 @@ export default function TopicDrawingPad({
       suppressDirtyUntilRef.current = Date.now() + 300;
       setConfirmCloseOpen(false);
       setDirty(false);
+      clearDraftScene();
       return true;
     } catch (err: unknown) {
       const message = err instanceof Error && err.message
@@ -1144,18 +1207,29 @@ export default function TopicDrawingPad({
     } finally {
       setLocalSaveBusy(false);
     }
-  }, [api, flushLatestChangeCommit, onSave]);
+  }, [api, clearDraftScene, flushLatestChangeCommit, onSave]);
+
+  const closeAndDiscardDraft = useCallback(() => {
+    discardDraftOnCloseRef.current = true;
+    if (changeComputeTimerRef.current !== null) {
+      window.clearTimeout(changeComputeTimerRef.current);
+      changeComputeTimerRef.current = null;
+    }
+    clearDraftScene();
+    onClose();
+  }, [clearDraftScene, onClose]);
 
   const handleClose = useCallback(() => {
     if (dirty) {
       setConfirmCloseOpen(true);
       return;
     }
-    onClose();
-  }, [dirty, onClose]);
+    closeAndDiscardDraft();
+  }, [closeAndDiscardDraft, dirty]);
 
   const performDelete = useCallback(async (): Promise<boolean> => {
     if (!api) return false;
+    discardDraftOnCloseRef.current = false;
     setLocalDeleteBusy(true);
     setSaveError(null);
     try {
@@ -1177,6 +1251,7 @@ export default function TopicDrawingPad({
       setConfirmCloseOpen(false);
       setConfirmDeleteOpen(false);
       setDirty(false);
+      clearDraftScene();
       return true;
     } catch (err: unknown) {
       const message = err instanceof Error && err.message
@@ -1187,7 +1262,7 @@ export default function TopicDrawingPad({
     } finally {
       setLocalDeleteBusy(false);
     }
-  }, [api, onDelete]);
+  }, [api, clearDraftScene, onDelete]);
 
   const busy = saveBusy || localSaveBusy || localDeleteBusy;
 
@@ -2141,7 +2216,7 @@ export default function TopicDrawingPad({
                 type="button"
                 onClick={() => {
                   setConfirmCloseOpen(false);
-                  onClose();
+                  closeAndDiscardDraft();
                 }}
                 className="inline-flex items-center px-3 py-1.5 rounded-md border border-red-300 dark:border-red-700 text-red-700 dark:text-red-300 hover:bg-red-50 dark:hover:bg-red-900/30 text-xs font-semibold transition-colors cursor-pointer"
               >
