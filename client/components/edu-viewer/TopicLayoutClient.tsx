@@ -331,7 +331,8 @@ export default function TopicLayoutClient({
     placement: "above" | "below";
   }>({ visible: false, x: 0, y: 0, placement: "below" });
   const [isCompleted, setIsCompleted] = useState(() => new Set(initialCompleted).has(topic.topic_index));
-  const [scrollProgress, setScrollProgress] = useState(0);
+  const progressFillRef = useRef<HTMLDivElement | null>(null);
+  const scrollProgressRef = useRef(0);
   const navigatingRef = useRef(false);
   const completedRef = useRef<Set<number>>(new Set(initialCompleted));
   const validFromPath = fromPath && fromPath.startsWith("/") && !fromPath.startsWith("//") ? fromPath : null;
@@ -2343,7 +2344,12 @@ export default function TopicLayoutClient({
     const winScroll = window.scrollY || root.scrollTop;
     const height = root.scrollHeight - window.innerHeight;
     const scrolled = height > 0 ? Math.min(100, Math.max(0, (winScroll / height) * 100)) : 0;
-    setScrollProgress((prev) => (Math.abs(prev - scrolled) < 0.05 ? prev : scrolled));
+    if (Math.abs(scrollProgressRef.current - scrolled) < 0.05) return;
+    scrollProgressRef.current = scrolled;
+    const fill = progressFillRef.current;
+    if (fill) {
+      fill.style.transform = `scaleX(${scrolled / 100})`;
+    }
   }, []);
 
   useEffect(() => {
@@ -2435,12 +2441,13 @@ export default function TopicLayoutClient({
 
       {/* Reading Progress Indicator */}
       <div
-        className="sticky left-0 right-0 z-20 h-1 bg-gray-200 dark:bg-gray-800 pointer-events-none"
+        className="sticky left-0 right-0 z-[65] h-1 bg-gray-200 dark:bg-gray-800 pointer-events-none"
         style={{ top: "var(--ev-navbar-offset, 56px)" }}
       >
         <div
-          className="h-full bg-emerald-500 transition-[width] duration-75 ease-linear"
-          style={{ width: `${scrollProgress}%` }}
+          ref={progressFillRef}
+          className="h-full w-full bg-emerald-500 transition-transform duration-75 ease-linear"
+          style={{ transform: "scaleX(0)", transformOrigin: "left center", willChange: "transform" }}
         />
       </div>
 
