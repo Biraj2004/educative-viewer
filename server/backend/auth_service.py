@@ -17,6 +17,7 @@ from backend.db.sql_helpers import execute, fetch_all_dict, fetch_one_dict
 
 log = logging.getLogger(__name__)
 MAX_ACTIVE_SESSIONS_LIMIT = 20
+MAX_IP_ADDRESSES_LIMIT = 20
 
 
 _USER_JOIN = """
@@ -26,6 +27,7 @@ _USER_JOIN = """
            COALESCE(u.is_first_login, 0) AS is_first_login,
            s.password_hash, s.two_factor_secret, s.two_factor_confirmed,
            COALESCE(s.max_active_sessions, 1) AS max_active_sessions,
+           COALESCE(s.max_ip_addresses, 2) AS max_ip_addresses,
            s.current_token,
            COALESCE(s.failed_attempts, 0) AS failed_attempts, s.locked_until,
            s.temp_password_expires_at, s.onboarding_temp_password_hash
@@ -160,6 +162,18 @@ class AuthService:
         return parsed
 
     @staticmethod
+    def clamp_max_ip_addresses(value: Any) -> int:
+        try:
+            parsed = int(value)
+        except (TypeError, ValueError):
+            return 2
+        if parsed < 1:
+            return 1
+        if parsed > MAX_IP_ADDRESSES_LIMIT:
+            return MAX_IP_ADDRESSES_LIMIT
+        return parsed
+
+    @staticmethod
     def parse_session_queue(raw: Any) -> list[dict[str, Any]]:
         if not raw:
             return []
@@ -238,6 +252,7 @@ class AuthService:
         token: str,
         client_ip: str | None,
         is_admin: bool,
+        max_ip_addresses: Any,
     ) -> tuple[bool, str, bool, bool]:
         """
         Return (found, serialized_queue, changed, blocked).
@@ -245,6 +260,8 @@ class AuthService:
         """
         queue = self.parse_session_queue(queue_raw)
         normalized_ip = str(client_ip or "").strip()
+        max_ips = self.clamp_max_ip_addresses(max_ip_addresses)
+        max_ip_updates = max(0, max_ips - 1)
         found = False
         changed = False
         blocked = False
@@ -255,7 +272,10 @@ class AuthService:
             found = True
             existing_ip = str(row.get("ip", "") or "").strip()
             if normalized_ip and existing_ip != normalized_ip:
-                if not existing_ip:
+                if is_admin:
+                    row["ip"] = normalized_ip
+                    changed = True
+                elif not existing_ip:
                     row["ip"] = normalized_ip
                     changed = True
                 else:
@@ -267,7 +287,7 @@ class AuthService:
                     if ip_updates < 0:
                         ip_updates = 0
 
-                    if (not is_admin) and ip_updates >= 1:
+                    if ip_updates >= max_ip_updates:
                         blocked = True
                     else:
                         row["ip"] = normalized_ip
@@ -343,6 +363,7 @@ class AuthService:
                     token=token,
                     client_ip=client_ip,
                     is_admin=(user.get("role", "user") == "admin"),
+                    max_ip_addresses=user.get("max_ip_addresses"),
                 )
                 if not found:
                     abort(401, description="Session superseded by a newer login. Please sign in again.")

@@ -130,6 +130,7 @@ function CreateUserModal({ onClose, onCreated }: { onClose: () => void; onCreate
   const [name, setName] = useState("");
   const [roleId, setRoleId] = useState(1);
   const [maxActiveSessions, setMaxActiveSessions] = useState(1);
+  const [maxIpAddresses, setMaxIpAddresses] = useState(2);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -143,6 +144,7 @@ function CreateUserModal({ onClose, onCreated }: { onClose: () => void; onCreate
         name.trim() || null,
         roleId,
         maxActiveSessions,
+        maxIpAddresses,
       );
       onCreated({ password: result.temp_password, expiresAt: result.temp_password_expires_at });
     } catch (err) {
@@ -171,13 +173,24 @@ function CreateUserModal({ onClose, onCreated }: { onClose: () => void; onCreate
           </select>
         </div>
         <div>
-          <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1.5">Max Active Sessions</label>
+          <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1.5">Max Active Tokens Allowed</label>
           <input
             type="number"
             min={1}
             max={20}
             value={maxActiveSessions}
             onChange={(e) => setMaxActiveSessions(Math.max(1, Number(e.target.value) || 1))}
+            className={inputCls}
+          />
+        </div>
+        <div>
+          <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1.5">Max IP Addresses Per Token</label>
+          <input
+            type="number"
+            min={1}
+            max={20}
+            value={maxIpAddresses}
+            onChange={(e) => setMaxIpAddresses(Math.max(1, Number(e.target.value) || 1))}
             className={inputCls}
           />
         </div>
@@ -208,6 +221,7 @@ function EditUserModal({
   const [name, setName] = useState(user.name ?? "");
   const [roleId, setRoleId] = useState(user.role_id);
   const [maxActiveSessions, setMaxActiveSessions] = useState(user.max_active_sessions || 1);
+  const [maxIpAddresses, setMaxIpAddresses] = useState(user.max_ip_addresses || 2);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -224,6 +238,7 @@ function EditUserModal({
         name.trim() || null,
         isSelf ? undefined : roleId,
         maxActiveSessions,
+        maxIpAddresses,
       );
       onSaved();
     } catch (err) {
@@ -259,13 +274,24 @@ function EditUserModal({
           {isSelf && <p className="text-[10px] text-gray-500 mt-1">You cannot change your own role.</p>}
         </div>
         <div>
-          <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1.5">Max Active Sessions</label>
+          <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1.5">Max Active Tokens Allowed</label>
           <input
             type="number"
             min={1}
             max={20}
             value={maxActiveSessions}
             onChange={(e) => setMaxActiveSessions(Math.max(1, Number(e.target.value) || 1))}
+            className={inputCls}
+          />
+        </div>
+        <div>
+          <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1.5">Max IP Addresses Per Token</label>
+          <input
+            type="number"
+            min={1}
+            max={20}
+            value={maxIpAddresses}
+            onChange={(e) => setMaxIpAddresses(Math.max(1, Number(e.target.value) || 1))}
             className={inputCls}
           />
         </div>

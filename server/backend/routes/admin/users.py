@@ -25,6 +25,7 @@ EMAIL_RE = __import__("re").compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 TEMP_PW_EXPIRES_HOURS = 1
 READER_DATA_CLEANUP_SCOPES = {"bookmarks", "highlights", "notes", "drawing", "all"}
 MAX_ACTIVE_SESSIONS_LIMIT = 20
+MAX_IP_ADDRESSES_LIMIT = 20
 
 
 def _gen_temp_password(length: int = 12) -> str:
@@ -100,6 +101,7 @@ def register_user_routes(bp: Blueprint, auth_service: AuthService, db_manager: D
                 "two_factor_enabled": bool(row["two_factor_enabled"]),
                 "is_first_login": bool(row["is_first_login"]),
                 "max_active_sessions": int(row.get("max_active_sessions") or 1),
+                "max_ip_addresses": int(row.get("max_ip_addresses") or 2),
                 "failed_attempts": int(row["failed_attempts"] or 0),
                 "locked_until": row["locked_until"],
                 "created_at": row["created_at"],
@@ -263,6 +265,7 @@ def register_user_routes(bp: Blueprint, auth_service: AuthService, db_manager: D
         name = str(body.get("name", "")).strip() or None
         role_id = int(body.get("role_id", 1))
         max_active_sessions = int(body.get("max_active_sessions", 1))
+        max_ip_addresses = int(body.get("max_ip_addresses", 2))
 
         if not email or not EMAIL_RE.match(email):
             abort(400, description="A valid email address is required")
@@ -270,6 +273,8 @@ def register_user_routes(bp: Blueprint, auth_service: AuthService, db_manager: D
             abort(400, description="role_id must be 1 (user) or 2 (admin)")
         if max_active_sessions < 1 or max_active_sessions > MAX_ACTIVE_SESSIONS_LIMIT:
             abort(400, description=f"max_active_sessions must be between 1 and {MAX_ACTIVE_SESSIONS_LIMIT}")
+        if max_ip_addresses < 1 or max_ip_addresses > MAX_IP_ADDRESSES_LIMIT:
+            abort(400, description=f"max_ip_addresses must be between 1 and {MAX_IP_ADDRESSES_LIMIT}")
 
         temp_pw = _gen_temp_password()
         pw_hash = bcrypt.hashpw(temp_pw.encode(), bcrypt.gensalt(rounds=12)).decode()
@@ -286,6 +291,7 @@ def register_user_routes(bp: Blueprint, auth_service: AuthService, db_manager: D
                 password_hash=pw_hash,
                 temp_password_expires_at=expires_at,
                 max_active_sessions=max_active_sessions,
+                max_ip_addresses=max_ip_addresses,
             )
         except Exception as exc:
             if db_manager.auth_backend.is_integrity_error(exc):
@@ -299,6 +305,7 @@ def register_user_routes(bp: Blueprint, auth_service: AuthService, db_manager: D
             "name": name,
             "role_id": role_id,
             "max_active_sessions": max_active_sessions,
+            "max_ip_addresses": max_ip_addresses,
             "temp_password": temp_pw,
             "temp_password_expires_at": expires_at,
         }), 201
@@ -316,6 +323,7 @@ def register_user_routes(bp: Blueprint, auth_service: AuthService, db_manager: D
         current_admin, _ = auth_service.resolve_user(require_full=True)
         role_id = None
         max_active_sessions = None
+        max_ip_addresses = None
         if "role_id" in body:
             raw_role_id = parse_int_field(body, "role_id")
             if current_admin and current_admin.get("id") == user_id:
@@ -334,6 +342,11 @@ def register_user_routes(bp: Blueprint, auth_service: AuthService, db_manager: D
             if raw_max_sessions < 1 or raw_max_sessions > MAX_ACTIVE_SESSIONS_LIMIT:
                 abort(400, description=f"max_active_sessions must be between 1 and {MAX_ACTIVE_SESSIONS_LIMIT}")
             max_active_sessions = raw_max_sessions
+        if "max_ip_addresses" in body:
+            raw_max_ip_addresses = parse_int_field(body, "max_ip_addresses")
+            if raw_max_ip_addresses < 1 or raw_max_ip_addresses > MAX_IP_ADDRESSES_LIMIT:
+                abort(400, description=f"max_ip_addresses must be between 1 and {MAX_IP_ADDRESSES_LIMIT}")
+            max_ip_addresses = raw_max_ip_addresses
 
         if not email or not EMAIL_RE.match(email):
             abort(400, description="A valid email address is required")
@@ -345,6 +358,7 @@ def register_user_routes(bp: Blueprint, auth_service: AuthService, db_manager: D
                 email=email,
                 role_id=role_id,
                 max_active_sessions=max_active_sessions,
+                max_ip_addresses=max_ip_addresses,
             )
             if success and max_active_sessions is not None:
                 conn = db_manager.get_auth_connection()

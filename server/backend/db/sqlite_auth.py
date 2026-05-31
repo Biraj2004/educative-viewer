@@ -81,6 +81,7 @@ class SQLiteAuthDatabase:
                     two_factor_secret TEXT,
                     two_factor_confirmed INTEGER NOT NULL DEFAULT 0,
                     max_active_sessions INTEGER NOT NULL DEFAULT 1,
+                    max_ip_addresses INTEGER NOT NULL DEFAULT 2,
                     session_id TEXT,
                     current_token TEXT,
                     failed_attempts INTEGER NOT NULL DEFAULT 0,
@@ -176,6 +177,17 @@ class SQLiteAuthDatabase:
         finally:
             conn.close()
 
+    def ensure_max_ip_addresses_column(self) -> None:
+        """Lazily add max_ip_addresses column to users_sensitive if it doesn't exist."""
+        conn = self.get_connection()
+        try:
+            conn.execute("ALTER TABLE users_sensitive ADD COLUMN max_ip_addresses INTEGER NOT NULL DEFAULT 2")
+            conn.commit()
+        except sqlite3.OperationalError:
+            pass  # Column already exists
+        finally:
+            conn.close()
+
     def ensure_course_reader_state_table(self) -> None:
         """Ensure normalized per-user per-course reader state table exists."""
         conn = self.get_connection()
@@ -206,6 +218,7 @@ class SQLiteAuthDatabase:
         self.ensure_is_active_column()
         self.ensure_first_login_columns()
         self.ensure_max_active_sessions_column()
+        self.ensure_max_ip_addresses_column()
         conn = self.get_connection()
         try:
             return conn.execute(
@@ -214,6 +227,7 @@ class SQLiteAuthDatabase:
                        u.is_active, u.created_at, u.two_factor_enabled,
                        COALESCE(u.is_first_login, 0) as is_first_login,
                        COALESCE(s.max_active_sessions, 1) as max_active_sessions,
+                       COALESCE(s.max_ip_addresses, 2) as max_ip_addresses,
                        COALESCE(s.failed_attempts, 0) as failed_attempts,
                        s.locked_until
                 FROM users u
@@ -249,9 +263,12 @@ class SQLiteAuthDatabase:
         password_hash: str,
         temp_password_expires_at: str,
         max_active_sessions: int = 1,
+        max_ip_addresses: int = 2,
     ) -> int:
         """Create an admin-provisioned user with a temporary password. Returns the new user id."""
         self.ensure_first_login_columns()
+        self.ensure_max_active_sessions_column()
+        self.ensure_max_ip_addresses_column()
         conn = self.get_connection()
         try:
             cur = conn.execute(
@@ -260,9 +277,10 @@ class SQLiteAuthDatabase:
             )
             user_id = cur.lastrowid
             conn.execute(
-                "INSERT INTO users_sensitive (user_id, password_hash, temp_password_expires_at, onboarding_temp_password_hash, max_active_sessions) "
-                "VALUES (?, ?, ?, ?, ?)",
-                (user_id, password_hash, temp_password_expires_at, password_hash, max_active_sessions),
+                "INSERT INTO users_sensitive "
+                "(user_id, password_hash, temp_password_expires_at, onboarding_temp_password_hash, max_active_sessions, max_ip_addresses) "
+                "VALUES (?, ?, ?, ?, ?, ?)",
+                (user_id, password_hash, temp_password_expires_at, password_hash, max_active_sessions, max_ip_addresses),
             )
             conn.commit()
             return user_id
@@ -276,9 +294,11 @@ class SQLiteAuthDatabase:
         email: str,
         role_id: int | None = None,
         max_active_sessions: int | None = None,
+        max_ip_addresses: int | None = None,
     ) -> bool:
         """Update a user's display name and email."""
         self.ensure_max_active_sessions_column()
+        self.ensure_max_ip_addresses_column()
         conn = self.get_connection()
         try:
             if role_id is not None:
@@ -295,6 +315,11 @@ class SQLiteAuthDatabase:
                 conn.execute(
                     "UPDATE users_sensitive SET max_active_sessions = ? WHERE user_id = ?",
                     (max_active_sessions, user_id),
+                )
+            if max_ip_addresses is not None:
+                conn.execute(
+                    "UPDATE users_sensitive SET max_ip_addresses = ? WHERE user_id = ?",
+                    (max_ip_addresses, user_id),
                 )
             conn.commit()
             return cur.rowcount > 0

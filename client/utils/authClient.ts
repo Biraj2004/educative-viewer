@@ -786,6 +786,7 @@ export interface AdminUser {
   two_factor_enabled: boolean;
   is_first_login: boolean;
   max_active_sessions: number;
+  max_ip_addresses: number;
   failed_attempts: number;
   locked_until: string | null;
   created_at: string;
@@ -798,6 +799,7 @@ export interface AdminCreateResult {
   name: string | null;
   role_id: number;
   max_active_sessions: number;
+  max_ip_addresses: number;
   temp_password: string;
   temp_password_expires_at: string;
 }
@@ -874,12 +876,14 @@ export async function adminCreateUser(
   name: string | null,
   role_id: number,
   max_active_sessions: number,
+  max_ip_addresses: number,
 ): Promise<AdminCreateResult> {
   return adminApiCall<AdminCreateResult>(`${getAdminAPI()}/users/create`, "POST", {
     email,
     name,
     role_id,
     max_active_sessions,
+    max_ip_addresses,
   });
 }
 
@@ -889,8 +893,9 @@ export async function adminEditUser(
   name: string | null,
   role_id: number | undefined,
   max_active_sessions: number,
+  max_ip_addresses: number,
 ): Promise<{ success: boolean }> {
-  const payload: Record<string, unknown> = { email, name, max_active_sessions };
+  const payload: Record<string, unknown> = { email, name, max_active_sessions, max_ip_addresses };
   if (typeof role_id === "number") {
     payload.role_id = role_id;
   }
