@@ -654,6 +654,7 @@ export interface UpdateViewerCourseSettingsPayload {
   last_highlight_color?: "yellow" | "blue" | "green" | "pink" | "orange";
   bookmark_topic_index?: number;
   bookmarked?: boolean;
+  remove_bookmark_topic_indices?: number[];
   add_highlight?: {
     topic_index: number;
     text: string;

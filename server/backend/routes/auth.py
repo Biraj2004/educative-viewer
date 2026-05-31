@@ -944,6 +944,19 @@ def create_auth_blueprint(auth_service: AuthService, db_manager: DBManager) -> B
                     bookmarks = [item for item in bookmarks if item != bookmark_idx]
                 course_state["bookmarks"] = bookmarks[-MAX_BOOKMARKS_PER_COURSE:]
 
+            if "remove_bookmark_topic_indices" in body:
+                if not bookmarks_enabled:
+                    abort(403, description="Bookmarks are disabled by administrator")
+                remove_indices = body.get("remove_bookmark_topic_indices")
+                if not isinstance(remove_indices, list):
+                    abort(400, description="remove_bookmark_topic_indices must be a list")
+                try:
+                    remove_set = {int(idx) for idx in remove_indices}
+                except (ValueError, TypeError):
+                    abort(400, description="remove_bookmark_topic_indices must contain integers")
+                bookmarks = [item for item in bookmarks if item not in remove_set]
+                course_state["bookmarks"] = bookmarks[-MAX_BOOKMARKS_PER_COURSE:]
+
             add_highlight = body.get("add_highlight")
             if add_highlight is not None:
                 if not highlights_enabled:

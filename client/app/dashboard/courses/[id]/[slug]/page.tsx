@@ -111,11 +111,13 @@ export default function CourseDetailPage() {
       ? (fromPath ?? "/dashboard/projects")
       : "/dashboard/courses";
   const backLabel = fromPathsPage ? "Paths" : fromProjectsPage ? "Projects" : "Courses";
+  const isInvalidCourseId = Number.isNaN(courseId);
 
   const [course, setCourse] = useState<CourseDetail | null>(null);
   const [progress, setProgress] = useState<ProgressData>({ course_order: [], completed: {} });
   const [lastVisitedTopicIndex, setLastVisitedTopicIndex] = useState<number | null>(null);
   const [bookmarkedTopicIndices, setBookmarkedTopicIndices] = useState<Set<number>>(new Set());
+  const [selectedBookmarkIndices, setSelectedBookmarkIndices] = useState<Set<number>>(new Set());
   const [bookmarksEnabled, setBookmarksEnabled] = useState(true);
   const [highlightsEnabled, setHighlightsEnabled] = useState(true);
   const [notesEnabled, setNotesEnabled] = useState(true);
@@ -125,7 +127,12 @@ export default function CourseDetailPage() {
   const [readerPanelMounted, setReaderPanelMounted] = useState(false);
   const [readerPanelVisible, setReaderPanelVisible] = useState(false);
   const [readerPanelMode, setReaderPanelMode] = useState<ReaderPanelMode>("bookmarks");
-  const [readerPanelWidth, setReaderPanelWidth] = useState(960);
+  const [readerPanelWidth, setReaderPanelWidth] = useState(() => {
+    if (typeof window === "undefined") return 960;
+    const max = Math.max(520, window.innerWidth - 24);
+    const min = Math.min(420, max);
+    return Math.max(min, Math.min(window.innerWidth * 0.6, max));
+  });
   const [readerBusy, setReaderBusy] = useState(false);
   const [noteHistoryBusy, setNoteHistoryBusy] = useState(false);
   const [noteUndoStack, setNoteUndoStack] = useState<NoteHistoryEntry[]>([]);
@@ -141,6 +148,7 @@ export default function CourseDetailPage() {
   const [courseAddDraft, setCourseAddDraft] = useState("");
   const [courseNoteDrafts, setCourseNoteDrafts] = useState<Record<string, string>>({});
   const [courseNoteEditOpen, setCourseNoteEditOpen] = useState<Record<string, boolean>>({});
+  const [bookmarkDeleteDraft, setBookmarkDeleteDraft] = useState<number[] | null>(null);
   const [loading, setLoading] = useState(true);
   const [missing, setMissing] = useState(false);
   const [resetting, setResetting] = useState(false);
@@ -158,6 +166,8 @@ export default function CourseDetailPage() {
     startX: 0,
     startWidth: 960,
   });
+  const isLoading = !isInvalidCourseId && loading;
+  const isMissing = isInvalidCourseId || missing;
 
   useEffect(() => {
     return () => {
@@ -169,7 +179,7 @@ export default function CourseDetailPage() {
   }, []);
 
   useEffect(() => {
-    if (isNaN(courseId)) { setMissing(true); setLoading(false); return; }
+    if (isInvalidCourseId) return;
     let cancelled = false;
     const basePath = `/dashboard/courses/${routeId}/${routeSlug}`;
     const nextPath = fromPath ? `${basePath}?from=${encodeURIComponent(fromPath)}` : basePath;
@@ -252,7 +262,7 @@ export default function CourseDetailPage() {
     return () => {
       cancelled = true;
     };
-  }, [courseId, routeId, routeSlug, router, fromPath]);
+  }, [courseId, routeId, routeSlug, router, fromPath, isInvalidCourseId]);
 
   const clampReaderPanelWidth = useCallback((next: number) => {
     if (typeof window === "undefined") return 960;
@@ -260,11 +270,6 @@ export default function CourseDetailPage() {
     const min = Math.min(420, max);
     return Math.max(min, Math.min(next, max));
   }, []);
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    setReaderPanelWidth(clampReaderPanelWidth(window.innerWidth * 0.6));
-  }, [clampReaderPanelWidth]);
 
   useEffect(() => {
     if (!readerPanelMounted) return;
@@ -293,7 +298,7 @@ export default function CourseDetailPage() {
     };
   }, [clampReaderPanelWidth]);
 
-  if (loading) {
+  if (isLoading) {
     return (
       <main className="min-h-screen bg-gray-50 dark:bg-gray-950">
         <AppNavbar
@@ -329,7 +334,7 @@ export default function CourseDetailPage() {
     );
   }
 
-  if (missing || !course) return notFound();
+  if (isMissing || !course) return notFound();
 
   const completedIds: number[] = progress.completed[String(courseId)] ?? [];
   const completedTopicIndices = new Set(completedIds);
@@ -438,6 +443,7 @@ export default function CourseDetailPage() {
       }
       if (selectedScopes.includes("bookmarks")) {
         setBookmarkedTopicIndices(new Set<number>());
+        setSelectedBookmarkIndices(new Set<number>());
       }
       if (selectedScopes.includes("notes")) {
         setCourseAddOpen(false);
@@ -467,6 +473,9 @@ export default function CourseDetailPage() {
 
   const openReaderPanel = (mode: ReaderPanelMode) => {
     setReaderPanelMode(mode);
+    if (mode !== "bookmarks") {
+      setSelectedBookmarkIndices(new Set());
+    }
     if (typeof window !== "undefined") {
       const targetRatio = mode === "drawing" ? 0.6 : 0.3;
       setReaderPanelWidth(clampReaderPanelWidth(window.innerWidth * targetRatio));
@@ -480,6 +489,7 @@ export default function CourseDetailPage() {
   };
 
   const closeReaderPanel = () => {
+    setSelectedBookmarkIndices(new Set());
     if (panelCloseTimerRef.current) {
       clearTimeout(panelCloseTimerRef.current);
     }
@@ -535,28 +545,22 @@ export default function CourseDetailPage() {
     }
   };
 
-  const handleRemoveBookmark = async (topicIndex: number) => {
-    if (readerBusy) return;
-    try {
-      await mutateViewerCourse({
-        course_id: courseId,
-        bookmark_topic_index: topicIndex,
-        bookmarked: false,
-      });
-    } catch (err) {
-      console.error("Failed to remove bookmark", err);
-    }
-  };
-
-  const handleClearAllBookmarks = async () => {
-    if (readerBusy || bookmarkedTopicIndices.size === 0) return;
+  const handleRemoveBookmarks = async (topicIndices: number[]) => {
+    if (readerBusy || topicIndices.length === 0) return;
     setReaderBusy(true);
     try {
-      await resetCourseProgress(courseId, ["bookmarks"]);
-      setViewerCourseState((prev) => ({ ...prev, bookmarks: [] }));
-      setBookmarkedTopicIndices(new Set<number>());
+      const next = await updateViewerCourseSettings({
+        course_id: courseId,
+        remove_bookmark_topic_indices: topicIndices,
+      });
+      applyViewerCourseState(next);
+      setSelectedBookmarkIndices((prev) => {
+        const nextSet = new Set(prev);
+        topicIndices.forEach((idx) => nextSet.delete(idx));
+        return nextSet;
+      });
     } catch (err) {
-      console.error("Failed to clear bookmarks", err);
+      console.error("Failed to remove bookmarks", err);
     } finally {
       setReaderBusy(false);
     }
@@ -1144,7 +1148,7 @@ export default function CourseDetailPage() {
       </div>
 
       {showResetDialog && (
-        <div className="fixed inset-0 z-[70] flex items-center justify-center px-4">
+        <div className="fixed inset-0 z-70 flex items-center justify-center px-4">
           <div className="absolute inset-0 bg-black/60" onClick={() => !resetting && setShowResetDialog(false)} />
           <div className="relative w-full max-w-xl rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 shadow-2xl">
             <div className="flex items-center justify-between gap-3 px-5 py-4 border-b border-gray-200 dark:border-gray-800">
@@ -1225,6 +1229,43 @@ export default function CourseDetailPage() {
               opacity: readerPanelVisible ? 1 : 0,
             }}
           >
+            {readerPanelMode === "bookmarks" && bookmarkDeleteDraft && bookmarkDeleteDraft.length > 0 && (
+              <div className="absolute inset-0 z-70 flex items-center justify-center bg-black/60 px-4">
+                <div
+                  className="absolute inset-0"
+                  onClick={() => !readerBusy && setBookmarkDeleteDraft(null)}
+                />
+                <div className="relative w-full max-w-md rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-5 shadow-2xl">
+                  <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100">Delete bookmarks?</h3>
+                  <p className="mt-2 text-sm text-gray-600 dark:text-gray-300">
+                    This will remove {bookmarkDeleteDraft.length} selected bookmark{bookmarkDeleteDraft.length === 1 ? "" : "s"}{" "}
+                    from this course.
+                  </p>
+                  <div className="mt-6 flex items-center justify-end gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setBookmarkDeleteDraft(null)}
+                      disabled={readerBusy}
+                      className="inline-flex items-center rounded-md border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700 transition-colors hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800 cursor-pointer"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const pending = [...bookmarkDeleteDraft];
+                        setBookmarkDeleteDraft(null);
+                        void handleRemoveBookmarks(pending);
+                      }}
+                      disabled={readerBusy}
+                      className="inline-flex items-center rounded-md border border-red-400 px-4 py-2 text-sm font-semibold text-red-700 transition-colors hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-red-700 dark:text-red-300 dark:hover:bg-red-900/30 cursor-pointer"
+                    >
+                      Delete
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
             <div
               role="separator"
               aria-orientation="vertical"
@@ -1251,13 +1292,15 @@ export default function CourseDetailPage() {
                     {readerPanelMode === "highlightNotes" && "Highlights+Notes"}
                   </h2>
                   <div className="flex items-center gap-2">
-                    {readerPanelMode === "bookmarks" && (
+                    {readerPanelMode === "bookmarks" && selectedBookmarkIndices.size > 0 && (
                       <button
-                        onClick={() => void handleClearAllBookmarks()}
-                        disabled={readerBusy || bookmarkedTopicIndices.size === 0}
-                        className="inline-flex items-center px-2 py-1 text-[11px] rounded border border-red-300 dark:border-red-700 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 disabled:opacity-45 disabled:cursor-not-allowed cursor-pointer"
+                        onClick={() => {
+                          setBookmarkDeleteDraft([...selectedBookmarkIndices]);
+                        }}
+                        disabled={readerBusy}
+                        className="inline-flex items-center px-2 py-1 text-[11px] rounded border border-red-300 dark:border-red-700 bg-red-50 dark:bg-red-950 text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/30 disabled:opacity-45 disabled:cursor-not-allowed cursor-pointer font-semibold"
                       >
-                        Delete All
+                        Delete Selected
                       </button>
                     )}
                     {readerPanelMode === "highlightNotes" && (
@@ -1293,32 +1336,77 @@ export default function CourseDetailPage() {
                       {[...bookmarkedTopicIndices].sort((a, b) => a - b).length === 0 ? (
                         <p className="text-sm text-gray-500 dark:text-gray-400">No bookmarks yet.</p>
                       ) : (
-                        <ul className="space-y-2">
-                          {[...bookmarkedTopicIndices].sort((a, b) => a - b).map((topicIndex) => {
-                            const topicMeta = topicMetaByIndex.get(topicIndex);
-                            const href = topicMeta
-                              ? buildTopicHref(courseId, routeSlug, topicIndex, topicMeta.slug, fromPath)
-                              : "#";
-                            return (
-                              <li key={topicIndex} className="rounded-lg border border-gray-200 dark:border-gray-800 p-3 bg-gray-50/70 dark:bg-gray-900/40">
-                                <div className="flex items-start justify-between gap-3">
-                                  <a href={href} className="text-sm font-medium text-indigo-600 dark:text-indigo-300 hover:underline">
-                                    {topicMeta?.title ?? `Topic ${topicIndex + 1}`}
-                                  </a>
-                                  <button
-                                    type="button"
-                                    onClick={() => void handleRemoveBookmark(topicIndex)}
-                                    disabled={readerBusy}
-                                    className="text-xs text-red-600 dark:text-red-400 hover:underline disabled:opacity-45 disabled:cursor-not-allowed cursor-pointer"
-                                  >
-                                    Delete
-                                  </button>
-                                </div>
-                                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">Topic #{topicIndex + 1}</p>
-                              </li>
-                            );
-                          })}
-                        </ul>
+                        <div className="space-y-3">
+                          <div className="flex items-center justify-between pb-2 border-b border-gray-100 dark:border-gray-800/60">
+                            <label className="flex items-center gap-2 cursor-pointer text-xs font-semibold text-gray-500 dark:text-gray-400">
+                              <input
+                                type="checkbox"
+                                checked={[...bookmarkedTopicIndices].length > 0 && selectedBookmarkIndices.size === bookmarkedTopicIndices.size}
+                                onChange={() => {
+                                  const allIndices = [...bookmarkedTopicIndices];
+                                  if (selectedBookmarkIndices.size === allIndices.length) {
+                                    setSelectedBookmarkIndices(new Set());
+                                  } else {
+                                    setSelectedBookmarkIndices(new Set(allIndices));
+                                  }
+                                }}
+                                className="h-4 w-4 rounded border-gray-300 dark:border-gray-700 text-indigo-600 focus:ring-indigo-500 bg-transparent cursor-pointer"
+                              />
+                              <span>Select All</span>
+                            </label>
+                            {selectedBookmarkIndices.size > 0 && (
+                              <span className="text-xs text-gray-500 dark:text-gray-400 font-medium">
+                                {selectedBookmarkIndices.size} selected
+                              </span>
+                            )}
+                          </div>
+
+                          <ul className="space-y-2">
+                            {[...bookmarkedTopicIndices].sort((a, b) => a - b).map((topicIndex) => {
+                              const topicMeta = topicMetaByIndex.get(topicIndex);
+                              const href = topicMeta
+                                ? buildTopicHref(courseId, routeSlug, topicIndex, topicMeta.slug, fromPath)
+                                : "#";
+                              const isChecked = selectedBookmarkIndices.has(topicIndex);
+                              return (
+                                <li key={topicIndex} className={`rounded-lg border px-3 py-3 transition-colors ${
+                                  isChecked
+                                    ? "border-indigo-300 dark:border-indigo-800 bg-indigo-50/20 dark:bg-indigo-950/10"
+                                    : "border-gray-200 dark:border-gray-800 bg-gray-50/70 dark:bg-gray-900/40"
+                                }`}>
+                                  <div className="flex items-center gap-3">
+                                    <input
+                                      type="checkbox"
+                                      checked={isChecked}
+                                      onChange={() => {
+                                        setSelectedBookmarkIndices((prev) => {
+                                          const next = new Set(prev);
+                                          if (next.has(topicIndex)) {
+                                            next.delete(topicIndex);
+                                          } else {
+                                            next.add(topicIndex);
+                                          }
+                                          return next;
+                                        });
+                                      }}
+                                      className="h-4 w-4 shrink-0 self-center rounded border-gray-300 dark:border-gray-700 text-indigo-600 focus:ring-indigo-500 bg-transparent cursor-pointer"
+                                    />
+                                    <div className="flex-1 min-w-0">
+                                      <a href={href} className="group flex max-w-full items-baseline gap-2 text-sm font-medium leading-6 text-indigo-600 hover:underline dark:text-indigo-300">
+                                        <span className="shrink-0 font-medium text-gray-500 dark:text-gray-400">
+                                          {topicIndex + 1}
+                                        </span>
+                                        <span className="min-w-0 flex-1 wrap-break-word">
+                                          {topicMeta?.title ?? `Topic ${topicIndex + 1}`}
+                                        </span>
+                                      </a>
+                                    </div>
+                                  </div>
+                                </li>
+                              );
+                            })}
+                          </ul>
+                        </div>
                       )}
                     </>
                   )}
