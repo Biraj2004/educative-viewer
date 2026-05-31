@@ -27,6 +27,7 @@ import type {
   ViewerTopicNote,
 } from "@/utils/authClient";
 import { getBackendApiBase } from "@/utils/runtime-config";
+import { readDrawingDrawerOpen, writeDrawingDrawerOpen } from "@/utils/drawingDrawerState";
 
 const BACKEND = getBackendApiBase();
 
@@ -303,6 +304,34 @@ export default function CourseDetailPage() {
     };
   }, [clampReaderPanelWidth]);
 
+  useEffect(() => {
+    if (!drawingsEnabled || isLoading || isMissing) {
+      if (!drawingsEnabled) writeDrawingDrawerOpen(courseId, false);
+      return;
+    }
+    if (!readDrawingDrawerOpen(courseId)) return;
+    if (readerPanelMounted && readerPanelMode === "drawing") return;
+    setReaderPanelMode("drawing");
+    setSelectedBookmarkIndices(new Set());
+    if (typeof window !== "undefined") {
+      setReaderPanelWidth(clampReaderPanelWidth(window.innerWidth * 0.6));
+    }
+    if (panelCloseTimerRef.current) {
+      clearTimeout(panelCloseTimerRef.current);
+      panelCloseTimerRef.current = null;
+    }
+    setReaderPanelMounted(true);
+    requestAnimationFrame(() => setReaderPanelVisible(true));
+  }, [
+    clampReaderPanelWidth,
+    courseId,
+    drawingsEnabled,
+    isLoading,
+    isMissing,
+    readerPanelMode,
+    readerPanelMounted,
+  ]);
+
   if (isLoading) {
     return (
       <main className="min-h-screen bg-gray-50 dark:bg-gray-950">
@@ -554,6 +583,7 @@ export default function CourseDetailPage() {
 
   const openReaderPanel = (mode: ReaderPanelMode) => {
     setReaderPanelMode(mode);
+    writeDrawingDrawerOpen(courseId, mode === "drawing");
     if (mode !== "bookmarks") {
       setSelectedBookmarkIndices(new Set());
     }
@@ -570,6 +600,7 @@ export default function CourseDetailPage() {
   };
 
   const closeReaderPanel = () => {
+    writeDrawingDrawerOpen(courseId, false);
     setSelectedBookmarkIndices(new Set());
     if (panelCloseTimerRef.current) {
       clearTimeout(panelCloseTimerRef.current);
@@ -1308,10 +1339,23 @@ export default function CourseDetailPage() {
       )}
 
       {readerPanelMounted && (
-        <div className={`fixed inset-x-0 bottom-0 top-14 z-50 transition-opacity duration-200 ${readerPanelVisible ? "pointer-events-auto" : "pointer-events-none"}`}>
-          <div className={`absolute inset-0 bg-black/40 transition-opacity duration-200 ${readerPanelVisible ? "opacity-100" : "opacity-0"}`} onClick={closeReaderPanel} />
+        <div
+          className={`fixed inset-x-0 bottom-0 top-14 z-50 transition-opacity duration-200 ${
+            readerPanelVisible
+              ? (readerPanelMode === "drawing" ? "pointer-events-none" : "pointer-events-auto")
+              : "pointer-events-none"
+          }`}
+        >
           <div
-            className="absolute top-0 bottom-0 right-0 bg-white dark:bg-gray-900 border-l border-gray-200 dark:border-gray-800 shadow-2xl flex flex-col will-change-[opacity] transition-opacity duration-220 ease-out"
+            className={`absolute inset-0 bg-black/40 transition-opacity duration-200 ${
+              readerPanelVisible
+                ? (readerPanelMode === "drawing" ? "opacity-0 pointer-events-none" : "opacity-100")
+                : "opacity-0"
+            }`}
+            onClick={closeReaderPanel}
+          />
+          <div
+            className="absolute top-0 bottom-0 right-0 bg-white dark:bg-gray-900 border-l border-gray-200 dark:border-gray-800 shadow-2xl flex flex-col will-change-[opacity] transition-opacity duration-220 ease-out pointer-events-auto"
             style={{
               width: `${readerPanelWidth}px`,
               opacity: readerPanelVisible ? 1 : 0,

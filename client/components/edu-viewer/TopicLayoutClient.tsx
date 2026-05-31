@@ -20,6 +20,7 @@ import {
   type ViewerTopicNote,
 } from "@/utils/authClient";
 import { getBackendApiBase } from "@/utils/runtime-config";
+import { readDrawingDrawerOpen, writeDrawingDrawerOpen } from "@/utils/drawingDrawerState";
 import TopicDrawingPad from "@/components/edu-viewer/TopicDrawingPad";
 
 const BACKEND = getBackendApiBase();
@@ -2128,15 +2129,17 @@ export default function TopicLayoutClient({
     setHighlightDrawerOpen(false);
     setDesktopSidebarCollapsed(true);
     setDrawingPadOpen(true);
-  }, [drawingsEnabled]);
+    writeDrawingDrawerOpen(courseId, true);
+  }, [courseId, drawingsEnabled]);
 
   useEffect(() => {
     if (!drawingsEnabled || drawingPadOpen) return;
     if (typeof window === "undefined") return;
     const hash = new URLSearchParams(window.location.hash.slice(1));
-    if (!hash.get("addLibrary")) return;
+    const shouldRestoreDrawingPad = readDrawingDrawerOpen(courseId);
+    if (!hash.get("addLibrary") && !shouldRestoreDrawingPad) return;
     handleOpenDrawingPad();
-  }, [drawingsEnabled, drawingPadOpen, handleOpenDrawingPad]);
+  }, [courseId, drawingsEnabled, drawingPadOpen, handleOpenDrawingPad]);
 
   const handleToggleHighlightDrawer = useCallback(() => {
     if (!notesDrawerEnabled) return;
@@ -2166,7 +2169,8 @@ export default function TopicLayoutClient({
     setDrawerOpen(false);
     setTocDrawerOpen(false);
     setHighlightDrawerOpen(false);
-  }, []);
+    writeDrawingDrawerOpen(courseId, false);
+  }, [courseId]);
 
   const handleSaveDrawingScene = useCallback(async (scene: ViewerDrawingScene) => {
     if (!drawingsEnabled) return;
@@ -2210,6 +2214,10 @@ export default function TopicLayoutClient({
       setDrawingPadOpen(false);
     }
   }, [drawingsEnabled, drawingPadOpen]);
+
+  useEffect(() => {
+    writeDrawingDrawerOpen(courseId, drawingsEnabled && drawingPadOpen);
+  }, [courseId, drawingsEnabled, drawingPadOpen]);
 
   useEffect(() => {
     if (tocDrawerOpen) {
