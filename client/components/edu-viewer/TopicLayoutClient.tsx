@@ -655,6 +655,16 @@ export default function TopicLayoutClient({
     ? `${courseBaseHref}?from=${encodeURIComponent(validFromPath)}`
     : courseBaseHref;
 
+  useEffect(() => {
+    // Ensure each topic opens from the top even when the browser tries to restore scroll.
+    const rafA = window.requestAnimationFrame(() => window.scrollTo({ top: 0, behavior: "auto" }));
+    const rafB = window.requestAnimationFrame(() => window.requestAnimationFrame(() => window.scrollTo({ top: 0, behavior: "auto" })));
+    return () => {
+      window.cancelAnimationFrame(rafA);
+      window.cancelAnimationFrame(rafB);
+    };
+  }, [currentTopic.topic_index]);
+
   // Keep completedRef current (also updated synchronously below when mutating state)
   useEffect(() => { completedRef.current = completed; }, [completed]);
   useEffect(() => { selectedTextRef.current = selectedText; }, [selectedText]);
@@ -1193,14 +1203,13 @@ export default function TopicLayoutClient({
     setSelectedText(text);
     setSelectionColorPaletteOpen(false);
     const rect = range.getBoundingClientRect();
-    const nextX = Math.min(window.innerWidth - 20, Math.max(20, rect.left + (rect.width / 2)));
-    const wantsBelow = rect.bottom + 56 < window.innerHeight;
-    const nextY = wantsBelow ? rect.bottom + 12 : Math.max(72, rect.top - 12);
+    const nextX = Math.min(window.innerWidth - 20, Math.max(20, rect.left + 12));
+    const nextY = Math.max(72, rect.top - 12);
     setSelectionAction({
       visible: true,
       x: nextX,
       y: nextY,
-      placement: wantsBelow ? "below" : "above",
+      placement: "above",
     });
     return text;
   }, [getQuoteContextByOffsets, getRangeOffsetsWithinContainer, highlightsEnabled]);
@@ -1832,7 +1841,6 @@ export default function TopicLayoutClient({
   }, [currentTopic.topic_index, handleTopicNav]);
 
   useEffect(() => {
-    if (drawingPadOpen) return;
     const container = contentRef.current;
     if (!container) return;
 
@@ -1879,10 +1887,9 @@ export default function TopicLayoutClient({
       if (rafId !== null) window.cancelAnimationFrame(rafId);
       if (touchTimer !== null) window.clearTimeout(touchTimer);
     };
-  }, [captureSelectionFromTopicContent, currentTopic.topic_index, drawingPadOpen]);
+  }, [captureSelectionFromTopicContent, currentTopic.topic_index]);
 
   useEffect(() => {
-    if (drawingPadOpen) return;
     const onOutsidePointerDown = (event: MouseEvent) => {
       const target = event.target as Node | null;
       if (!target) return;
@@ -1904,7 +1911,7 @@ export default function TopicLayoutClient({
       document.removeEventListener("mousedown", onOutsidePointerDown);
       window.removeEventListener("scroll", onScroll);
     };
-  }, [drawingPadOpen]);
+  }, []);
 
   useEffect(() => {
     if (!drawingPadOpen) return;
@@ -2510,9 +2517,12 @@ export default function TopicLayoutClient({
           style={contentShiftStyle}
         >
 
-          {/* Estimated Reading Time */}
+          {/* Topic Header */}
           <div className="max-w-6xl mx-auto px-6 pt-8 pb-2">
-            <div className="flex flex-wrap items-center gap-2">
+            <h1 className="text-3xl md:text-4xl font-extrabold tracking-tight text-gray-900 dark:text-gray-100 leading-tight">
+              {currentTopic.topic_name}
+            </h1>
+            <div className="mt-3 flex flex-wrap items-center gap-2">
               <div className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white dark:bg-gray-800 text-gray-500 dark:text-gray-400 rounded-full text-[11px] uppercase tracking-wider font-semibold border border-gray-200 dark:border-gray-700 shadow-sm">
                 <svg className="w-3.5 h-3.5 text-gray-400 dark:text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
