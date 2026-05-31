@@ -1,10 +1,11 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import "@excalidraw/excalidraw/index.css";
 import { getTheme } from "@/utils/theme";
 import NavigationEvents from "@/components/edu-viewer/NavigationEvents";
 import NavProgressBar from "@/components/edu-viewer/NavProgressBar";
+import PWARegistration from "@/components/edu-viewer/PWARegistration";
 import AuthFlowGuard from "@/utils/AuthFlowGuard";
 import { BRAND_ICON_URL } from "@/utils/branding";
 import {
@@ -22,6 +23,13 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+export const viewport: Viewport = {
+  themeColor: "#0a0a0a",
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 1,
+};
+
 export const metadata: Metadata = {
   title: "Edu-Viewer PRO",
   description: "An interactive content viewer for code-first learning.",
@@ -32,7 +40,12 @@ export const metadata: Metadata = {
       { url: BRAND_ICON_URL, sizes: "96x96", type: "image/png" },
     ],
     shortcut: [{ url: BRAND_ICON_URL }],
-    apple: [{ url: BRAND_ICON_URL, sizes: "180x180", type: "image/png" }],
+    apple: [{ url: "/apple-touch-icon.png", sizes: "180x180", type: "image/png" }],
+  },
+  appleWebApp: {
+    capable: true,
+    title: "Edu-Viewer PRO",
+    statusBarStyle: "default",
   },
 };
 
@@ -62,8 +75,10 @@ export default async function RootLayout({
         <AuthFlowGuard />
         <NavigationEvents />
         <NavProgressBar />
+        <PWARegistration />
         {children}
       </body>
     </html>
   );
 }
+
