@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { notFound } from "next/navigation";
+import { Redo2, Trash2, Undo2 } from "lucide-react";
 import AppNavbar from "@/components/edu-viewer/AppNavbar";
 import CourseDetailToc from "@/components/edu-viewer/CourseDetailToc";
 import UserMenu from "@/components/edu-viewer/UserMenu";
@@ -77,6 +78,7 @@ type NoteHistoryEntry = {
   undo: () => Promise<boolean>;
   redo: () => Promise<boolean>;
 };
+type BookmarkHistoryEntry = NoteHistoryEntry;
 
 function buildTopicHref(
   courseId: number,
@@ -134,6 +136,9 @@ export default function CourseDetailPage() {
     return Math.max(min, Math.min(window.innerWidth * 0.6, max));
   });
   const [readerBusy, setReaderBusy] = useState(false);
+  const [bookmarkHistoryBusy, setBookmarkHistoryBusy] = useState(false);
+  const [bookmarkUndoStack, setBookmarkUndoStack] = useState<BookmarkHistoryEntry[]>([]);
+  const [bookmarkRedoStack, setBookmarkRedoStack] = useState<BookmarkHistoryEntry[]>([]);
   const [noteHistoryBusy, setNoteHistoryBusy] = useState(false);
   const [noteUndoStack, setNoteUndoStack] = useState<NoteHistoryEntry[]>([]);
   const [noteRedoStack, setNoteRedoStack] = useState<NoteHistoryEntry[]>([]);
@@ -352,6 +357,14 @@ export default function CourseDetailPage() {
       topicMetaByIndex.set(entry.topic_index, { title: entry.title, slug: entry.slug });
     }
   }
+  const selectedBookmarkCount = selectedBookmarkIndices.size;
+  const bookmarkCount = bookmarkedTopicIndices.size;
+  const bookmarkDeleteSelectionLabel =
+    selectedBookmarkCount === 0
+      ? null
+      : selectedBookmarkCount === bookmarkCount
+        ? "All"
+        : String(selectedBookmarkCount);
 
   const applyViewerCourseState = (next: CourseViewerSettings | null) => {
     const safe = next && typeof next === "object" ? next : {};
@@ -381,6 +394,72 @@ export default function CourseDetailPage() {
   const pushNoteHistory = (entry: NoteHistoryEntry) => {
     setNoteUndoStack((prev) => [...prev.slice(-24), entry]);
     setNoteRedoStack([]);
+  };
+
+  const applyBookmarkTopics = async (topicIndices: number[], bookmarked: boolean) => {
+    const uniqueTopicIndices = [...new Set(topicIndices)].sort((a, b) => a - b);
+    if (uniqueTopicIndices.length === 0) return false;
+    if (!bookmarked) {
+      const next = await updateViewerCourseSettings({
+        course_id: courseId,
+        remove_bookmark_topic_indices: uniqueTopicIndices,
+      });
+      applyViewerCourseState(next);
+      setSelectedBookmarkIndices((prev) => {
+        const nextSet = new Set(prev);
+        uniqueTopicIndices.forEach((idx) => nextSet.delete(idx));
+        return nextSet;
+      });
+      return true;
+    }
+
+    let nextState: CourseViewerSettings | null = null;
+    for (const topicIndex of uniqueTopicIndices) {
+      nextState = await updateViewerCourseSettings({
+        course_id: courseId,
+        bookmark_topic_index: topicIndex,
+        bookmarked: true,
+      });
+    }
+    applyViewerCourseState(nextState);
+    return true;
+  };
+
+  const pushBookmarkHistory = (entry: BookmarkHistoryEntry) => {
+    setBookmarkUndoStack((prev) => [...prev.slice(-24), entry]);
+    setBookmarkRedoStack([]);
+  };
+
+  const handleUndoBookmarkAction = async () => {
+    if (bookmarkHistoryBusy || bookmarkUndoStack.length === 0) return;
+    const entry = bookmarkUndoStack[bookmarkUndoStack.length - 1];
+    setBookmarkHistoryBusy(true);
+    setReaderBusy(true);
+    try {
+      const applied = await entry.undo();
+      if (!applied) return;
+      setBookmarkUndoStack((prev) => prev.slice(0, -1));
+      setBookmarkRedoStack((prev) => [...prev, entry]);
+    } finally {
+      setReaderBusy(false);
+      setBookmarkHistoryBusy(false);
+    }
+  };
+
+  const handleRedoBookmarkAction = async () => {
+    if (bookmarkHistoryBusy || bookmarkRedoStack.length === 0) return;
+    const entry = bookmarkRedoStack[bookmarkRedoStack.length - 1];
+    setBookmarkHistoryBusy(true);
+    setReaderBusy(true);
+    try {
+      const applied = await entry.redo();
+      if (!applied) return;
+      setBookmarkRedoStack((prev) => prev.slice(0, -1));
+      setBookmarkUndoStack((prev) => [...prev, entry]);
+    } finally {
+      setReaderBusy(false);
+      setBookmarkHistoryBusy(false);
+    }
   };
 
   const handleUndoNoteAction = async () => {
@@ -444,6 +523,8 @@ export default function CourseDetailPage() {
       if (selectedScopes.includes("bookmarks")) {
         setBookmarkedTopicIndices(new Set<number>());
         setSelectedBookmarkIndices(new Set<number>());
+        setBookmarkUndoStack([]);
+        setBookmarkRedoStack([]);
       }
       if (selectedScopes.includes("notes")) {
         setCourseAddOpen(false);
@@ -546,18 +627,25 @@ export default function CourseDetailPage() {
   };
 
   const handleRemoveBookmarks = async (topicIndices: number[]) => {
-    if (readerBusy || topicIndices.length === 0) return;
+    const removedTopicIndices = [...new Set(topicIndices)]
+      .filter((topicIndex) => bookmarkedTopicIndices.has(topicIndex))
+      .sort((a, b) => a - b);
+    if (readerBusy || removedTopicIndices.length === 0) return;
     setReaderBusy(true);
     try {
       const next = await updateViewerCourseSettings({
         course_id: courseId,
-        remove_bookmark_topic_indices: topicIndices,
+        remove_bookmark_topic_indices: removedTopicIndices,
       });
       applyViewerCourseState(next);
       setSelectedBookmarkIndices((prev) => {
         const nextSet = new Set(prev);
-        topicIndices.forEach((idx) => nextSet.delete(idx));
+        removedTopicIndices.forEach((idx) => nextSet.delete(idx));
         return nextSet;
+      });
+      pushBookmarkHistory({
+        undo: async () => applyBookmarkTopics(removedTopicIndices, true),
+        redo: async () => applyBookmarkTopics(removedTopicIndices, false),
       });
     } catch (err) {
       console.error("Failed to remove bookmarks", err);
@@ -1292,16 +1380,47 @@ export default function CourseDetailPage() {
                     {readerPanelMode === "highlightNotes" && "Highlights+Notes"}
                   </h2>
                   <div className="flex items-center gap-2">
-                    {readerPanelMode === "bookmarks" && selectedBookmarkIndices.size > 0 && (
-                      <button
-                        onClick={() => {
-                          setBookmarkDeleteDraft([...selectedBookmarkIndices]);
-                        }}
-                        disabled={readerBusy}
-                        className="inline-flex items-center px-2 py-1 text-[11px] rounded border border-red-300 dark:border-red-700 bg-red-50 dark:bg-red-950 text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/30 disabled:opacity-45 disabled:cursor-not-allowed cursor-pointer font-semibold"
-                      >
-                        Delete Selected
-                      </button>
+                    {readerPanelMode === "bookmarks" && (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => void handleUndoBookmarkAction()}
+                          disabled={readerBusy || bookmarkHistoryBusy || bookmarkUndoStack.length === 0}
+                          aria-label="Undo bookmark action"
+                          title="Undo"
+                          className="inline-flex h-8 w-8 items-center justify-center rounded border border-gray-200 text-gray-600 transition-colors hover:border-indigo-300 hover:text-indigo-600 disabled:cursor-not-allowed disabled:opacity-45 dark:border-gray-700 dark:text-gray-300 dark:hover:border-indigo-700 dark:hover:text-indigo-300 cursor-pointer"
+                        >
+                          <Undo2 className="h-4 w-4" aria-hidden="true" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => void handleRedoBookmarkAction()}
+                          disabled={readerBusy || bookmarkHistoryBusy || bookmarkRedoStack.length === 0}
+                          aria-label="Redo bookmark action"
+                          title="Redo"
+                          className="inline-flex h-8 w-8 items-center justify-center rounded border border-gray-200 text-gray-600 transition-colors hover:border-indigo-300 hover:text-indigo-600 disabled:cursor-not-allowed disabled:opacity-45 dark:border-gray-700 dark:text-gray-300 dark:hover:border-indigo-700 dark:hover:text-indigo-300 cursor-pointer"
+                        >
+                          <Redo2 className="h-4 w-4" aria-hidden="true" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (selectedBookmarkCount === 0) return;
+                            setBookmarkDeleteDraft([...selectedBookmarkIndices]);
+                          }}
+                          disabled={readerBusy || selectedBookmarkCount === 0}
+                          aria-label="Delete selected bookmarks"
+                          title="Delete selected"
+                          className="inline-flex h-8 items-center gap-1.5 rounded border border-red-300 bg-red-50 px-2.5 text-[11px] font-semibold text-red-600 hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-45 dark:border-red-700 dark:bg-red-950 dark:text-red-400 dark:hover:bg-red-900/30 cursor-pointer"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
+                          {bookmarkDeleteSelectionLabel && (
+                            <span className="ml-0.5 rounded-sm bg-red-100 px-1.5 py-0.5 text-[10px] leading-none text-red-700 dark:bg-red-900/50 dark:text-red-200">
+                              {bookmarkDeleteSelectionLabel}
+                            </span>
+                          )}
+                        </button>
+                      </>
                     )}
                     {readerPanelMode === "highlightNotes" && (
                       <>
@@ -1354,11 +1473,6 @@ export default function CourseDetailPage() {
                               />
                               <span>Select All</span>
                             </label>
-                            {selectedBookmarkIndices.size > 0 && (
-                              <span className="text-xs text-gray-500 dark:text-gray-400 font-medium">
-                                {selectedBookmarkIndices.size} selected
-                              </span>
-                            )}
                           </div>
 
                           <ul className="space-y-2">
