@@ -7,7 +7,11 @@ import NavigationEvents from "@/components/edu-viewer/NavigationEvents";
 import NavProgressBar from "@/components/edu-viewer/NavProgressBar";
 import PWARegistration from "@/components/edu-viewer/PWARegistration";
 import AuthFlowGuard from "@/utils/AuthFlowGuard";
-import { BRAND_FAVICON_URL, BRAND_LOGO_URL } from "@/utils/branding";
+import {
+  BRAND_APPLE_TOUCH_ICON_URL,
+  BRAND_FAVICON_URL,
+  BRAND_LOGO_URL,
+} from "@/utils/branding";
 import {
   RUNTIME_PUBLIC_ENV_KEYS,
   type RuntimePublicEnvMap,
@@ -22,6 +26,8 @@ const geistMono = Geist_Mono({
   variable: "--font-geist-mono",
   subsets: ["latin"],
 });
+
+const MANIFEST_VERSION = "20260531";
 
 export const viewport: Viewport = {
   themeColor: "#0a0a0a",
@@ -40,7 +46,7 @@ export const metadata: Metadata = {
       { url: BRAND_LOGO_URL, sizes: "96x96", type: "image/png" },
     ],
     shortcut: [{ url: BRAND_FAVICON_URL, type: "image/png" }],
-    apple: [{ url: "/apple-touch-icon.png", sizes: "180x180", type: "image/png" }],
+    apple: [{ url: BRAND_APPLE_TOUCH_ICON_URL, sizes: "180x180", type: "image/png" }],
   },
   appleWebApp: {
     capable: true,
@@ -70,7 +76,7 @@ export default async function RootLayout({
       <head>
         <link rel="icon" href={BRAND_FAVICON_URL} type="image/png" sizes="32x32" />
         <link rel="shortcut icon" href={BRAND_FAVICON_URL} type="image/png" />
-        <link rel="manifest" href="/manifest.webmanifest" crossOrigin="use-credentials" />
+        <link rel="manifest" href={`/manifest.webmanifest?v=${MANIFEST_VERSION}`} crossOrigin="use-credentials" />
       </head>
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}

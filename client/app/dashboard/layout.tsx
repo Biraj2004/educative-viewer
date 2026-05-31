@@ -1,6 +1,10 @@
 import type { Metadata } from "next";
 import AuthProvider from "@/components/edu-viewer/AuthProvider";
-import { BRAND_FAVICON_URL, BRAND_LOGO_URL } from "@/utils/branding";
+import {
+  BRAND_APPLE_TOUCH_ICON_URL,
+  BRAND_FAVICON_URL,
+  BRAND_LOGO_URL,
+} from "@/utils/branding";
 
 export const metadata: Metadata = {
   title: "Dashboard · Edu-Viewer PRO",
@@ -12,7 +16,7 @@ export const metadata: Metadata = {
       { url: BRAND_LOGO_URL, sizes: "96x96", type: "image/png" },
     ],
     shortcut: [{ url: BRAND_FAVICON_URL, type: "image/png" }],
-    apple: [{ url: "/apple-touch-icon.png", sizes: "180x180", type: "image/png" }],
+    apple: [{ url: BRAND_APPLE_TOUCH_ICON_URL, sizes: "180x180", type: "image/png" }],
   },
 };
 

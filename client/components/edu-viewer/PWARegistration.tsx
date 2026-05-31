@@ -16,6 +16,13 @@ export default function PWARegistration() {
   const [showInstallPrompt, setShowInstallPrompt] = useState(false);
   const [showIosPrompt, setShowIosPrompt] = useState(false);
 
+  const isExpectedLocalSwSslError = useCallback((err: unknown): boolean => {
+    if (typeof window === "undefined") return false;
+    if (window.location.hostname !== "localhost") return false;
+    const message = err instanceof Error ? err.message : String(err);
+    return /ssl certificate error|securityerror|failed to register a serviceworker/i.test(message);
+  }, []);
+
   const handleInstallClick = useCallback(async () => {
     if (!deferredPrompt) return;
     setShowInstallPrompt(false);
@@ -28,7 +35,27 @@ export default function PWARegistration() {
   useEffect(() => {
     // 1. Register service worker
     if (typeof window !== "undefined" && "serviceWorker" in navigator) {
+      const host = window.location.hostname;
+      const isWorkersHost = host.endsWith(".workers.dev");
+      if (isWorkersHost) {
+        console.warn("[PWA] Skipping Service Worker registration on workers.dev host.");
+        return;
+      }
+
       const swUrl = "/sw.js";
+      const tryRegisterSw = async (label: string) => {
+        try {
+          await navigator.serviceWorker.register(swUrl);
+          console.log(label);
+        } catch (err) {
+          if (isExpectedLocalSwSslError(err)) {
+            console.warn("[PWA] Skipping Service Worker registration on localhost due to untrusted local SSL certificate.");
+            return;
+          }
+          console.error("[PWA] Service Worker registration failed:", err);
+        }
+      };
+
       const registerSW = async () => {
         try {
           const probe = await fetch(swUrl, {
@@ -41,15 +68,17 @@ export default function PWARegistration() {
             return;
           }
           if (document.readyState === "complete") {
-            await navigator.serviceWorker.register(swUrl);
-            console.log("[PWA] Service Worker registered.");
+            await tryRegisterSw("[PWA] Service Worker registered.");
           } else {
             window.addEventListener("load", async () => {
-              await navigator.serviceWorker.register(swUrl);
-              console.log("[PWA] Service Worker registered on load.");
+              await tryRegisterSw("[PWA] Service Worker registered on load.");
             });
           }
         } catch (err) {
+          if (isExpectedLocalSwSslError(err)) {
+            console.warn("[PWA] Skipping Service Worker registration on localhost due to untrusted local SSL certificate.");
+            return;
+          }
           console.error("[PWA] Service Worker registration failed:", err);
         }
       };
@@ -101,7 +130,7 @@ export default function PWARegistration() {
         };
       }
     }
-  }, []);
+  }, [isExpectedLocalSwSslError]);
 
   // 5. Handle manual custom installation triggers
   useEffect(() => {

@@ -1,11 +1,8 @@
-const CACHE_NAME = "edu-viewer-cache-v1";
+const CACHE_NAME = "edu-viewer-cache-v2";
 
 const STATIC_ASSETS = [
   "/",
-  "/icon-og.png",
-  "/icon-192.png",
-  "/icon-512.png",
-  "/apple-touch-icon.png",
+  "/brand-icon.png",
 ];
 
 // Install event: cache initial shell assets
@@ -67,7 +64,8 @@ self.addEventListener("fetch", (event) => {
   if (
     url.pathname.includes("/api/") || 
     url.pathname.startsWith("/proxy") ||
-    url.pathname.startsWith("/auth/")
+    url.pathname.startsWith("/auth/") ||
+    url.pathname === "/manifest.webmanifest"
   ) {
     return;
   }
