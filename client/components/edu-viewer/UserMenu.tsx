@@ -101,6 +101,10 @@ export default function UserMenu() {
   const firstName = (user.name ?? user.username ?? "").split(/\s+/)[0] || user.email.split("@")[0];
   const fromPath = pathname && pathname.startsWith("/") ? pathname : "/dashboard";
   const profileHref = `/dashboard/profile?from=${encodeURIComponent(fromPath)}`;
+  const isStandalone = typeof window !== "undefined" && (
+    window.matchMedia("(display-mode: standalone)").matches
+    || (navigator as Navigator & { standalone?: boolean }).standalone === true
+  );
 
   return (
     <div ref={containerRef} className="relative">
@@ -257,6 +261,26 @@ export default function UserMenu() {
                 </button>
 
                 <div className="h-px bg-gray-100 dark:bg-gray-800 my-1" />
+
+                {isStandalone && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setOpen(false);
+                        window.dispatchEvent(new CustomEvent("trigger-pwa-reload"));
+                      }}
+                      className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 hover:text-indigo-700 dark:hover:text-indigo-400 transition-colors cursor-pointer"
+                    >
+                      <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M21 12a9 9 0 1 1-2.64-6.36" />
+                        <polyline points="21 3 21 9 15 9" />
+                      </svg>
+                      <span className="text-xs font-medium">Reload App (PWA)</span>
+                    </button>
+                    <div className="h-px bg-gray-100 dark:bg-gray-800 my-1" />
+                  </>
+                )}
 
                 <button
                   type="button"

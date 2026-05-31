@@ -32,6 +32,32 @@ export default function PWARegistration() {
     setDeferredPrompt(null);
   }, [deferredPrompt]);
 
+  const forceReloadPwa = useCallback(async () => {
+    if (typeof window === "undefined") return;
+    if (!("serviceWorker" in navigator)) {
+      window.location.reload();
+      return;
+    }
+
+    try {
+      const registrations = await navigator.serviceWorker.getRegistrations();
+      await Promise.all(registrations.map((registration) => registration.update().catch(() => undefined)));
+
+      if ("caches" in window) {
+        const keys = await caches.keys();
+        await Promise.all(keys.map((key) => caches.delete(key)));
+      }
+
+      await Promise.all(registrations.map((registration) => registration.unregister().catch(() => false)));
+    } catch (err) {
+      console.warn("[PWA] Force reload encountered an issue:", err);
+    }
+
+    const url = new URL(window.location.href);
+    url.searchParams.set("pwa_refresh", String(Date.now()));
+    window.location.replace(url.toString());
+  }, []);
+
   useEffect(() => {
     // 1. Register service worker
     if (typeof window !== "undefined" && "serviceWorker" in navigator) {
@@ -163,6 +189,18 @@ export default function PWARegistration() {
       window.removeEventListener("trigger-pwa-install", handleTriggerInstall);
     };
   }, [deferredPrompt, handleInstallClick]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const handleTriggerReload = () => {
+      void forceReloadPwa();
+    };
+
+    window.addEventListener("trigger-pwa-reload", handleTriggerReload);
+    return () => {
+      window.removeEventListener("trigger-pwa-reload", handleTriggerReload);
+    };
+  }, [forceReloadPwa]);
 
   const handleDismiss = () => {
     localStorage.setItem("ev_pwa_dismissed", "true");
