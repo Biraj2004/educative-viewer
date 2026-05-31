@@ -348,6 +348,12 @@ export default function TopicDrawingPad({
   const lastSavedContentKeyRef = useRef<string>("");
   const latestContentKeyRef = useRef<string>("");
   const latestSceneRef = useRef<ViewerDrawingScene | null>(null);
+  const latestElementsRawRef = useRef<readonly unknown[]>([]);
+  const latestAppStateRawRef = useRef<Record<string, unknown>>({});
+  const latestFilesRawRef = useRef<Record<string, unknown>>({});
+  const changeComputeTimerRef = useRef<number | null>(null);
+  const showDebugRef = useRef(false);
+  const debugSyncRafRef = useRef<number | null>(null);
   const baselineInitializedRef = useRef(false);
   const initialSyncPendingRef = useRef(true);
   const saveRevisionRef = useRef(0);
@@ -502,6 +508,14 @@ export default function TopicDrawingPad({
     });
   }, [libraryCatalog, libraryCatalogQuery]);
 
+  useEffect(() => {
+    showDebugRef.current = showDebug;
+    if (!showDebug && debugSyncRafRef.current !== null) {
+      window.cancelAnimationFrame(debugSyncRafRef.current);
+      debugSyncRafRef.current = null;
+    }
+  }, [showDebug]);
+
   const initialData = useMemo<ExcalidrawInitialDataState | undefined>(() => {
     const rawAppState =
       initialScene?.appState && typeof initialScene.appState === "object"
@@ -535,6 +549,7 @@ export default function TopicDrawingPad({
     // Rolling event log for debug (keep last 8 entries)
     const logLines: string[] = [];
     const addLog = (msg: string) => {
+      if (!showDebugRef.current) return;
       logLines.push(msg);
       if (logLines.length > 8) logLines.shift();
     };
@@ -568,6 +583,10 @@ export default function TopicDrawingPad({
     };
 
     const syncDebug = (e: Event) => {
+      if (!showDebugRef.current) return;
+      if (debugSyncRafRef.current !== null) return;
+      debugSyncRafRef.current = window.requestAnimationFrame(() => {
+        debugSyncRafRef.current = null;
       const appState = api.getAppState();
       const penModeActive = appState ? !!appState.penMode : false;
 
@@ -598,6 +617,37 @@ export default function TopicDrawingPad({
         penModeActive,
         log: [...logLines],
       });
+      });
+    };
+
+    let twoFingerHandActive = false;
+    let handRestoreTool: { type: string; customType?: string } | null = null;
+
+    const activateTwoFingerHand = () => {
+      if (twoFingerHandActive) return;
+      isPinchingRef.current = true;
+      const appState = api.getAppState();
+      const activeTool = appState?.activeTool as { type?: string; customType?: string } | undefined;
+      if (activeTool?.type === "hand") {
+        handRestoreTool = null;
+        twoFingerHandActive = true;
+        return;
+      }
+      handRestoreTool = activeTool?.type
+        ? { type: activeTool.type, ...(activeTool.customType ? { customType: activeTool.customType } : {}) }
+        : { type: "selection" };
+      api.setActiveTool({ type: "hand" });
+      twoFingerHandActive = true;
+    };
+
+    const restoreToolAfterTwoFinger = () => {
+      if (!twoFingerHandActive) return;
+      twoFingerHandActive = false;
+      isPinchingRef.current = false;
+      const restore = handRestoreTool;
+      handRestoreTool = null;
+      if (!restore || restore.type === "hand") return;
+      api.setActiveTool(restore as never);
     };
 
     // ── Pointer event handlers ──
@@ -624,6 +674,10 @@ export default function TopicDrawingPad({
       }
 
       if (e.pointerType === "touch") {
+        if (twoFingerHandActive) {
+          activePointersRef.current.set(e.pointerId, e);
+          return;
+        }
         if (isPinchingRef.current) {
           blockedPointerIdsRef.current.add(e.pointerId);
           e.preventDefault();
@@ -664,6 +718,10 @@ export default function TopicDrawingPad({
       }
 
       if (e.pointerType === "touch") {
+        if (twoFingerHandActive) {
+          activePointersRef.current.set(e.pointerId, e);
+          return;
+        }
         const appState = api.getAppState();
         const isPenActive = appState ? !!appState.penMode : false;
         const isHandToolActive = appState?.activeTool?.type === "hand";
@@ -734,18 +792,6 @@ export default function TopicDrawingPad({
     };
 
     // ── Touch event handlers ──
-    let initialPinchDistance = 0;
-    let initialZoom = 1;
-    let initialScrollX = 0;
-    let initialScrollY = 0;
-    let initialMidpoint = { x: 0, y: 0 };
-
-    const getPinchDistance = (touches: TouchList) => {
-      const dx = touches[0].clientX - touches[1].clientX;
-      const dy = touches[0].clientY - touches[1].clientY;
-      return Math.sqrt(dx * dx + dy * dy);
-    };
-
     const onTouchStart = (e: TouchEvent) => {
       const stylusPresent = hasStylus(e.touches);
       if (stylusPresent && e.touches.length > 1) {
@@ -785,40 +831,12 @@ export default function TopicDrawingPad({
         return;
       }
 
-      // Pinch zoom when exactly 2 finger touches AND both are inside the container
       if (fingerCount === 2 && allInside && !stylusPresent) {
-        isPinchingRef.current = true;
-        initialPinchDistance = getPinchDistance(e.touches);
-        initialZoom = appState ? appState.zoom.value : 1;
-        initialScrollX = appState ? appState.scrollX : 0;
-        initialScrollY = appState ? appState.scrollY : 0;
-
-        const rect = root.getBoundingClientRect();
-        initialMidpoint = {
-          x: (e.touches[0].clientX + e.touches[1].clientX) / 2 - rect.left,
-          y: (e.touches[0].clientY + e.touches[1].clientY) / 2 - rect.top,
-        };
-
-        // Cancel all active touch pointers in Excalidraw to prevent long-press/context-menu bugs!
-        activePointersRef.current.forEach((p, id) => {
-          if (p.pointerType === "touch") {
-            try {
-              const cancelEvent = new PointerEvent("pointercancel", {
-                pointerId: id,
-                pointerType: "touch",
-                bubbles: true,
-                cancelable: true,
-                clientX: p.clientX,
-                clientY: p.clientY,
-              });
-              p.target?.dispatchEvent(cancelEvent);
-            } catch (err) { }
-            blockedPointerIdsRef.current.add(id);
-          }
-        });
-      } else if (fingerCount < 2) {
-        isPinchingRef.current = false;
-        initialPinchDistance = 0;
+        activateTwoFingerHand();
+        return;
+      }
+      if (fingerCount < 2) {
+        restoreToolAfterTwoFinger();
       }
     };
 
@@ -858,36 +876,9 @@ export default function TopicDrawingPad({
         return;
       }
 
-      if (fingerCount === 2 && allInside && !stylusPresent && initialPinchDistance > 0 && appState) {
-        e.preventDefault();
-        e.stopPropagation();
-        e.stopImmediatePropagation();
-
-        const currentDistance = getPinchDistance(e.touches);
-        const rect = root.getBoundingClientRect();
-        const currentMidpointX = (e.touches[0].clientX + e.touches[1].clientX) / 2 - rect.left;
-        const currentMidpointY = (e.touches[0].clientY + e.touches[1].clientY) / 2 - rect.top;
-
-        const dx = currentMidpointX - initialMidpoint.x;
-        const dy = currentMidpointY - initialMidpoint.y;
-
-        // Dampen the zoom sensitivity heavily so accidental distance changes during a pan are ignored
-        const rawScale = currentDistance / initialPinchDistance;
-        const scale = 1 + (rawScale - 1) * 0.4;
-
-        const MIN_ZOOM = 0.1;
-        const MAX_ZOOM = 30;
-        const newZoomValue = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, initialZoom * scale));
-
-        // Coordinate transformation: Excalidraw's scrollX/Y is in un-zoomed CANVAS coordinates.
-        // We must translate the screen pixel changes into canvas space (by dividing by zoom).
-        const scrollX = initialScrollX + initialMidpoint.x * (1 / newZoomValue - 1 / initialZoom) + dx / newZoomValue;
-        const scrollY = initialScrollY + initialMidpoint.y * (1 / newZoomValue - 1 / initialZoom) + dy / newZoomValue;
-
-        api.updateScene({
-          appState: { ...appState, zoom: { value: newZoomValue }, scrollX, scrollY } as any,
-        });
-        syncDebug(e);
+      if (fingerCount >= 2 && allInside && !stylusPresent) {
+        activateTwoFingerHand();
+        return;
       }
     };
 
@@ -907,15 +898,10 @@ export default function TopicDrawingPad({
         }
         return;
       }
-      const appState = api.getAppState();
-      const isPenActive = appState ? !!appState.penMode : false;
-      const isHandToolActive = appState?.activeTool?.type === "hand";
-
       addLog(`te n=${e.touches.length}`);
       syncDebug(e);
       if (e.touches.length < 2) {
-        isPinchingRef.current = false;
-        initialPinchDistance = 0;
+        restoreToolAfterTwoFinger();
       }
     };
 
@@ -964,6 +950,11 @@ export default function TopicDrawingPad({
     window.addEventListener("touchcancel", onTouchEnd, { capture: true, passive: false });
 
     return () => {
+      restoreToolAfterTwoFinger();
+      if (debugSyncRafRef.current !== null) {
+        window.cancelAnimationFrame(debugSyncRafRef.current);
+        debugSyncRafRef.current = null;
+      }
       root.removeEventListener("gesturestart", preventDefault);
       root.removeEventListener("gesturechange", preventDefault);
       
@@ -995,6 +986,9 @@ export default function TopicDrawingPad({
   useEffect(() => {
     if (baselineInitializedRef.current) return;
     if (!initialData) {
+      latestElementsRawRef.current = [];
+      latestAppStateRawRef.current = {};
+      latestFilesRawRef.current = {};
       lastSavedContentKeyRef.current = "";
       latestContentKeyRef.current = "";
       latestSceneRef.current = null;
@@ -1007,6 +1001,9 @@ export default function TopicDrawingPad({
       (initialData.appState ?? {}) as Record<string, unknown>,
       (initialData.files ?? {}) as Record<string, unknown>,
     );
+    latestElementsRawRef.current = (initialData.elements ?? []) as readonly unknown[];
+    latestAppStateRawRef.current = (initialData.appState ?? {}) as Record<string, unknown>;
+    latestFilesRawRef.current = (initialData.files ?? {}) as Record<string, unknown>;
     const key = contentSignatureFromScene(scene);
     lastSavedContentKeyRef.current = key;
     latestContentKeyRef.current = key;
@@ -1037,6 +1034,58 @@ export default function TopicDrawingPad({
     });
   }, [api, excalidrawTheme]);
 
+  const commitLatestChange = useCallback(() => {
+    const elements = latestElementsRawRef.current;
+    const appState = latestAppStateRawRef.current;
+    const files = latestFilesRawRef.current;
+    const currentScene = buildSerializableScene(elements, appState, files);
+    const currentKey = contentSignatureFromUnknown(elements, files);
+    latestSceneRef.current = currentScene;
+    latestContentKeyRef.current = currentKey;
+    if (initialSyncPendingRef.current) {
+      initialSyncPendingRef.current = false;
+      lastSavedContentKeyRef.current = currentKey;
+      setDirty(false);
+      return;
+    }
+    if (!lastSavedContentKeyRef.current) {
+      lastSavedContentKeyRef.current = currentKey;
+      setDirty(false);
+      return;
+    }
+    if (Date.now() < suppressDirtyUntilRef.current && currentKey === lastSavedContentKeyRef.current) {
+      setDirty(false);
+      return;
+    }
+    setDirty(currentKey !== lastSavedContentKeyRef.current);
+    setSaveError((prev) => (prev ? null : prev));
+  }, []);
+
+  const scheduleLatestChangeCommit = useCallback(() => {
+    if (changeComputeTimerRef.current !== null) return;
+    changeComputeTimerRef.current = window.setTimeout(() => {
+      changeComputeTimerRef.current = null;
+      commitLatestChange();
+    }, 120);
+  }, [commitLatestChange]);
+
+  const flushLatestChangeCommit = useCallback(() => {
+    if (changeComputeTimerRef.current !== null) {
+      window.clearTimeout(changeComputeTimerRef.current);
+      changeComputeTimerRef.current = null;
+      commitLatestChange();
+    }
+  }, [commitLatestChange]);
+
+  useEffect(() => {
+    return () => {
+      if (changeComputeTimerRef.current !== null) {
+        window.clearTimeout(changeComputeTimerRef.current);
+        changeComputeTimerRef.current = null;
+      }
+    };
+  }, []);
+
   const handleSave = useCallback(async (): Promise<boolean> => {
     if (!api) return false;
     const revision = saveRevisionRef.current + 1;
@@ -1047,6 +1096,7 @@ export default function TopicDrawingPad({
       await new Promise<void>((resolve) => {
         requestAnimationFrame(() => resolve());
       });
+      flushLatestChangeCommit();
       const nextScene = latestSceneRef.current ?? buildSerializableScene(
         api.getSceneElements() as readonly unknown[],
         api.getAppState() as unknown as Record<string, unknown>,
@@ -1073,7 +1123,7 @@ export default function TopicDrawingPad({
     } finally {
       setLocalSaveBusy(false);
     }
-  }, [api, onSave]);
+  }, [api, flushLatestChangeCommit, onSave]);
 
   const handleClose = useCallback(() => {
     if (dirty) {
@@ -1757,34 +1807,10 @@ export default function TopicDrawingPad({
           theme={excalidrawTheme}
           onLibraryChange={handleLibraryChange}
           onChange={(elements, appState, files) => {
-            const currentScene = buildSerializableScene(
-              elements as readonly unknown[],
-              appState as unknown as Record<string, unknown>,
-              files as unknown as Record<string, unknown>,
-            );
-            const currentKey = contentSignatureFromUnknown(
-              elements as readonly unknown[],
-              files as unknown as Record<string, unknown>,
-            );
-            latestSceneRef.current = currentScene;
-            latestContentKeyRef.current = currentKey;
-            if (initialSyncPendingRef.current) {
-              initialSyncPendingRef.current = false;
-              lastSavedContentKeyRef.current = currentKey;
-              setDirty(false);
-              return;
-            }
-            if (!lastSavedContentKeyRef.current) {
-              lastSavedContentKeyRef.current = currentKey;
-              setDirty(false);
-              return;
-            }
-            if (Date.now() < suppressDirtyUntilRef.current && currentKey === lastSavedContentKeyRef.current) {
-              setDirty(false);
-              return;
-            }
-            setDirty(currentKey !== lastSavedContentKeyRef.current);
-            if (saveError) setSaveError(null);
+            latestElementsRawRef.current = elements as readonly unknown[];
+            latestAppStateRawRef.current = appState as unknown as Record<string, unknown>;
+            latestFilesRawRef.current = files as unknown as Record<string, unknown>;
+            scheduleLatestChangeCommit();
           }}
         />
       </div>
