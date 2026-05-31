@@ -563,14 +563,52 @@ export default function TopicDrawingPad({
       return false;
     };
 
+    const isDragHandleElement = (target: EventTarget | null): boolean => {
+      if (!target) return false;
+      const el = target as HTMLElement;
+      if (typeof el.closest === "function") {
+        if (
+          el.closest("[role='separator']") ||
+          el.closest("[aria-label*='Resize']") ||
+          el.closest("[aria-label*='resize']") ||
+          el.closest("[title*='resize']") ||
+          el.closest("[title*='Resize']")
+        ) {
+          return true;
+        }
+      }
+      return false;
+    };
+
     const isInteractiveElement = (target: EventTarget | null): boolean => {
       if (!target) return false;
       const el = target as HTMLElement;
-      if (el.tagName === "BUTTON" || el.tagName === "INPUT" || el.tagName === "SELECT" || el.tagName === "TEXTAREA" || el.tagName === "A") {
+      const tagName = el.tagName;
+      if (tagName === "BUTTON" || tagName === "INPUT" || tagName === "SELECT" || tagName === "TEXTAREA" || tagName === "A" || tagName === "LABEL") {
         return true;
       }
       if (typeof el.closest === "function") {
-        if (el.closest("button") || el.closest("a") || el.closest(".excalidraw-button") || el.closest("[role='button']")) {
+        if (
+          el.closest("button") ||
+          el.closest("a") ||
+          el.closest("label") ||
+          el.closest(".excalidraw-button") ||
+          el.closest(".layer-ui__wrapper") ||
+          el.closest(".excalidraw-sidebar") ||
+          el.closest(".context-menu") ||
+          el.closest(".dropdown-menu") ||
+          el.closest(".popover") ||
+          el.closest(".tooltip") ||
+          el.closest(".excalidraw-tooltip") ||
+          el.closest(".ToolIcon") ||
+          el.closest("[role='button']") ||
+          el.closest("[role='checkbox']") ||
+          el.closest("[role='menuitem']") ||
+          el.closest("[role='tab']") ||
+          el.closest("[role='separator']") ||
+          el.closest("[aria-label*='Resize']") ||
+          el.closest("[aria-label*='resize']")
+        ) {
           return true;
         }
       }
@@ -653,6 +691,7 @@ export default function TopicDrawingPad({
 
     // ── Pointer event handlers ──
     const onPointerDown = (e: PointerEvent) => {
+      if (isDragHandleElement(e.target)) return;
       if (!rootRef.current?.contains(e.target as Node)) {
         if (e.pointerType === "touch") {
           e.stopPropagation();
@@ -686,6 +725,7 @@ export default function TopicDrawingPad({
     };
 
     const onPointerMove = (e: PointerEvent) => {
+      if (isDragHandleElement(e.target)) return;
       if (blockedPointerIdsRef.current.has(e.pointerId)) {
         if (e.pointerType === "touch" && twoFingerHandActive) {
           blockedPointerIdsRef.current.delete(e.pointerId);
@@ -713,6 +753,7 @@ export default function TopicDrawingPad({
     };
 
     const onPointerUp = (e: PointerEvent) => {
+      if (isDragHandleElement(e.target)) return;
       if (blockedPointerIdsRef.current.has(e.pointerId)) {
         if (e.pointerType === "touch" && twoFingerHandActive) {
           blockedPointerIdsRef.current.delete(e.pointerId);
@@ -740,6 +781,7 @@ export default function TopicDrawingPad({
     };
 
     const onPointerCancel = (e: PointerEvent) => {
+      if (isDragHandleElement(e.target)) return;
       if (blockedPointerIdsRef.current.has(e.pointerId)) {
         if (e.pointerType === "touch" && twoFingerHandActive) {
           blockedPointerIdsRef.current.delete(e.pointerId);
@@ -768,6 +810,7 @@ export default function TopicDrawingPad({
 
     // ── Touch event handlers ──
     const onTouchStart = (e: TouchEvent) => {
+      if (isDragHandleElement(e.target)) return;
       const stylusPresent = hasStylus(e.touches);
       if (stylusPresent && e.touches.length > 1) {
         e.preventDefault();
@@ -814,6 +857,7 @@ export default function TopicDrawingPad({
     };
 
     const onTouchMove = (e: TouchEvent) => {
+      if (isDragHandleElement(e.target)) return;
       const stylusPresent = hasStylus(e.touches);
       if (stylusPresent && e.touches.length > 1) {
         e.preventDefault();
@@ -857,6 +901,7 @@ export default function TopicDrawingPad({
     };
 
     const onTouchEnd = (e: TouchEvent) => {
+      if (isDragHandleElement(e.target)) return;
       if (e.touches.length === 0) {
         restoreToolAfterTwoFinger();
       }
@@ -886,6 +931,7 @@ export default function TopicDrawingPad({
     const stopOutsideEventPropagation = (e: Event) => {
       // Excalidraw usually only cares about touch and pen for gestures. Let mouse clicks on outside UI bubble up safely.
       if ('pointerType' in e && (e as PointerEvent).pointerType === 'mouse') return;
+      if (isDragHandleElement(e.target)) return;
       if (rootRef.current && !rootRef.current.contains(e.target as Node)) {
         e.stopPropagation();
         e.stopImmediatePropagation();

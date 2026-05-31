@@ -2723,9 +2723,16 @@ export default function TopicLayoutClient({
             aria-orientation="vertical"
             aria-label="Resize notes and highlights panel"
             onPointerDown={handleStartHighlightResize}
-            className="absolute left-0 top-0 h-full w-2 -translate-x-1/2 cursor-col-resize bg-transparent z-10"
+            className="absolute left-0 top-0 h-full w-6 -translate-x-1/2 cursor-col-resize bg-transparent z-20 touch-none"
+            title="Drag to resize notes and highlights panel"
           >
-            <div className="mx-auto mt-8 h-12 w-1 rounded-full bg-gray-300 dark:bg-gray-700" />
+            <div className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 h-10 w-10 rounded-full border border-gray-300/90 dark:border-gray-700/90 bg-white/95 dark:bg-gray-900/95 shadow-lg flex items-center justify-center">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-gray-600 dark:text-gray-300">
+                <path d="M9 7 5 12l4 5" />
+                <path d="M15 7l4 5-4 5" />
+                <line x1="12" y1="6" x2="12" y2="18" />
+              </svg>
+            </div>
           </div>
           <div className="flex items-center justify-between px-6 py-5 border-b border-gray-200 dark:border-gray-800 shrink-0">
             <h2 className="text-sm font-bold text-gray-900 dark:text-gray-100 uppercase tracking-wider">
@@ -3085,9 +3092,16 @@ export default function TopicLayoutClient({
             aria-orientation="vertical"
             aria-label="Resize drawing panel"
             onPointerDown={handleStartDrawingResize}
-            className="absolute left-0 top-0 h-full w-2 -translate-x-1/2 cursor-col-resize bg-transparent z-10"
+            className="absolute left-0 top-0 h-full w-6 -translate-x-1/2 cursor-col-resize bg-transparent z-20 touch-none"
+            title="Drag to resize drawing panel"
           >
-            <div className="mx-auto mt-8 h-12 w-1 rounded-full bg-gray-300 dark:bg-gray-700" />
+            <div className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 h-10 w-10 rounded-full border border-gray-300/90 dark:border-gray-700/90 bg-white/95 dark:bg-gray-900/95 shadow-lg flex items-center justify-center">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-gray-600 dark:text-gray-300">
+                <path d="M9 7 5 12l4 5" />
+                <path d="M15 7l4 5-4 5" />
+                <line x1="12" y1="6" x2="12" y2="18" />
+              </svg>
+            </div>
           </div>
           <TopicDrawingPad
             topicTitle={currentTopic.topic_name}
