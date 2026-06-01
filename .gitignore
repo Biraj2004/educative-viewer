@@ -1,5 +1,6 @@
 Educative.postman_collection.json
 server/.env
+server/.bootstrap_admin_credentials.txt
 server/educative_scraper.db
 env
 .skills

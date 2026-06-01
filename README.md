@@ -1,9 +1,9 @@
-# Edu-Viewer PRO
+﻿# Edu-Viewer PRO
 
 A local viewer for structured educational content. One script starts everything.
 
 ## Updates
-- v1.0.182+ updates
+- v1.0.188+ updates
     ```
     Please rebuild the project using --force-build command as environment variables were updated.
     Auth DB may need to be deleted if you face issues.
@@ -13,8 +13,8 @@ A local viewer for structured educational content. One script starts everything.
 
 Install these before running:
 
-- **[Node.js 18+](https://nodejs.org/)** — download and install the LTS version
-- **[Python 3.10+](https://www.python.org/downloads/)** — make sure it's on your PATH (`python --version` should work)
+- **[Node.js 18+](https://nodejs.org/)** download and install the LTS version
+- **[Python 3.10+](https://www.python.org/downloads/)** make sure it's on your PATH (`python --version` should work)
 
 ## Start locally
 
@@ -24,7 +24,7 @@ From the repo root:
 node local-start.js
 ```
 
-> **Windows/Linux:** Port 443 might require an elevated shell — run PowerShell as **Administrator** / use `sudo`, or use `--proxy-port 8443`.
+> **Windows/Linux:** Port 443 might require an elevated shell run PowerShell as **Administrator** / use `sudo`, or use `--proxy-port 8443`.
 
 ### What happens on first run
 
@@ -32,15 +32,15 @@ The script is fully automated. It will:
 
 1. **Create a Python venv** at `server/env/` and install backend dependencies.
 2. **Generate RSA keys** and write them into `server/.env`.
-3. **Ask for your course DB path(s)** — paste the full path to each DB file. After each entry you can add another with **Y/N**:
+3. **Ask for your course DB path(s)** paste the full path to each DB file. After each entry you can add another with **Y/N**:
    ```
    Course DB path 1: C:\Users\you\Downloads\educative_scraper.db
    Add another course DB? [y/N]: y
    Course DB path 2: D:\Courses\extra.db
    Add another course DB? [y/N]: n
    ```
-4. **Ask for the static API root** — the folder that holds course images. Just press **Enter** to accept the default (parent folder of the DB).
-5. **Build the Next.js bundle** — takes ~1–2 min the first time.
+4. **Ask for the static API root** the folder that holds course images. Just press **Enter** to accept the default (parent folder of the DB).
+5. **Build the Next.js bundle** takes ~1â€“2 min the first time.
 6. Start Flask, Next.js, and the embedded proxy.
 
 You will see output similar to:
@@ -54,7 +54,19 @@ Once done, open **https://localhost** (or your machine's LAN IP, e.g., `https://
 
 > **Note:** The local server automatically generates self-signed SSL certificates to enable proper cross-device testing and unlock browser features like Sandpack/Web Crypto. Your browser will show a **"Connection is Not Private"** warning. This is expected. Click "Advanced" or "Show Details" and proceed to the site.
 
-On **subsequent runs** all prompts are skipped — it starts straight away.
+On **subsequent runs** all prompts are skipped it starts straight away.
+
+### Bootstrap admin account (auto-created)
+
+During backend setup, if **no admin user exists** in the auth DB, Edu-Viewer creates one bootstrap admin account automatically.
+
+- Email: `admin@localhost`
+- A strong temporary password is generated and written to `server/.bootstrap_admin_credentials.txt`.
+- This setup password does **not expire** before first login.
+- On first login, you must change the password (first-login flow).
+- After password change, the original setup temporary password is revoked.
+
+Keep `server/.bootstrap_admin_credentials.txt` private and delete it after initial setup.
 
 ## Useful flags
 

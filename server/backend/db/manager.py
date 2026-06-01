@@ -2,6 +2,11 @@ from __future__ import annotations
 
 import atexit
 import logging
+import secrets
+import string
+from pathlib import Path
+
+import bcrypt
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from flask import Flask
@@ -13,6 +18,9 @@ from backend.db.sqlite_courses import CourseDbShard, SQLiteCourseDatabase
 from backend.db.sql_helpers import execute, fetch_one_dict
 
 log = logging.getLogger(__name__)
+BOOTSTRAP_ADMIN_EMAIL = "admin@localhost"
+BOOTSTRAP_ADMIN_NAME = "Setup Administrator"
+BOOTSTRAP_ADMIN_CREDENTIALS_FILE = ".bootstrap_admin_credentials.txt"
 
 
 class DBManager:
@@ -142,6 +150,67 @@ class DBManager:
         self.auth_backend.ensure_max_ip_addresses_column()
         self.auth_backend.ensure_daily_token_issue_columns()
         self.auth_backend.ensure_course_reader_state_table()
+        self._ensure_bootstrap_admin_user()
+
+    def _ensure_bootstrap_admin_user(self) -> None:
+        """Create one bootstrap admin account when no admin account exists."""
+        conn = self.get_auth_connection()
+        try:
+            row = fetch_one_dict(
+                conn,
+                """
+                SELECT COUNT(1) AS admin_count
+                FROM users u
+                JOIN roles r ON r.id = u.role_id
+                WHERE LOWER(r.name) = 'admin'
+                """,
+            )
+            admin_count = int((row or {}).get("admin_count") or 0)
+        finally:
+            conn.close()
+
+        if admin_count > 0:
+            return
+
+        email = BOOTSTRAP_ADMIN_EMAIL
+        name = BOOTSTRAP_ADMIN_NAME
+        alphabet = string.ascii_letters + string.digits
+        password = "".join(secrets.choice(alphabet) for _ in range(16))
+
+        password_hash = bcrypt.hashpw(password.encode(), bcrypt.gensalt(rounds=12)).decode()
+
+        try:
+            self.auth_backend.create_user(
+                email=email,
+                name=name,
+                role_id=2,  # admin
+                password_hash=password_hash,
+                # Setup bootstrap password must not expire before first login/password change.
+                temp_password_expires_at="",
+                max_active_sessions=1,
+                max_ip_addresses=2,
+            )
+        except Exception as exc:
+            if self.auth_backend.is_integrity_error(exc):
+                return
+            raise
+
+        creds_path = str(Path(__file__).resolve().parents[2] / BOOTSTRAP_ADMIN_CREDENTIALS_FILE)
+
+        body = (
+            "Bootstrap Admin Account (one-time setup)\n"
+            "=========================================\n"
+            f"Email: {email}\n"
+            f"Temporary Password: {password}\n\n"
+            "Notes:\n"
+            "- This account is created only when no admin user exists.\n"
+            "- You must change this temporary password on first login.\n"
+            "- After password change, the temporary password is revoked.\n"
+        )
+        path_obj = Path(creds_path)
+        path_obj.parent.mkdir(parents=True, exist_ok=True)
+        path_obj.write_text(body, encoding="utf-8")
+        log.warning("Bootstrap admin account created. Credentials written to: %s", str(path_obj))
 
     def keep_auth_db_alive(self) -> None:
         self.auth_backend.keep_alive()

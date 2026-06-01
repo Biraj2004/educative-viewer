@@ -232,7 +232,7 @@ class SQLiteAuthDatabase:
         finally:
             conn.close()
 
-    def get_all_users(self) -> list[sqlite3.Row]:
+    def get_all_users(self) -> list[dict]:
         self.ensure_is_active_column()
         self.ensure_first_login_columns()
         self.ensure_max_active_sessions_column()
@@ -240,7 +240,7 @@ class SQLiteAuthDatabase:
         self.ensure_daily_token_issue_columns()
         conn = self.get_connection()
         try:
-            return conn.execute(
+            rows = conn.execute(
                 """
                 SELECT u.id, u.email, u.name, u.username, u.role_id, r.name as role_name,
                        u.is_active, u.created_at, u.two_factor_enabled,
@@ -257,6 +257,7 @@ class SQLiteAuthDatabase:
                 ORDER BY u.id
                 """
             ).fetchall()
+            return [dict(row) for row in rows]
         finally:
             conn.close()
 
