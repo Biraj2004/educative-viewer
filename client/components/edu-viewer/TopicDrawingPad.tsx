@@ -606,7 +606,7 @@ export default function TopicDrawingPad({
     };
 
     const isFloatingMenuElement = (target: EventTarget | null): boolean => {
-      if (!(target instanceof HTMLElement)) return false;
+      if (!(target instanceof Element)) return false;
       return Boolean(
         target.closest(".dropdown-menu-container") ||
         target.closest(".dropdown-menu") ||
@@ -614,7 +614,21 @@ export default function TopicDrawingPad({
         target.closest(".color-picker") ||
         target.closest(".popover") ||
         target.closest(".excalidraw-sidebar") ||
+        target.closest("aside") ||
+        target.closest("[class*='sidebar']") ||
+        target.closest("[class*='library']") ||
+        target.closest("[data-testid*='sidebar']") ||
+        target.closest("[data-testid*='library']") ||
         target.closest("[role='dialog']")
+      );
+    };
+
+    const isAllowedExcalidrawOverlayTarget = (target: EventTarget | null): boolean => {
+      if (!(target instanceof Element)) return false;
+      return Boolean(
+        isFloatingMenuElement(target) ||
+        target.closest(".excalidraw") ||
+        target.closest("[class*='excalidraw']")
       );
     };
 
@@ -663,7 +677,8 @@ export default function TopicDrawingPad({
 
     const isDragHandleElement = (target: EventTarget | null): boolean => {
       if (!target) return false;
-      const el = target as HTMLElement;
+      if (!(target instanceof Element)) return false;
+      const el = target;
       if (typeof el.closest === "function") {
         if (
           el.closest("[role='separator']") ||
@@ -680,8 +695,9 @@ export default function TopicDrawingPad({
 
     const isInteractiveElement = (target: EventTarget | null): boolean => {
       if (!target) return false;
-      const el = target as HTMLElement;
-      const tagName = el.tagName;
+      if (!(target instanceof Element)) return false;
+      const el = target;
+      const tagName = String(el.tagName || "").toUpperCase();
       if (tagName === "BUTTON" || tagName === "INPUT" || tagName === "SELECT" || tagName === "TEXTAREA" || tagName === "A" || tagName === "LABEL") {
         return true;
       }
@@ -694,6 +710,10 @@ export default function TopicDrawingPad({
           el.closest(".layer-ui__wrapper") ||
           el.closest(".excalidraw-sidebar") ||
           el.closest("aside") ||
+          el.closest("[class*='sidebar']") ||
+          el.closest("[class*='library']") ||
+          el.closest("[data-testid*='sidebar']") ||
+          el.closest("[data-testid*='library']") ||
           el.closest("[aria-label='Close library browser']") ||
           el.closest(".context-menu") ||
           el.closest(".dropdown-menu") ||
@@ -793,7 +813,7 @@ export default function TopicDrawingPad({
     const onPointerDown = (e: PointerEvent) => {
       if (isDragHandleElement(e.target)) return;
       if (!rootRef.current?.contains(e.target as Node)) {
-        if (e.pointerType === "touch") {
+        if (e.pointerType === "touch" && !isAllowedExcalidrawOverlayTarget(e.target)) {
           e.stopPropagation();
           e.stopImmediatePropagation();
         }
@@ -841,7 +861,7 @@ export default function TopicDrawingPad({
         }
       }
       if (!rootRef.current?.contains(e.target as Node)) {
-        if (e.pointerType === "touch") {
+        if (e.pointerType === "touch" && !isAllowedExcalidrawOverlayTarget(e.target)) {
           e.stopPropagation();
           e.stopImmediatePropagation();
         }
@@ -872,7 +892,7 @@ export default function TopicDrawingPad({
         }
       }
       if (!rootRef.current?.contains(e.target as Node)) {
-        if (e.pointerType === "touch") {
+        if (e.pointerType === "touch" && !isAllowedExcalidrawOverlayTarget(e.target)) {
           e.stopPropagation();
           e.stopImmediatePropagation();
         }
@@ -900,7 +920,7 @@ export default function TopicDrawingPad({
         }
       }
       if (!rootRef.current?.contains(e.target as Node)) {
-        if (e.pointerType === "touch") {
+        if (e.pointerType === "touch" && !isAllowedExcalidrawOverlayTarget(e.target)) {
           e.stopPropagation();
           e.stopImmediatePropagation();
         }
@@ -924,6 +944,7 @@ export default function TopicDrawingPad({
       }
 
       if (!rootRef.current?.contains(e.target as Node)) {
+        if (isAllowedExcalidrawOverlayTarget(e.target)) return;
         if (e.touches.length >= 2) {
           e.stopPropagation();
           e.stopImmediatePropagation();
@@ -975,6 +996,7 @@ export default function TopicDrawingPad({
       }
 
       if (!rootRef.current?.contains(e.target as Node)) {
+        if (isAllowedExcalidrawOverlayTarget(e.target)) return;
         if (e.touches.length >= 2) {
           e.stopPropagation();
           e.stopImmediatePropagation();
@@ -1022,6 +1044,7 @@ export default function TopicDrawingPad({
       }
 
       if (!rootRef.current?.contains(e.target as Node)) {
+        if (isAllowedExcalidrawOverlayTarget(e.target)) return;
         if (e.touches.length >= 2) {
           e.stopPropagation();
           e.stopImmediatePropagation();
@@ -1040,6 +1063,7 @@ export default function TopicDrawingPad({
       // Excalidraw usually only cares about touch and pen for gestures. Let mouse clicks on outside UI bubble up safely.
       if ('pointerType' in e && (e as PointerEvent).pointerType === 'mouse') return;
       if (isDragHandleElement(e.target)) return;
+      if (isAllowedExcalidrawOverlayTarget(e.target)) return;
       if (rootRef.current && !rootRef.current.contains(e.target as Node)) {
         e.stopPropagation();
         e.stopImmediatePropagation();
@@ -1056,6 +1080,7 @@ export default function TopicDrawingPad({
     document.addEventListener("gestureend", stopOutsideEventPropagation);
 
     const stopOutsideGesturePropagation = (e: Event) => {
+      if (isAllowedExcalidrawOverlayTarget(e.target)) return;
       if (rootRef.current && !rootRef.current.contains(e.target as Node)) {
         e.stopPropagation();
         e.stopImmediatePropagation();
