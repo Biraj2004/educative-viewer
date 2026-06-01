@@ -17,7 +17,8 @@ import {
   adminCleanupAllReaderState,
   type AdminUser,
   type AdminUserSession,
-  type ReaderDataCleanupScope,
+  type UserReaderCleanupScope,
+  type GlobalCleanupScope,
 } from "@/utils/authClient";
 
 // ─── Icons ────────────────────────────────────────────────────────────────────
@@ -530,8 +531,8 @@ function UserSessionsModal({ user, onClose, onDone }: { user: AdminUser; onClose
   );
 }
 
-const CLEANUP_NON_ALL_KEYS: Array<Exclude<ReaderDataCleanupScope, "all">> = ["notes", "highlights", "drawing", "bookmarks"];
-const CLEANUP_SCOPE_OPTIONS: Array<{ key: ReaderDataCleanupScope; label: string; description: string }> = [
+const USER_CLEANUP_NON_ALL_KEYS: Array<Exclude<UserReaderCleanupScope, "all">> = ["notes", "highlights", "drawing", "bookmarks"];
+const USER_CLEANUP_SCOPE_OPTIONS: Array<{ key: UserReaderCleanupScope; label: string; description: string }> = [
   { key: "all", label: "All", description: "Clear bookmarks, highlights, notes, and drawings." },
   { key: "notes", label: "Notes", description: "Topic notes and course notes." },
   { key: "highlights", label: "Highlights", description: "Highlighted text and attached notes." },
@@ -539,7 +540,17 @@ const CLEANUP_SCOPE_OPTIONS: Array<{ key: ReaderDataCleanupScope; label: string;
   { key: "bookmarks", label: "Bookmarks", description: "All bookmarks saved by the reader." },
 ];
 
-const createCleanupSelection = (): Record<ReaderDataCleanupScope, boolean> => ({
+const GLOBAL_CLEANUP_NON_ALL_KEYS: Array<Exclude<GlobalCleanupScope, "all">> = ["notes", "highlights", "drawing", "bookmarks", "tokens"];
+const GLOBAL_CLEANUP_SCOPE_OPTIONS: Array<{ key: GlobalCleanupScope; label: string; description: string }> = [
+  { key: "all", label: "All", description: "Clear reader data and revoke every active user token." },
+  { key: "notes", label: "Notes", description: "Topic notes and course notes." },
+  { key: "highlights", label: "Highlights", description: "Highlighted text and attached notes." },
+  { key: "drawing", label: "Drawing Board", description: "Saved drawing board canvases." },
+  { key: "bookmarks", label: "Bookmarks", description: "All bookmarks saved by the reader." },
+  { key: "tokens", label: "Active Tokens", description: "Force logout for everyone by clearing all active tokens." },
+];
+
+const createUserCleanupSelection = (): Record<UserReaderCleanupScope, boolean> => ({
   all: true,
   notes: true,
   highlights: true,
@@ -547,40 +558,69 @@ const createCleanupSelection = (): Record<ReaderDataCleanupScope, boolean> => ({
   bookmarks: true,
 });
 
-const toggleCleanupSelection = (
-  prev: Record<ReaderDataCleanupScope, boolean>,
-  key: ReaderDataCleanupScope,
-): Record<ReaderDataCleanupScope, boolean> => {
+const createGlobalCleanupSelection = (): Record<GlobalCleanupScope, boolean> => ({
+  all: true,
+  notes: true,
+  highlights: true,
+  drawing: true,
+  bookmarks: true,
+  tokens: true,
+});
+
+const toggleUserCleanupSelection = (
+  prev: Record<UserReaderCleanupScope, boolean>,
+  key: UserReaderCleanupScope,
+): Record<UserReaderCleanupScope, boolean> => {
   const next = { ...prev };
   if (key === "all") {
     const nextValue = !prev.all;
-    CLEANUP_SCOPE_OPTIONS.forEach((option) => {
+    USER_CLEANUP_SCOPE_OPTIONS.forEach((option) => {
       next[option.key] = nextValue;
     });
     return next;
   }
   next[key] = !prev[key];
-  next.all = CLEANUP_NON_ALL_KEYS.every((scope) => next[scope]);
+  next.all = USER_CLEANUP_NON_ALL_KEYS.every((scope) => next[scope]);
   return next;
 };
 
-const getSelectedCleanupScopes = (selection: Record<ReaderDataCleanupScope, boolean>) =>
-  CLEANUP_NON_ALL_KEYS.filter((scope) => selection[scope]);
+const toggleGlobalCleanupSelection = (
+  prev: Record<GlobalCleanupScope, boolean>,
+  key: GlobalCleanupScope,
+): Record<GlobalCleanupScope, boolean> => {
+  const next = { ...prev };
+  if (key === "all") {
+    const nextValue = !prev.all;
+    GLOBAL_CLEANUP_SCOPE_OPTIONS.forEach((option) => {
+      next[option.key] = nextValue;
+    });
+    return next;
+  }
+  next[key] = !prev[key];
+  next.all = GLOBAL_CLEANUP_NON_ALL_KEYS.every((scope) => next[scope]);
+  return next;
+};
+
+const getSelectedUserCleanupScopes = (selection: Record<UserReaderCleanupScope, boolean>) =>
+  USER_CLEANUP_NON_ALL_KEYS.filter((scope) => selection[scope]);
+
+const getSelectedGlobalCleanupScopes = (selection: Record<GlobalCleanupScope, boolean>) =>
+  GLOBAL_CLEANUP_NON_ALL_KEYS.filter((scope) => selection[scope]);
 
 function CleanupUserReaderDataModal({ user, onClose, onDone }: { user: AdminUser; onClose: () => void; onDone: () => void }) {
-  const [scopeSelection, setScopeSelection] = useState<Record<ReaderDataCleanupScope, boolean>>(createCleanupSelection);
+  const [scopeSelection, setScopeSelection] = useState<Record<UserReaderCleanupScope, boolean>>(createUserCleanupSelection);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const selectedScopes = getSelectedCleanupScopes(scopeSelection);
+  const selectedScopes = getSelectedUserCleanupScopes(scopeSelection);
   const selectedScopeCount = selectedScopes.length;
-  const useAll = selectedScopeCount === CLEANUP_NON_ALL_KEYS.length;
+  const useAll = selectedScopeCount === USER_CLEANUP_NON_ALL_KEYS.length;
 
   async function handleCleanup() {
     if (selectedScopeCount === 0) return;
     setLoading(true);
     setError("");
     try {
-      const scopesToRun: ReaderDataCleanupScope[] = useAll ? ["all"] : selectedScopes;
+      const scopesToRun: UserReaderCleanupScope[] = useAll ? ["all"] : selectedScopes;
       for (const nextScope of scopesToRun) {
         await adminCleanupUserReaderState(user.id, nextScope);
       }
@@ -599,12 +639,12 @@ function CleanupUserReaderDataModal({ user, onClose, onDone }: { user: AdminUser
       <div>
         <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1.5">Cleanup Scope</label>
         <div className="space-y-2">
-          {CLEANUP_SCOPE_OPTIONS.map((option) => (
+          {USER_CLEANUP_SCOPE_OPTIONS.map((option) => (
             <label key={option.key} className="flex items-start gap-3 rounded-lg border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-3">
               <input
                 type="checkbox"
                 checked={scopeSelection[option.key]}
-                onChange={() => setScopeSelection((prev) => toggleCleanupSelection(prev, option.key))}
+                onChange={() => setScopeSelection((prev) => toggleUserCleanupSelection(prev, option.key))}
                 className="mt-0.5 h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
               />
               <span>
@@ -627,43 +667,43 @@ function CleanupUserReaderDataModal({ user, onClose, onDone }: { user: AdminUser
 }
 
 function GlobalCleanupReaderDataModal({ onClose, onDone }: { onClose: () => void; onDone: () => void }) {
-  const [scopeSelection, setScopeSelection] = useState<Record<ReaderDataCleanupScope, boolean>>(createCleanupSelection);
+  const [scopeSelection, setScopeSelection] = useState<Record<GlobalCleanupScope, boolean>>(createGlobalCleanupSelection);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const selectedScopes = getSelectedCleanupScopes(scopeSelection);
+  const selectedScopes = getSelectedGlobalCleanupScopes(scopeSelection);
   const selectedScopeCount = selectedScopes.length;
-  const useAll = selectedScopeCount === CLEANUP_NON_ALL_KEYS.length;
+  const useAll = selectedScopeCount === GLOBAL_CLEANUP_NON_ALL_KEYS.length;
 
   async function handleCleanup() {
     if (selectedScopeCount === 0) return;
     setLoading(true);
     setError("");
     try {
-      const scopesToRun: ReaderDataCleanupScope[] = useAll ? ["all"] : selectedScopes;
+      const scopesToRun: GlobalCleanupScope[] = useAll ? ["all"] : selectedScopes;
       for (const nextScope of scopesToRun) {
         await adminCleanupAllReaderState(nextScope);
       }
       onDone();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to cleanup reader data globally");
+      setError(err instanceof Error ? err.message : "Failed to run global cleanup");
       setLoading(false);
     }
   }
 
   return (
-    <Modal title="Global Reader Data Cleanup" onClose={onClose}>
+    <Modal title="Global Maintenance Cleanup" onClose={onClose}>
       <div className="text-sm text-gray-600 dark:text-gray-400">
-        This will cleanup selected reader data for every user and every course.
+        This will run selected maintenance actions for every user and every course.
       </div>
       <div>
         <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1.5">Cleanup Scope</label>
         <div className="space-y-2">
-          {CLEANUP_SCOPE_OPTIONS.map((option) => (
+          {GLOBAL_CLEANUP_SCOPE_OPTIONS.map((option) => (
             <label key={option.key} className="flex items-start gap-3 rounded-lg border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-3">
               <input
                 type="checkbox"
                 checked={scopeSelection[option.key]}
-                onChange={() => setScopeSelection((prev) => toggleCleanupSelection(prev, option.key))}
+                onChange={() => setScopeSelection((prev) => toggleGlobalCleanupSelection(prev, option.key))}
                 className="mt-0.5 h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
               />
               <span>
@@ -771,7 +811,7 @@ export default function AdminUsersPage() {
               className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-red-500/40 text-red-400 hover:bg-red-500/10 text-sm font-semibold transition-colors cursor-pointer"
             >
               <DatabaseIcon className="w-4 h-4" />
-              Global Cleanup
+              Global Maintenance
             </button>
             <button
               onClick={() => setShowCreate(true)}

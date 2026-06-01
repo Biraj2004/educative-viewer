@@ -838,13 +838,15 @@ export interface AdminClearUserSessionsResult {
   remaining_sessions: number;
 }
 
-export type ReaderDataCleanupScope = "bookmarks" | "highlights" | "notes" | "drawing" | "all";
+export type UserReaderCleanupScope = "bookmarks" | "highlights" | "notes" | "drawing" | "all";
+export type GlobalCleanupScope = UserReaderCleanupScope | "tokens";
 
 export interface ReaderDataCleanupResult {
   success: boolean;
-  scope: ReaderDataCleanupScope;
+  scope: GlobalCleanupScope;
   user_id?: number;
   affected_courses: number;
+  affected_tokens?: number;
 }
 
 async function adminApiCall<T>(
@@ -932,13 +934,13 @@ export async function adminClearUserSessions(
 
 export async function adminCleanupUserReaderState(
   userId: number,
-  scope: ReaderDataCleanupScope,
+  scope: UserReaderCleanupScope,
 ): Promise<ReaderDataCleanupResult> {
   return adminApiCall<ReaderDataCleanupResult>(`${getAdminAPI()}/users/${userId}/reader-state/cleanup`, "POST", { scope });
 }
 
 export async function adminCleanupAllReaderState(
-  scope: ReaderDataCleanupScope = "all",
+  scope: GlobalCleanupScope = "all",
 ): Promise<ReaderDataCleanupResult> {
   return adminApiCall<ReaderDataCleanupResult>(`${getAdminAPI()}/reader-state/cleanup`, "POST", { scope });
 }
