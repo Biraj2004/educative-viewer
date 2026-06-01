@@ -19,8 +19,11 @@ export function readSavedTheme(): "dark" | "light" | null {
 }
 
 export default function DarkModeToggle() {
-  // Keep first render deterministic for SSR hydration; sync actual DOM theme after mount.
-  const [isDark, setIsDark] = useState(false);
+  const [isDark, setIsDark] = useState(() => {
+    if (typeof document === "undefined") return false;
+    return document.documentElement.classList.contains("dark");
+  });
+  const [ready, setReady] = useState(false);
 
   const syncFromDom = () => {
     const domDark = document.documentElement.classList.contains("dark");
@@ -33,7 +36,8 @@ export default function DarkModeToggle() {
     const useDark = saved === "dark";
     document.documentElement.classList.toggle("dark", useDark);
     if (!saved) saveTheme("light");
-    requestAnimationFrame(syncFromDom);
+    syncFromDom();
+    requestAnimationFrame(() => setReady(true));
   }, []);
 
   // Keep toggle UI in sync even if some other part of app toggles the root class.
@@ -67,12 +71,12 @@ export default function DarkModeToggle() {
     <button
       onClick={toggle}
       title={isDark ? "Switch to light mode" : "Switch to dark mode"}
-      className={`relative inline-flex items-center w-11 h-6 rounded-full transition-colors duration-200 shrink-0 cursor-pointer ${
+      className={`relative inline-flex items-center w-11 h-6 rounded-full ${ready ? "transition-colors duration-200" : ""} shrink-0 cursor-pointer ${
         isDark ? "bg-indigo-600" : "bg-gray-300"
       }`}
     >
       <span
-        className={`inline-flex items-center justify-center w-5 h-5 rounded-full bg-white shadow-sm transform transition-transform duration-200 ${
+        className={`inline-flex items-center justify-center w-5 h-5 rounded-full bg-white shadow-sm transform ${ready ? "transition-transform duration-200" : ""} ${
           isDark ? "translate-x-5.5" : "translate-x-0.5"
         }`}
       >

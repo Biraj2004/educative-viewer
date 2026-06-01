@@ -533,6 +533,7 @@ def create_auth_blueprint(auth_service: AuthService, db_manager: DBManager) -> B
         data = request.get_json(force=True, silent=True) or {}
         email = str(data.get("email", "")).strip().lower()
         raw_pw = str(data.get("password", ""))
+        invalid_credentials_msg = "Incorrect username or password."
 
         if not email or not raw_pw:
             abort(400, description="Email and password are required")
@@ -547,10 +548,14 @@ def create_auth_blueprint(auth_service: AuthService, db_manager: DBManager) -> B
 
         dummy_hash = b"$2b$12$" + b"x" * 53
         stored_hash = user["password_hash"].encode() if (user and user.get("password_hash")) else dummy_hash
-        password_ok = bcrypt.checkpw(password.encode(), stored_hash)
+        try:
+            password_ok = bcrypt.checkpw(password.encode(), stored_hash)
+        except ValueError:
+            # Malformed bcrypt hash (e.g. invalid salt) must not bubble as 500.
+            password_ok = False
 
         if not user:
-            abort(401, description="Invalid email or password")
+            abort(401, description=invalid_credentials_msg)
 
         # ── Brute-force lockout check ──────────────────────────────────────────
         now_ts = time.time()
@@ -591,7 +596,12 @@ def create_auth_blueprint(auth_service: AuthService, db_manager: DBManager) -> B
                 # This only applies if they are in the transitional phase (already changed pw but not finished 2FA).
                 stale_hash = user.get("onboarding_temp_password_hash")
                 if stale_hash and not user.get("is_first_login"):
-                    if bcrypt.checkpw(password.encode(), stale_hash.encode()):
+                    stale_matches = False
+                    try:
+                        stale_matches = bcrypt.checkpw(password.encode(), stale_hash.encode())
+                    except ValueError:
+                        stale_matches = False
+                    if stale_matches:
                         abort(
                             401,
                             description=(
@@ -601,7 +611,7 @@ def create_auth_blueprint(auth_service: AuthService, db_manager: DBManager) -> B
                         )
             finally:
                 conn3.close()
-            abort(401, description="Invalid email or password")
+            abort(401, description=invalid_credentials_msg)
 
         # ── Reset lockout on successful credential check ───────────────────────
         conn_reset = db_manager.get_auth_connection()

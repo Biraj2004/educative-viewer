@@ -46,6 +46,8 @@ const SessionIcon = ({ className }: { className?: string }) => <Icon d="M20 16V8
 // ─── Shared input/button styles ───────────────────────────────────────────────
 
 const inputCls = "w-full px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-sm text-gray-900 dark:text-gray-100 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all";
+const numberInputCls = `${inputCls} [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none`;
+const selectInputCls = `${inputCls} appearance-none`;
 const btnPrimary = "px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold transition-colors cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed";
 const btnGhost = "px-4 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 text-sm font-medium transition-colors cursor-pointer";
 const btnDanger = "px-4 py-2 rounded-lg bg-red-600 hover:bg-red-700 text-white text-sm font-semibold transition-colors cursor-pointer disabled:opacity-60";
@@ -180,7 +182,7 @@ function CreateUserModal({ onClose, onCreated }: { onClose: () => void; onCreate
         </div>
         <div>
           <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1.5">Role</label>
-          <select value={roleId} onChange={(e) => setRoleId(Number(e.target.value))} className={inputCls}>
+          <select value={roleId} onChange={(e) => setRoleId(Number(e.target.value))} className={selectInputCls}>
             <option value={1}>User</option>
             <option value={2}>Admin</option>
           </select>
@@ -193,7 +195,7 @@ function CreateUserModal({ onClose, onCreated }: { onClose: () => void; onCreate
             max={20}
             value={maxActiveSessions}
             onChange={(e) => setMaxActiveSessions(Math.max(1, Number(e.target.value) || 1))}
-            className={inputCls}
+            className={numberInputCls}
           />
         </div>
         <div>
@@ -204,7 +206,7 @@ function CreateUserModal({ onClose, onCreated }: { onClose: () => void; onCreate
             max={20}
             value={maxIpAddresses}
             onChange={(e) => setMaxIpAddresses(Math.max(1, Number(e.target.value) || 1))}
-            className={inputCls}
+            className={numberInputCls}
           />
         </div>
         {error && <p className="text-xs text-red-600 dark:text-red-400">{error}</p>}
@@ -277,7 +279,7 @@ function EditUserModal({
           <select 
             value={roleId} 
             onChange={(e) => setRoleId(Number(e.target.value))} 
-            className={inputCls}
+            className={selectInputCls}
             disabled={isSelf}
             title={isSelf ? "You cannot change your own role" : ""}
           >
@@ -294,7 +296,7 @@ function EditUserModal({
             max={20}
             value={maxActiveSessions}
             onChange={(e) => setMaxActiveSessions(Math.max(1, Number(e.target.value) || 1))}
-            className={inputCls}
+            className={numberInputCls}
           />
         </div>
         <div>
@@ -305,12 +307,11 @@ function EditUserModal({
             max={20}
             value={maxIpAddresses}
             onChange={(e) => setMaxIpAddresses(Math.max(1, Number(e.target.value) || 1))}
-            className={inputCls}
+            className={numberInputCls}
           />
         </div>
         {error && <p className="text-xs text-red-600 dark:text-red-400">{error}</p>}
-        <div className="flex gap-2 justify-end pt-1">
-          <button type="button" onClick={onClose} className={btnGhost}>Cancel</button>
+        <div className="flex justify-end pt-1">
           <button type="submit" disabled={loading} className={btnPrimary}>{loading ? "Saving…" : "Save Changes"}</button>
         </div>
       </form>
