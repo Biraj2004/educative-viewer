@@ -17,7 +17,7 @@ import {
   adminCleanupAllReaderState,
   type AdminUser,
   type AdminUserSession,
-  type UserReaderCleanupScope,
+  type UserDataCleanupScope,
   type GlobalCleanupScope,
 } from "@/utils/authClient";
 
@@ -101,7 +101,19 @@ function TempPasswordCard({ password, expiresAt, onClose }: { password: string; 
 
 // ─── Modal wrapper ────────────────────────────────────────────────────────────
 
-function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
+function Modal({
+  title,
+  onClose,
+  children,
+  maxWidthClass = "max-w-md",
+  contentClassName = "",
+}: {
+  title: string;
+  onClose: () => void;
+  children: React.ReactNode;
+  maxWidthClass?: string;
+  contentClassName?: string;
+}) {
   useEffect(() => {
     const handler = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
     document.addEventListener("keydown", handler);
@@ -109,16 +121,16 @@ function Modal({ title, onClose, children }: { title: string; onClose: () => voi
   }, [onClose]);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4">
       <div className="absolute inset-0 bg-black/40 dark:bg-black/60 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative w-full max-w-md bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 shadow-2xl overflow-hidden">
-        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 dark:border-gray-800">
-          <h2 className="text-base font-semibold text-gray-900 dark:text-gray-100">{title}</h2>
+      <div className={`relative w-full ${maxWidthClass} max-h-[92vh] bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 shadow-2xl overflow-hidden`}>
+        <div className="flex items-center justify-between px-4 sm:px-5 py-3 sm:py-4 border-b border-gray-100 dark:border-gray-800">
+          <h2 className="text-base sm:text-[1.05rem] font-semibold text-gray-900 dark:text-gray-100">{title}</h2>
           <button onClick={onClose} className="p-1 rounded-lg text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 cursor-pointer transition-colors">
             <XIcon className="w-4 h-4" />
           </button>
         </div>
-        <div className="p-5 flex flex-col gap-4">{children}</div>
+        <div className={`p-4 sm:p-5 flex flex-col gap-4 overflow-y-auto ${contentClassName}`}>{children}</div>
       </div>
     </div>
   );
@@ -531,31 +543,34 @@ function UserSessionsModal({ user, onClose, onDone }: { user: AdminUser; onClose
   );
 }
 
-const USER_CLEANUP_NON_ALL_KEYS: Array<Exclude<UserReaderCleanupScope, "all">> = ["notes", "highlights", "drawing", "bookmarks"];
-const USER_CLEANUP_SCOPE_OPTIONS: Array<{ key: UserReaderCleanupScope; label: string; description: string }> = [
-  { key: "all", label: "All", description: "Clear bookmarks, highlights, notes, and drawings." },
+const USER_CLEANUP_NON_ALL_KEYS: Array<Exclude<UserDataCleanupScope, "all">> = ["notes", "highlights", "drawing", "bookmarks", "progress"];
+const USER_CLEANUP_SCOPE_OPTIONS: Array<{ key: UserDataCleanupScope; label: string; description: string }> = [
+  { key: "all", label: "All", description: "Clear reader data and learning progress." },
   { key: "notes", label: "Notes", description: "Topic notes and course notes." },
   { key: "highlights", label: "Highlights", description: "Highlighted text and attached notes." },
   { key: "drawing", label: "Drawing Board", description: "Saved drawing board canvases." },
   { key: "bookmarks", label: "Bookmarks", description: "All bookmarks saved by the reader." },
+  { key: "progress", label: "Progress", description: "Topic completion and visited progress records." },
 ];
 
-const GLOBAL_CLEANUP_NON_ALL_KEYS: Array<Exclude<GlobalCleanupScope, "all">> = ["notes", "highlights", "drawing", "bookmarks", "tokens"];
+const GLOBAL_CLEANUP_NON_ALL_KEYS: Array<Exclude<GlobalCleanupScope, "all">> = ["notes", "highlights", "drawing", "bookmarks", "progress", "tokens"];
 const GLOBAL_CLEANUP_SCOPE_OPTIONS: Array<{ key: GlobalCleanupScope; label: string; description: string }> = [
-  { key: "all", label: "All", description: "Clear reader data and revoke every active user token." },
+  { key: "all", label: "All", description: "Clear reader data, progress, and revoke every active user token." },
   { key: "notes", label: "Notes", description: "Topic notes and course notes." },
   { key: "highlights", label: "Highlights", description: "Highlighted text and attached notes." },
   { key: "drawing", label: "Drawing Board", description: "Saved drawing board canvases." },
   { key: "bookmarks", label: "Bookmarks", description: "All bookmarks saved by the reader." },
+  { key: "progress", label: "Progress", description: "Delete progress records for every user and every course." },
   { key: "tokens", label: "Active Tokens", description: "Force logout for everyone by clearing all active tokens." },
 ];
 
-const createUserCleanupSelection = (): Record<UserReaderCleanupScope, boolean> => ({
+const createUserCleanupSelection = (): Record<UserDataCleanupScope, boolean> => ({
   all: true,
   notes: true,
   highlights: true,
   drawing: true,
   bookmarks: true,
+  progress: true,
 });
 
 const createGlobalCleanupSelection = (): Record<GlobalCleanupScope, boolean> => ({
@@ -564,13 +579,14 @@ const createGlobalCleanupSelection = (): Record<GlobalCleanupScope, boolean> => 
   highlights: true,
   drawing: true,
   bookmarks: true,
+  progress: true,
   tokens: true,
 });
 
 const toggleUserCleanupSelection = (
-  prev: Record<UserReaderCleanupScope, boolean>,
-  key: UserReaderCleanupScope,
-): Record<UserReaderCleanupScope, boolean> => {
+  prev: Record<UserDataCleanupScope, boolean>,
+  key: UserDataCleanupScope,
+): Record<UserDataCleanupScope, boolean> => {
   const next = { ...prev };
   if (key === "all") {
     const nextValue = !prev.all;
@@ -601,14 +617,14 @@ const toggleGlobalCleanupSelection = (
   return next;
 };
 
-const getSelectedUserCleanupScopes = (selection: Record<UserReaderCleanupScope, boolean>) =>
+const getSelectedUserCleanupScopes = (selection: Record<UserDataCleanupScope, boolean>) =>
   USER_CLEANUP_NON_ALL_KEYS.filter((scope) => selection[scope]);
 
 const getSelectedGlobalCleanupScopes = (selection: Record<GlobalCleanupScope, boolean>) =>
   GLOBAL_CLEANUP_NON_ALL_KEYS.filter((scope) => selection[scope]);
 
 function CleanupUserReaderDataModal({ user, onClose, onDone }: { user: AdminUser; onClose: () => void; onDone: () => void }) {
-  const [scopeSelection, setScopeSelection] = useState<Record<UserReaderCleanupScope, boolean>>(createUserCleanupSelection);
+  const [scopeSelection, setScopeSelection] = useState<Record<UserDataCleanupScope, boolean>>(createUserCleanupSelection);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const selectedScopes = getSelectedUserCleanupScopes(scopeSelection);
@@ -620,27 +636,27 @@ function CleanupUserReaderDataModal({ user, onClose, onDone }: { user: AdminUser
     setLoading(true);
     setError("");
     try {
-      const scopesToRun: UserReaderCleanupScope[] = useAll ? ["all"] : selectedScopes;
+      const scopesToRun: UserDataCleanupScope[] = useAll ? ["all"] : selectedScopes;
       for (const nextScope of scopesToRun) {
         await adminCleanupUserReaderState(user.id, nextScope);
       }
       onDone();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to cleanup reader data");
+      setError(err instanceof Error ? err.message : "Failed to cleanup user data");
       setLoading(false);
     }
   }
 
   return (
-    <Modal title="Cleanup User Reader Data" onClose={onClose}>
+    <Modal title="Cleanup User Data" onClose={onClose} maxWidthClass="max-w-[min(96vw,1100px)]">
       <div className="text-sm text-gray-600 dark:text-gray-400">
         Select what to clear for <strong className="text-gray-900 dark:text-gray-100">{user.name || user.email}</strong> across all courses.
       </div>
       <div>
         <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1.5">Cleanup Scope</label>
-        <div className="space-y-2">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-2 sm:gap-3">
           {USER_CLEANUP_SCOPE_OPTIONS.map((option) => (
-            <label key={option.key} className="flex items-start gap-3 rounded-lg border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-3">
+            <label key={option.key} className="flex items-start gap-3 rounded-lg border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-3 sm:p-4">
               <input
                 type="checkbox"
                 checked={scopeSelection[option.key]}
@@ -656,9 +672,9 @@ function CleanupUserReaderDataModal({ user, onClose, onDone }: { user: AdminUser
         </div>
       </div>
       {error && <p className="text-xs text-red-600 dark:text-red-400">{error}</p>}
-      <div className="flex gap-2 justify-end">
-        <button type="button" onClick={onClose} className={btnGhost}>Cancel</button>
-        <button type="button" onClick={handleCleanup} disabled={loading || selectedScopeCount === 0} className={btnDanger}>
+      <div className="flex flex-col-reverse sm:flex-row gap-2 sm:justify-end">
+        <button type="button" onClick={onClose} className={`${btnGhost} w-full sm:w-auto`}>Cancel</button>
+        <button type="button" onClick={handleCleanup} disabled={loading || selectedScopeCount === 0} className={`${btnDanger} w-full sm:w-auto`}>
           {loading ? "Cleaning..." : "Cleanup"}
         </button>
       </div>
@@ -691,15 +707,15 @@ function GlobalCleanupReaderDataModal({ onClose, onDone }: { onClose: () => void
   }
 
   return (
-    <Modal title="Global Maintenance Cleanup" onClose={onClose}>
+    <Modal title="Global Maintenance Cleanup" onClose={onClose} maxWidthClass="max-w-[min(96vw,1100px)]">
       <div className="text-sm text-gray-600 dark:text-gray-400">
         This will run selected maintenance actions for every user and every course.
       </div>
       <div>
         <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1.5">Cleanup Scope</label>
-        <div className="space-y-2">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-2 sm:gap-3">
           {GLOBAL_CLEANUP_SCOPE_OPTIONS.map((option) => (
-            <label key={option.key} className="flex items-start gap-3 rounded-lg border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-3">
+            <label key={option.key} className="flex items-start gap-3 rounded-lg border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-3 sm:p-4">
               <input
                 type="checkbox"
                 checked={scopeSelection[option.key]}
@@ -715,9 +731,9 @@ function GlobalCleanupReaderDataModal({ onClose, onDone }: { onClose: () => void
         </div>
       </div>
       {error && <p className="text-xs text-red-600 dark:text-red-400">{error}</p>}
-      <div className="flex gap-2 justify-end">
-        <button type="button" onClick={onClose} className={btnGhost}>Cancel</button>
-        <button type="button" onClick={handleCleanup} disabled={loading || selectedScopeCount === 0} className={btnDanger}>
+      <div className="flex flex-col-reverse sm:flex-row gap-2 sm:justify-end">
+        <button type="button" onClick={onClose} className={`${btnGhost} w-full sm:w-auto`}>Cancel</button>
+        <button type="button" onClick={handleCleanup} disabled={loading || selectedScopeCount === 0} className={`${btnDanger} w-full sm:w-auto`}>
           {loading ? "Cleaning..." : "Cleanup All"}
         </button>
       </div>
@@ -976,7 +992,7 @@ export default function AdminUsersPage() {
                               </button>
                               <button
                                 onClick={() => setCleanupUser(u)}
-                                title="Cleanup reader data"
+                                title="Cleanup user data"
                                 className="p-1.5 rounded-lg text-gray-400 hover:text-red-500 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 cursor-pointer transition-colors"
                               >
                                 <DatabaseIcon className="w-4 h-4" />

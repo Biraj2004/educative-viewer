@@ -23,8 +23,8 @@ from backend.routes.admin.helpers import require_admin, get_json_body, parse_int
 
 EMAIL_RE = __import__("re").compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 TEMP_PW_EXPIRES_HOURS = 1
-USER_READER_DATA_CLEANUP_SCOPES = {"bookmarks", "highlights", "notes", "drawing", "all"}
-GLOBAL_CLEANUP_SCOPES = {"bookmarks", "highlights", "notes", "drawing", "tokens", "all"}
+USER_DATA_CLEANUP_SCOPES = {"bookmarks", "highlights", "notes", "drawing", "progress", "all"}
+GLOBAL_CLEANUP_SCOPES = {"bookmarks", "highlights", "notes", "drawing", "progress", "tokens", "all"}
 MAX_ACTIVE_SESSIONS_LIMIT = 20
 MAX_IP_ADDRESSES_LIMIT = 20
 
@@ -411,23 +411,56 @@ def register_user_routes(bp: Blueprint, auth_service: AuthService, db_manager: D
 
     @bp.route("/users/<int:user_id>/reader-state/cleanup", methods=["POST"])
     def cleanup_user_reader_state(user_id: int):
-        """Cleanup reader data for one user across all courses by scope."""
+        """Cleanup user data for one user across all courses by scope."""
         require_admin(auth_service)
         body = get_json_body()
         scope = str(body.get("scope", "all") or "all").strip().lower()
-        if scope not in USER_READER_DATA_CLEANUP_SCOPES:
-            abort(400, description="scope must be one of: bookmarks, highlights, notes, drawing, all")
+        if scope not in USER_DATA_CLEANUP_SCOPES:
+            abort(400, description="scope must be one of: bookmarks, highlights, notes, drawing, progress, all")
 
         conn = db_manager.get_auth_connection()
         try:
+            affected_progress_rows = 0
             if scope == "all":
-                affected = execute(
+                affected_courses = execute(
                     conn,
                     "DELETE FROM user_course_reader_state WHERE user_id = :user_id",
                     {"user_id": user_id},
                 )
+                affected_progress_rows = execute(
+                    conn,
+                    "DELETE FROM user_progress WHERE user_id = :user_id",
+                    {"user_id": user_id},
+                )
                 conn.commit()
-                return jsonify({"success": True, "user_id": user_id, "scope": scope, "affected_courses": max(affected, 0)})
+                return jsonify(
+                    {
+                        "success": True,
+                        "user_id": user_id,
+                        "scope": scope,
+                        "affected_courses": max(affected_courses, 0),
+                        "affected_progress_rows": max(affected_progress_rows, 0),
+                        "affected_tokens": 0,
+                    }
+                )
+
+            if scope == "progress":
+                affected_progress_rows = execute(
+                    conn,
+                    "DELETE FROM user_progress WHERE user_id = :user_id",
+                    {"user_id": user_id},
+                )
+                conn.commit()
+                return jsonify(
+                    {
+                        "success": True,
+                        "user_id": user_id,
+                        "scope": scope,
+                        "affected_courses": 0,
+                        "affected_progress_rows": max(affected_progress_rows, 0),
+                        "affected_tokens": 0,
+                    }
+                )
 
             rows = fetch_all_dict(
                 conn,
@@ -465,21 +498,31 @@ def register_user_routes(bp: Blueprint, auth_service: AuthService, db_manager: D
         finally:
             conn.close()
 
-        return jsonify({"success": True, "user_id": user_id, "scope": scope, "affected_courses": affected_courses})
+        return jsonify(
+            {
+                "success": True,
+                "user_id": user_id,
+                "scope": scope,
+                "affected_courses": affected_courses,
+                "affected_progress_rows": 0,
+                "affected_tokens": 0,
+            }
+        )
 
     @bp.route("/reader-state/cleanup", methods=["POST"])
     def cleanup_all_reader_state():
-        """Global maintenance cleanup: reader data and/or active tokens."""
+        """Global maintenance cleanup: reader data, progress, and/or active tokens."""
         require_admin(auth_service)
         body = get_json_body()
         scope = str(body.get("scope", "all") or "all").strip().lower()
         if scope not in GLOBAL_CLEANUP_SCOPES:
-            abort(400, description="scope must be one of: bookmarks, highlights, notes, drawing, tokens, all")
+            abort(400, description="scope must be one of: bookmarks, highlights, notes, drawing, progress, tokens, all")
 
         conn = db_manager.get_auth_connection()
         try:
             if scope == "all":
                 affected_courses = execute(conn, "DELETE FROM user_course_reader_state")
+                affected_progress_rows = execute(conn, "DELETE FROM user_progress")
                 affected_tokens = execute(conn, "UPDATE users_sensitive SET current_token = NULL")
                 conn.commit()
                 return jsonify(
@@ -487,6 +530,7 @@ def register_user_routes(bp: Blueprint, auth_service: AuthService, db_manager: D
                         "success": True,
                         "scope": scope,
                         "affected_courses": max(affected_courses, 0),
+                        "affected_progress_rows": max(affected_progress_rows, 0),
                         "affected_tokens": max(affected_tokens, 0),
                     }
                 )
@@ -499,7 +543,21 @@ def register_user_routes(bp: Blueprint, auth_service: AuthService, db_manager: D
                         "success": True,
                         "scope": scope,
                         "affected_courses": 0,
+                        "affected_progress_rows": 0,
                         "affected_tokens": max(affected_tokens, 0),
+                    }
+                )
+
+            if scope == "progress":
+                affected_progress_rows = execute(conn, "DELETE FROM user_progress")
+                conn.commit()
+                return jsonify(
+                    {
+                        "success": True,
+                        "scope": scope,
+                        "affected_courses": 0,
+                        "affected_progress_rows": max(affected_progress_rows, 0),
+                        "affected_tokens": 0,
                     }
                 )
 
@@ -540,6 +598,7 @@ def register_user_routes(bp: Blueprint, auth_service: AuthService, db_manager: D
                 "success": True,
                 "scope": scope,
                 "affected_courses": affected_courses,
+                "affected_progress_rows": 0,
                 "affected_tokens": 0,
             }
         )

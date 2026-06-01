@@ -51,6 +51,7 @@ def register_settings_routes(bp: Blueprint, auth_service: AuthService) -> None:
             "totp_issuer": get_env_variable("TOTP_ISSUER", "EduViewer"),
             "gemini_api_key": get_env_variable("GEMINI_API_KEY"),
             "groq_api_key": get_env_variable("GROQ_API_KEY"),
+            "judge0_rapidapi_key": get_env_variable("JUDGE0_RAPIDAPI_KEY"),
             "course_db_engine": get_env_variable("COURSE_DB_ENGINE", "sqlite"),
             "course_sqlite_db_paths_json": get_env_variable("COURSE_SQLITE_DB_PATHS_JSON", '[]'),
             "viewer_feature_flags_json": json.dumps(viewer_feature_flags, separators=(",", ":")),
@@ -71,6 +72,7 @@ def register_settings_routes(bp: Blueprint, auth_service: AuthService) -> None:
             "totp_issuer": "TOTP_ISSUER",
             "gemini_api_key": "GEMINI_API_KEY",
             "groq_api_key": "GROQ_API_KEY",
+            "judge0_rapidapi_key": "JUDGE0_RAPIDAPI_KEY",
             "course_db_engine": "COURSE_DB_ENGINE",
             "course_sqlite_db_paths_json": "COURSE_SQLITE_DB_PATHS_JSON",
         }
@@ -101,6 +103,8 @@ def register_settings_routes(bp: Blueprint, auth_service: AuthService) -> None:
             cfg.gemini_api_key = str(data["gemini_api_key"])
         if "groq_api_key" in data:
             cfg.groq_api_key = str(data["groq_api_key"])
+        if "judge0_rapidapi_key" in data:
+            cfg.judge0_rapidapi_key = str(data["judge0_rapidapi_key"])
             
         course_db_updated = False
         if "course_db_engine" in data:

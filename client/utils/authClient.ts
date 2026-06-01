@@ -838,14 +838,15 @@ export interface AdminClearUserSessionsResult {
   remaining_sessions: number;
 }
 
-export type UserReaderCleanupScope = "bookmarks" | "highlights" | "notes" | "drawing" | "all";
-export type GlobalCleanupScope = UserReaderCleanupScope | "tokens";
+export type UserDataCleanupScope = "bookmarks" | "highlights" | "notes" | "drawing" | "progress" | "all";
+export type GlobalCleanupScope = UserDataCleanupScope | "tokens";
 
 export interface ReaderDataCleanupResult {
   success: boolean;
-  scope: GlobalCleanupScope;
+  scope: UserDataCleanupScope | GlobalCleanupScope;
   user_id?: number;
   affected_courses: number;
+  affected_progress_rows?: number;
   affected_tokens?: number;
 }
 
@@ -934,7 +935,7 @@ export async function adminClearUserSessions(
 
 export async function adminCleanupUserReaderState(
   userId: number,
-  scope: UserReaderCleanupScope,
+  scope: UserDataCleanupScope,
 ): Promise<ReaderDataCleanupResult> {
   return adminApiCall<ReaderDataCleanupResult>(`${getAdminAPI()}/users/${userId}/reader-state/cleanup`, "POST", { scope });
 }

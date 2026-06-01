@@ -1,5 +1,5 @@
 {
-  "generated_at_utc": "2026-06-01T06:28:48Z",
+  "generated_at_utc": "2026-06-01T08:57:50Z",
   "backend_api_rules": [
     "/api/admin/reader-state/cleanup",
     "/api/admin/set-course-status",
