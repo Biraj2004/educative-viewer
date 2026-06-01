@@ -693,6 +693,8 @@ export default function TopicDrawingPad({
           el.closest(".excalidraw-button") ||
           el.closest(".layer-ui__wrapper") ||
           el.closest(".excalidraw-sidebar") ||
+          el.closest("aside") ||
+          el.closest("[aria-label='Close library browser']") ||
           el.closest(".context-menu") ||
           el.closest(".dropdown-menu") ||
           el.closest(".popover") ||
@@ -1563,6 +1565,67 @@ export default function TopicDrawingPad({
     }
   }, [api, importLibraryBlobWithDedupe, libraryImportBusy, librarySourcePresenceBySource]);
 
+  const handleRemoveLibraryFromCatalog = useCallback(async (library: ExcalidrawLibraryItem) => {
+    if (!api || libraryImportBusy) return;
+    if (!librarySourcePresenceBySource[library.source]) return;
+    setLibraryImportBusy(true);
+    setLibraryImportingSource(library.source);
+    setLibraryImportError(null);
+    try {
+      const meta = librarySourceMetaBySource[library.source];
+      const signaturesToRemove = new Set(meta?.signatures || []);
+      const namesToRemove = new Set(meta?.names || []);
+
+      await api.updateLibrary({
+        libraryItems: (currentItems) => {
+          const nextItems = currentItems.filter((item) => {
+            const signature = getLibraryItemSignature(item);
+            if (signature && signaturesToRemove.has(signature)) return false;
+            const name = typeof item.name === "string" ? item.name.trim() : "";
+            if (name && namesToRemove.has(name)) return false;
+            return true;
+          });
+          return nextItems;
+        },
+        merge: false,
+        openLibraryMenu: false,
+      });
+
+      // Optimistically update presence in our local state/storage
+      const updatedSignatures = new Set(libraryItemSignaturesRef.current);
+      const updatedNames = new Set(libraryItemNamesRef.current);
+
+      signaturesToRemove.forEach((sig) => updatedSignatures.delete(sig));
+      namesToRemove.forEach((name) => updatedNames.delete(name));
+
+      libraryItemSignaturesRef.current = updatedSignatures;
+      libraryItemNamesRef.current = updatedNames;
+
+      persistLibrarySourcePresence(
+        computeLibrarySourcePresenceMap(
+          librarySourceMetaRef.current,
+          updatedSignatures,
+          updatedNames,
+        )
+      );
+
+    } catch (err: unknown) {
+      const message = err instanceof Error && err.message
+        ? err.message
+        : `Could not remove "${library.name}".`;
+      setLibraryImportError(message);
+    } finally {
+      setLibraryImportBusy(false);
+      setLibraryImportingSource(null);
+    }
+  }, [
+    api,
+    libraryImportBusy,
+    librarySourcePresenceBySource,
+    librarySourceMetaBySource,
+    persistLibrarySourcePresence,
+  ]);
+
   useEffect(() => {
     if (typeof window === "undefined") return;
     const onHashChange = () => {
@@ -2208,36 +2271,42 @@ export default function TopicDrawingPad({
                           </p>
                           <button
                             type="button"
-                            onClick={() => { void handleImportLibraryFromCatalog(library); }}
-                            disabled={libraryImportBusy || !api || alreadyInLibrary}
+                            onClick={() => {
+                              if (alreadyInLibrary) {
+                                void handleRemoveLibraryFromCatalog(library);
+                              } else {
+                                void handleImportLibraryFromCatalog(library);
+                              }
+                            }}
+                            disabled={libraryImportBusy || !api}
                             title={
-                              alreadyInLibrary
-                                ? "Already added"
-                                : importingThis
-                                  ? "Adding..."
+                              importingThis
+                                ? "Processing..."
+                                : alreadyInLibrary
+                                  ? "Remove library"
                                   : "Add library"
                             }
                             aria-label={
-                              alreadyInLibrary
-                                ? "Already added"
-                                : importingThis
-                                  ? "Adding..."
+                              importingThis
+                                ? "Processing..."
+                                : alreadyInLibrary
+                                  ? "Remove library"
                                   : "Add library"
                             }
                             className={`absolute right-3 bottom-3 inline-flex items-center justify-center h-9 w-9 rounded-full border transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
                               alreadyInLibrary
-                                ? "border-emerald-300 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-900/20"
+                                ? "border-rose-300 dark:border-rose-800 text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/20 hover:bg-rose-100 dark:hover:bg-rose-900/40 hover:text-rose-800 dark:hover:text-rose-300"
                                 : "border-indigo-300 dark:border-indigo-800 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-50 dark:hover:bg-indigo-900/20"
                             }`}
                           >
-                            {alreadyInLibrary ? (
-                              <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" strokeWidth="2.2" fill="none" strokeLinecap="round" strokeLinejoin="round">
-                                <polyline points="20 6 9 17 4 12"></polyline>
-                              </svg>
-                            ) : importingThis ? (
+                            {importingThis ? (
                               <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" strokeWidth="2.2" fill="none" strokeLinecap="round" strokeLinejoin="round" className="animate-spin">
                                 <path d="M21 12a9 9 0 1 1-2.64-6.36"></path>
                                 <polyline points="21 3 21 9 15 9"></polyline>
+                              </svg>
+                            ) : alreadyInLibrary ? (
+                              <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" strokeWidth="2.2" fill="none" strokeLinecap="round" strokeLinejoin="round">
+                                <line x1="5" y1="12" x2="19" y2="12"></line>
                               </svg>
                             ) : (
                               <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" strokeWidth="2.2" fill="none" strokeLinecap="round" strokeLinejoin="round">
