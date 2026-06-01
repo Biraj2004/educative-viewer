@@ -386,8 +386,8 @@ function UserSessionsModal({ user, onClose, onDone }: { user: AdminUser; onClose
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [sessions, setSessions] = useState<AdminUserSession[]>([]);
-  const [lastLoginIp, setLastLoginIp] = useState<string | null>(null);
-  const [lastLoginAt, setLastLoginAt] = useState<string | null>(null);
+  const [currentActiveIp, setCurrentActiveIp] = useState<string | null>(null);
+  const [currentActiveAt, setCurrentActiveAt] = useState<string | null>(null);
   const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set());
 
   const fetchSessions = useCallback(async () => {
@@ -396,8 +396,8 @@ function UserSessionsModal({ user, onClose, onDone }: { user: AdminUser; onClose
     try {
       const result = await adminGetUserSessions(user.id);
       setSessions(result.sessions ?? []);
-      setLastLoginIp(result.last_login_ip ?? null);
-      setLastLoginAt(result.last_login_at ?? null);
+      setCurrentActiveIp(result.current_active_ip ?? result.last_login_ip ?? null);
+      setCurrentActiveAt(result.current_active_at ?? result.last_login_at ?? null);
       setSelectedKeys(new Set());
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load sessions");
@@ -430,30 +430,17 @@ function UserSessionsModal({ user, onClose, onDone }: { user: AdminUser; onClose
     });
   };
 
-  const clearSelected = async () => {
+  const clearSelectedOrAll = async () => {
     if (selectedCount === 0) return;
     setSaving(true);
     setError("");
     try {
-      await adminClearUserSessions(user.id, Array.from(selectedKeys), false);
+      const shouldClearAll = allSelected;
+      await adminClearUserSessions(user.id, shouldClearAll ? [] : Array.from(selectedKeys), shouldClearAll);
       await fetchSessions();
       onDone();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to clear selected sessions");
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const clearAll = async () => {
-    setSaving(true);
-    setError("");
-    try {
-      await adminClearUserSessions(user.id, [], true);
-      await fetchSessions();
-      onDone();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to clear all sessions");
+      setError(err instanceof Error ? err.message : "Failed to clear sessions");
     } finally {
       setSaving(false);
     }
@@ -466,10 +453,10 @@ function UserSessionsModal({ user, onClose, onDone }: { user: AdminUser; onClose
       </div>
       <div className="rounded-lg border border-gray-200 dark:border-gray-800 bg-gray-50/70 dark:bg-gray-950/50 px-3 py-2">
         <p className="text-xs text-gray-500 dark:text-gray-400">
-          Last login IP: <span className="font-medium text-gray-800 dark:text-gray-200">{lastLoginIp || "Unknown"}</span>
+          Current IP in use: <span className="font-medium text-gray-800 dark:text-gray-200">{currentActiveIp || "Unknown"}</span>
         </p>
         <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-          Last login time: <span className="font-medium text-gray-800 dark:text-gray-200">{lastLoginAt ? new Date(lastLoginAt).toLocaleString() : "Unknown"}</span>
+          Current session since: <span className="font-medium text-gray-800 dark:text-gray-200">{currentActiveAt ? new Date(currentActiveAt).toLocaleString() : "Unknown"}</span>
         </p>
       </div>
 
@@ -505,7 +492,7 @@ function UserSessionsModal({ user, onClose, onDone }: { user: AdminUser; onClose
               />
               <div className="min-w-0">
                 <p className="text-xs font-medium text-gray-900 dark:text-gray-100">
-                  {session.is_most_recent ? "Most recent session" : "Active session"} - token ...{session.token_hint}
+                  {session.is_most_recent ? "Current in-use session" : "Active session"} - token ...{session.token_hint}
                 </p>
                 <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5">
                   Issued: {session.issued_at ? new Date(session.issued_at).toLocaleString() : "Unknown"}
@@ -521,22 +508,17 @@ function UserSessionsModal({ user, onClose, onDone }: { user: AdminUser; onClose
 
       {error && <p className="text-xs text-red-600 dark:text-red-400">{error}</p>}
       <div className="flex flex-wrap gap-2 justify-end">
-        <button type="button" onClick={onClose} className={btnGhost}>Close</button>
         <button
           type="button"
-          onClick={clearSelected}
+          onClick={clearSelectedOrAll}
           disabled={saving || selectedCount === 0 || sessions.length === 0}
-          className={btnPrimary}
-        >
-          {saving ? "Clearing..." : `Clear Selected${selectedCount > 0 ? ` (${selectedCount})` : ""}`}
-        </button>
-        <button
-          type="button"
-          onClick={clearAll}
-          disabled={saving || sessions.length === 0}
           className={btnDanger}
         >
-          {saving ? "Clearing..." : "Clear All"}
+          {saving
+            ? "Clearing..."
+            : allSelected
+              ? "Clear All"
+              : `Clear Selected${selectedCount > 0 ? ` (${selectedCount})` : ""}`}
         </button>
       </div>
     </Modal>
@@ -673,9 +655,12 @@ function CleanupUserReaderDataModal({ user, onClose, onDone }: { user: AdminUser
       </div>
       {error && <p className="text-xs text-red-600 dark:text-red-400">{error}</p>}
       <div className="flex flex-col-reverse sm:flex-row gap-2 sm:justify-end">
-        <button type="button" onClick={onClose} className={`${btnGhost} w-full sm:w-auto`}>Cancel</button>
         <button type="button" onClick={handleCleanup} disabled={loading || selectedScopeCount === 0} className={`${btnDanger} w-full sm:w-auto`}>
-          {loading ? "Cleaning..." : "Cleanup"}
+          {loading
+            ? "Cleaning..."
+            : useAll
+              ? "Cleanup All"
+              : `Cleanup Selected${selectedScopeCount > 0 ? ` (${selectedScopeCount})` : ""}`}
         </button>
       </div>
     </Modal>
@@ -732,9 +717,12 @@ function GlobalCleanupReaderDataModal({ onClose, onDone }: { onClose: () => void
       </div>
       {error && <p className="text-xs text-red-600 dark:text-red-400">{error}</p>}
       <div className="flex flex-col-reverse sm:flex-row gap-2 sm:justify-end">
-        <button type="button" onClick={onClose} className={`${btnGhost} w-full sm:w-auto`}>Cancel</button>
         <button type="button" onClick={handleCleanup} disabled={loading || selectedScopeCount === 0} className={`${btnDanger} w-full sm:w-auto`}>
-          {loading ? "Cleaning..." : "Cleanup All"}
+          {loading
+            ? "Cleaning..."
+            : useAll
+              ? "Cleanup All"
+              : `Cleanup Selected${selectedScopeCount > 0 ? ` (${selectedScopeCount})` : ""}`}
         </button>
       </div>
     </Modal>

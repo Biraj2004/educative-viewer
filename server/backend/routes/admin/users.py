@@ -159,6 +159,8 @@ def register_user_routes(bp: Blueprint, auth_service: AuthService, db_manager: D
                 "user_id": user_id,
                 "user_email": row.get("email"),
                 "user_name": row.get("name"),
+                "current_active_ip": most_recent.get("ip") if most_recent else None,
+                "current_active_at": most_recent.get("issued_at") if most_recent else None,
                 "last_login_ip": most_recent.get("ip") if most_recent else None,
                 "last_login_at": most_recent.get("issued_at") if most_recent else None,
                 "session_count": len(sessions),

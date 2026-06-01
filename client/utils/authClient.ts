@@ -824,6 +824,8 @@ export interface AdminUserSessionListResult {
   user_id: number;
   user_email: string;
   user_name: string | null;
+  current_active_ip?: string | null;
+  current_active_at?: string | null;
   last_login_ip: string | null;
   last_login_at: string | null;
   session_count: number;
