@@ -50,9 +50,10 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
   // We only clear the local token and redirect; no logout API call is needed
   // because the session is already invalid on the server.
   useEffect(() => {
-    const handle401 = () => {
+    const handle401 = (reason?: string) => {
       clearAuthToken();
-      window.location.replace("/auth?reason=session_expired");
+      const nextReason = reason || "session_expired";
+      window.location.replace(`/auth?reason=${encodeURIComponent(nextReason)}`);
     };
     const handle403 = (_message?: string) => {
       // Any 403 from a protected endpoint means access was revoked by admin.

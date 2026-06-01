@@ -82,6 +82,8 @@ class SQLiteAuthDatabase:
                     two_factor_confirmed INTEGER NOT NULL DEFAULT 0,
                     max_active_sessions INTEGER NOT NULL DEFAULT 1,
                     max_ip_addresses INTEGER NOT NULL DEFAULT 2,
+                    daily_token_issue_date TEXT,
+                    daily_token_issue_count INTEGER NOT NULL DEFAULT 0,
                     session_id TEXT,
                     current_token TEXT,
                     failed_attempts INTEGER NOT NULL DEFAULT 0,
@@ -188,6 +190,22 @@ class SQLiteAuthDatabase:
         finally:
             conn.close()
 
+    def ensure_daily_token_issue_columns(self) -> None:
+        """Lazily add daily token issuance tracking columns to users_sensitive."""
+        conn = self.get_connection()
+        try:
+            for sql in [
+                "ALTER TABLE users_sensitive ADD COLUMN daily_token_issue_date TEXT",
+                "ALTER TABLE users_sensitive ADD COLUMN daily_token_issue_count INTEGER NOT NULL DEFAULT 0",
+            ]:
+                try:
+                    conn.execute(sql)
+                    conn.commit()
+                except sqlite3.OperationalError:
+                    pass
+        finally:
+            conn.close()
+
     def ensure_course_reader_state_table(self) -> None:
         """Ensure normalized per-user per-course reader state table exists."""
         conn = self.get_connection()
@@ -219,6 +237,7 @@ class SQLiteAuthDatabase:
         self.ensure_first_login_columns()
         self.ensure_max_active_sessions_column()
         self.ensure_max_ip_addresses_column()
+        self.ensure_daily_token_issue_columns()
         conn = self.get_connection()
         try:
             return conn.execute(
@@ -228,6 +247,8 @@ class SQLiteAuthDatabase:
                        COALESCE(u.is_first_login, 0) as is_first_login,
                        COALESCE(s.max_active_sessions, 1) as max_active_sessions,
                        COALESCE(s.max_ip_addresses, 2) as max_ip_addresses,
+                       COALESCE(s.daily_token_issue_count, 0) as daily_token_issue_count,
+                       s.daily_token_issue_date,
                        COALESCE(s.failed_attempts, 0) as failed_attempts,
                        s.locked_until
                 FROM users u
@@ -269,6 +290,7 @@ class SQLiteAuthDatabase:
         self.ensure_first_login_columns()
         self.ensure_max_active_sessions_column()
         self.ensure_max_ip_addresses_column()
+        self.ensure_daily_token_issue_columns()
         conn = self.get_connection()
         try:
             cur = conn.execute(
@@ -299,6 +321,7 @@ class SQLiteAuthDatabase:
         """Update a user's display name and email."""
         self.ensure_max_active_sessions_column()
         self.ensure_max_ip_addresses_column()
+        self.ensure_daily_token_issue_columns()
         conn = self.get_connection()
         try:
             if role_id is not None:

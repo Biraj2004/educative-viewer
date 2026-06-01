@@ -672,7 +672,8 @@ function AuthPageInner() {
   const [setupQrUrl, setSetupQrUrl] = useState("");
   const [twoFASetupSource, setTwoFASetupSource] = useState<"signup" | "login" | null>(null);
 
-  const sessionExpired = searchParams.get("reason") === "session_expired";
+  const authReason = (searchParams.get("reason") || "").trim().toLowerCase();
+  const showSessionNotice = authReason.length > 0;
 
   useEffect(() => {
     let cancelled = false;
@@ -800,12 +801,16 @@ function AuthPageInner() {
 
         <div className="overflow-hidden rounded-3xl border border-slate-200/70 bg-white/80 shadow-[0_36px_90px_-45px_rgba(15,23,42,0.45)] backdrop-blur-xl dark:border-slate-800/80 dark:bg-slate-950/70">
         {/* Session expired notice */}
-          {sessionExpired && !showForgot && !showTwoFA && (
+          {showSessionNotice && !showForgot && !showTwoFA && (
             <div className="mx-6 mt-6 mb-0 flex items-center gap-2 rounded-xl border border-amber-300/70 bg-amber-50/90 px-3 py-2.5 text-xs text-amber-800 dark:border-amber-800 dark:bg-amber-950/35 dark:text-amber-300">
               <svg className="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
                 <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
               </svg>
-              Your session was ended by a login from another device. Please sign in again.
+              {authReason === "ip_change_exceeded"
+                ? "Max IP change exceeded for this token. Please sign in again."
+                : authReason === "login_limit_exceeded"
+                  ? "Maximum login limit reached for today. Please try again tomorrow."
+                  : "Your session was ended by a login from another device. Please sign in again."}
             </div>
           )}
 

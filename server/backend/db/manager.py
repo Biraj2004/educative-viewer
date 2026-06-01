@@ -140,6 +140,7 @@ class DBManager:
         self.auth_backend.ensure_first_login_columns()
         self.auth_backend.ensure_max_active_sessions_column()
         self.auth_backend.ensure_max_ip_addresses_column()
+        self.auth_backend.ensure_daily_token_issue_columns()
         self.auth_backend.ensure_course_reader_state_table()
 
     def keep_auth_db_alive(self) -> None:

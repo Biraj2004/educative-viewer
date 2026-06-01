@@ -91,7 +91,7 @@ async function _encryptPassword(password: string): Promise<string> {
 // Registered once by AuthProvider. Fires when any protected API call returns 401
 // (expired token, or session superseded by a login from another browser).
 
-type UnauthorizedHandler = () => void | Promise<void>;
+type UnauthorizedHandler = (reason?: string) => void | Promise<void>;
 type ForbiddenHandler = (message?: string) => void | Promise<void>;
 let _unauthorizedHandler: UnauthorizedHandler | null = null;
 let _forbiddenHandler: ForbiddenHandler | null = null;
@@ -104,13 +104,20 @@ export function setForbiddenHandler(fn: ForbiddenHandler | null): void {
   _forbiddenHandler = fn;
 }
 
+function _mapUnauthorizedReason(message?: string): string {
+  const raw = String(message || "").toLowerCase();
+  if (raw.includes("max ip change exceeded")) return "ip_change_exceeded";
+  if (raw.includes("maximum login limit reached")) return "login_limit_exceeded";
+  return "session_expired";
+}
+
 /** Called internally whenever a protected fetch returns 401. */
-async function _handleUnauthorized(): Promise<void> {
+async function _handleUnauthorized(message?: string): Promise<void> {
   if (_unauthorizedHandler) {
-    await _unauthorizedHandler();
+    await _unauthorizedHandler(_mapUnauthorizedReason(message));
   } else {
     clearAuthToken();
-    if (IS_BROWSER) window.location.replace("/auth?reason=session_expired");
+    if (IS_BROWSER) window.location.replace(`/auth?reason=${encodeURIComponent(_mapUnauthorizedReason(message))}`);
   }
 }
 
@@ -338,7 +345,7 @@ async function apiPost<T>(
     if (path.endsWith("/2fa/verify") && data?.error !== "Not authenticated") {
       throw new ApiError(data?.error ?? "Invalid authenticator code", 401);
     }
-    await _handleUnauthorized();
+    await _handleUnauthorized(data?.error ?? data?.message);
     throw new ApiError(data?.error ?? "Session expired.", 401);
   }
   if (res.status === 403) {
@@ -369,7 +376,7 @@ async function apiGet<T>(path: string): Promise<T> {
     .then(async (res) => {
       const data = await res.json().catch(() => ({}));
       if (res.status === 401 && token) {
-        await _handleUnauthorized();
+        await _handleUnauthorized(data?.error ?? data?.message);
         throw new ApiError(data?.error ?? "Session expired.", 401);
       }
       if (res.status === 403) {
@@ -732,7 +739,7 @@ export async function updateViewerCourseSettings(
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
     if (res.status === 401) {
-      await _handleUnauthorized();
+      await _handleUnauthorized(data?.error ?? data?.message);
     }
     if (res.status === 403) {
       await _handleForbidden(data?.error ?? data?.message);
@@ -759,7 +766,7 @@ async function apiFetch(path: string, init: RequestInit): Promise<void> {
   if (!res.ok) {
     const data = await res.json().catch(() => ({}));
     if (res.status === 401) {
-      await _handleUnauthorized();
+      await _handleUnauthorized(data?.error ?? data?.message);
       throw new ApiError(data?.error ?? "Session expired.", 401);
     }
     if (res.status === 403) {
@@ -857,19 +864,42 @@ async function adminApiCall<T>(
   method: string,
   body?: Record<string, unknown>,
 ): Promise<T> {
+  const normalizedMethod = method.toUpperCase();
   const token = getAuthToken();
+  const dedupeKey = normalizedMethod === "GET" && body === undefined
+    ? `${path}::${token ?? ""}`
+    : null;
+  if (dedupeKey) {
+    const inflight = inflightGets.get(dedupeKey);
+    if (inflight) {
+      return inflight as Promise<T>;
+    }
+  }
+
   const headers: Record<string, string> = { "Content-Type": "application/json" };
   if (token) headers["Authorization"] = `Bearer ${token}`;
-  const res = await fetch(path, {
-    method,
-    headers,
-    body: body !== undefined ? JSON.stringify(body) : undefined,
-  });
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) {
-    throw new ApiError(data?.error ?? data?.message ?? `Request failed (${res.status})`, res.status);
+
+  const requestPromise = (async () => {
+    const res = await fetch(path, {
+      method: normalizedMethod,
+      headers,
+      body: body !== undefined ? JSON.stringify(body) : undefined,
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new ApiError(data?.error ?? data?.message ?? `Request failed (${res.status})`, res.status);
+    }
+    return data as T;
+  })();
+
+  if (dedupeKey) {
+    inflightGets.set(dedupeKey, requestPromise as Promise<unknown>);
+    requestPromise.finally(() => {
+      setTimeout(() => inflightGets.delete(dedupeKey), 50);
+    });
   }
-  return data as T;
+
+  return requestPromise;
 }
 
 export async function adminGetUsers(): Promise<AdminUser[]> {

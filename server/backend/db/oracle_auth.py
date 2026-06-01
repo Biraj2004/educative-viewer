@@ -144,6 +144,8 @@ class OracleAuthDatabase:
                         two_factor_confirmed       NUMBER(1,0) DEFAULT 0 NOT NULL,
                         max_active_sessions        NUMBER DEFAULT 1 NOT NULL,
                         max_ip_addresses           NUMBER DEFAULT 2 NOT NULL,
+                        daily_token_issue_date     VARCHAR2(10 CHAR),
+                        daily_token_issue_count    NUMBER DEFAULT 0 NOT NULL,
                         session_id                 VARCHAR2(64 CHAR),
                         current_token              CLOB,
                         failed_attempts            NUMBER DEFAULT 0 NOT NULL,
@@ -295,6 +297,30 @@ class OracleAuthDatabase:
         finally:
             conn.close()
 
+    def ensure_daily_token_issue_columns(self) -> None:
+        """Lazily add daily token issuance tracking columns to users_sensitive."""
+        if not self.is_configured:
+            return
+        conn = self.get_connection()
+        try:
+            cursor = conn.cursor()
+            try:
+                for sql in [
+                    "ALTER TABLE users_sensitive ADD daily_token_issue_date VARCHAR2(10 CHAR)",
+                    "ALTER TABLE users_sensitive ADD daily_token_issue_count NUMBER DEFAULT 0 NOT NULL",
+                ]:
+                    try:
+                        cursor.execute(sql)
+                    except oracledb.DatabaseError as exc:
+                        (err,) = exc.args
+                        if err.code != 1430:
+                            raise
+                conn.commit()
+            finally:
+                cursor.close()
+        finally:
+            conn.close()
+
     def ensure_course_reader_state_table(self) -> None:
         """Ensure normalized per-user per-course reader state table exists."""
         if not self.is_configured:
@@ -335,6 +361,7 @@ class OracleAuthDatabase:
         self.ensure_first_login_columns()
         self.ensure_max_active_sessions_column()
         self.ensure_max_ip_addresses_column()
+        self.ensure_daily_token_issue_columns()
         conn = self.get_connection()
         try:
             cursor = conn.cursor()
@@ -346,6 +373,8 @@ class OracleAuthDatabase:
                            COALESCE(u.is_first_login, 0) as is_first_login,
                            COALESCE(s.max_active_sessions, 1) as max_active_sessions,
                            COALESCE(s.max_ip_addresses, 2) as max_ip_addresses,
+                           COALESCE(s.daily_token_issue_count, 0) as daily_token_issue_count,
+                           s.daily_token_issue_date,
                            COALESCE(s.failed_attempts, 0) as failed_attempts,
                            s.locked_until
                     FROM users u
@@ -391,6 +420,7 @@ class OracleAuthDatabase:
         self.ensure_first_login_columns()
         self.ensure_max_active_sessions_column()
         self.ensure_max_ip_addresses_column()
+        self.ensure_daily_token_issue_columns()
         conn = self.get_connection()
         try:
             cursor = conn.cursor()
@@ -427,6 +457,7 @@ class OracleAuthDatabase:
         """Update a user's display name, email, and optionally role_id."""
         self.ensure_max_active_sessions_column()
         self.ensure_max_ip_addresses_column()
+        self.ensure_daily_token_issue_columns()
         conn = self.get_connection()
         try:
             cursor = conn.cursor()

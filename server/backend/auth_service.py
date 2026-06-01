@@ -28,6 +28,8 @@ _USER_JOIN = """
            s.password_hash, s.two_factor_secret, s.two_factor_confirmed,
            COALESCE(s.max_active_sessions, 1) AS max_active_sessions,
            COALESCE(s.max_ip_addresses, 2) AS max_ip_addresses,
+           COALESCE(s.daily_token_issue_count, 0) AS daily_token_issue_count,
+           s.daily_token_issue_date,
            s.current_token,
            COALESCE(s.failed_attempts, 0) AS failed_attempts, s.locked_until,
            s.temp_password_expires_at, s.onboarding_temp_password_hash
@@ -245,6 +247,49 @@ class AuthService:
         queue = self.parse_session_queue(queue_raw)
         return any(row.get("token") == token for row in queue)
 
+    @staticmethod
+    def utc_day_key() -> str:
+        return time.strftime("%Y-%m-%d", time.gmtime())
+
+    def reserve_daily_token_issue(self, conn: Any, user: dict[str, Any]) -> tuple[bool, int, int, str]:
+        """
+        Reserve one full-token issuance for the current UTC day.
+        Returns (allowed, next_count_or_current_count, limit, day_key).
+        Admin users are always allowed and are not counted.
+        """
+        role = str(user.get("role", "user") or "user").strip().lower()
+        day_key = self.utc_day_key()
+        limit = self.clamp_max_active_sessions(user.get("max_active_sessions"))
+        if role == "admin":
+            return True, 0, limit, day_key
+
+        raw_date = str(user.get("daily_token_issue_date", "") or "").strip()
+        raw_count = user.get("daily_token_issue_count")
+        try:
+            count = int(raw_count)
+        except (TypeError, ValueError):
+            count = 0
+        if count < 0:
+            count = 0
+
+        if raw_date != day_key:
+            count = 0
+
+        if count >= limit:
+            return False, count, limit, day_key
+
+        next_count = count + 1
+        execute(
+            conn,
+            "UPDATE users_sensitive "
+            "SET daily_token_issue_date = :day_key, daily_token_issue_count = :next_count "
+            "WHERE user_id = :user_id",
+            {"day_key": day_key, "next_count": next_count, "user_id": user["id"]},
+        )
+        user["daily_token_issue_date"] = day_key
+        user["daily_token_issue_count"] = next_count
+        return True, next_count, limit, day_key
+
     def refresh_session_token_ip(
         self,
         queue_raw: Any,
@@ -256,17 +301,18 @@ class AuthService:
     ) -> tuple[bool, str, bool, bool]:
         """
         Return (found, serialized_queue, changed, blocked).
-        For non-admin users, allow at most one IP change per token lifetime.
+        For non-admin users, allow up to (max_ip_addresses - 1) IP changes per token.
         """
         queue = self.parse_session_queue(queue_raw)
         normalized_ip = str(client_ip or "").strip()
+        touched_at = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
         max_ips = self.clamp_max_ip_addresses(max_ip_addresses)
         max_ip_updates = max(0, max_ips - 1)
         found = False
         changed = False
         blocked = False
 
-        for row in queue:
+        for idx, row in enumerate(queue):
             if row.get("token") != token:
                 continue
             found = True
@@ -293,6 +339,18 @@ class AuthService:
                         row["ip"] = normalized_ip
                         row["ip_updates"] = ip_updates + 1
                         changed = True
+
+            if not blocked:
+                # Touch every in-use token so "current active session" reflects
+                # the latest API call even when IP is unchanged.
+                row["issued_at"] = touched_at
+                changed = True
+
+                # Keep most recently used session at the tail to preserve the
+                # existing reverse(queue) ordering in admin session views.
+                if idx != len(queue) - 1:
+                    queue.pop(idx)
+                    queue.append(row)
             break
 
         return found, self.serialize_session_queue(queue), changed, blocked
@@ -376,7 +434,7 @@ class AuthService:
                         {"current_token": self.serialize_session_queue(next_queue), "user_id": user["id"]},
                     )
                     conn.commit()
-                    abort(401, description="Session invalid due to repeated IP changes. Please sign in again.")
+                    abort(401, description="Max IP change exceeded for this token. Please sign in again.")
 
                 if changed:
                     execute(

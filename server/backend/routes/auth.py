@@ -52,6 +52,19 @@ def _remove_token_from_session_queue(auth_service: AuthService, queue_raw: Any, 
     return auth_service.serialize_session_queue(queue)
 
 
+def _enforce_daily_token_issue_limit(auth_service: AuthService, conn: Any, user: dict[str, Any]) -> None:
+    allowed, _count, limit, day_key = auth_service.reserve_daily_token_issue(conn, user)
+    if allowed:
+        return
+    abort(
+        401,
+        description=(
+            f"Maximum login limit reached for {day_key} UTC. "
+            f"Allowed full logins per day: {limit}."
+        ),
+    )
+
+
 def _to_int(value: Any, field: str) -> int:
     try:
         return int(value)
@@ -668,6 +681,7 @@ def create_auth_blueprint(auth_service: AuthService, db_manager: DBManager) -> B
 
         conn2 = db_manager.get_auth_connection()
         try:
+            _enforce_daily_token_issue_limit(auth_service, conn2, user)
             token = auth_service.make_full_token(user)
             token_queue_json = auth_service.append_session_token(
                 user.get("current_token"),
@@ -1536,6 +1550,7 @@ def create_auth_blueprint(auth_service: AuthService, db_manager: DBManager) -> B
 
         conn = db_manager.get_auth_connection()
         try:
+            _enforce_daily_token_issue_limit(auth_service, conn, user)
             execute(
                 conn,
                 "UPDATE users SET two_factor_enabled = 1 WHERE id = :user_id",
@@ -1594,6 +1609,7 @@ def create_auth_blueprint(auth_service: AuthService, db_manager: DBManager) -> B
 
         conn = db_manager.get_auth_connection()
         try:
+            _enforce_daily_token_issue_limit(auth_service, conn, user)
             token = auth_service.make_full_token(user)
             token_queue_json = auth_service.append_session_token(
                 user.get("current_token"),
