@@ -188,6 +188,11 @@ const HIGHLIGHT_SWATCH_CLASS: Record<HighlightColor, string> = {
   orange: "bg-orange-500",
 };
 
+function deferEffectState(callback: () => void): () => void {
+  const frameId = window.requestAnimationFrame(callback);
+  return () => window.cancelAnimationFrame(frameId);
+}
+
 function normalizeHighlightColor(color: unknown): HighlightColor {
   const normalized = String(color || "").trim().toLowerCase();
   if (normalized === "yellow" || normalized === "blue" || normalized === "green" || normalized === "pink" || normalized === "orange") {
@@ -669,11 +674,13 @@ export default function TopicLayoutClient({
   useEffect(() => { completedRef.current = completed; }, [completed]);
   useEffect(() => { selectedTextRef.current = selectedText; }, [selectedText]);
   useEffect(() => {
-    const next: Record<string, string> = {};
-    currentTopicHighlights.forEach((item) => {
-      if (item.id) next[item.id] = item.note ?? "";
+    return deferEffectState(() => {
+      const next: Record<string, string> = {};
+      currentTopicHighlights.forEach((item) => {
+        if (item.id) next[item.id] = item.note ?? "";
+      });
+      setNoteDraftById(next);
     });
-    setNoteDraftById(next);
   }, [currentTopicHighlights, currentTopic.topic_index]);
 
   // Signal the global NavProgressBar for in-page topic fetches
@@ -2110,20 +2117,22 @@ export default function TopicLayoutClient({
   ]);
 
   useEffect(() => {
-    setSelectedText("");
-    setNewHighlightNote("");
-    setNewTopicNote("");
-    setTopicNoteComposerOpen(false);
-    setTopicNoteEditOpenById({});
-    setTopicNoteEditDraftById({});
-    setHighlightNoteEditorOpenById({});
-    setNoteDraftById({});
     selectedOffsetsRef.current = null;
     selectedQuoteContextRef.current = null;
-    setSelectionAction((prev) => ({ ...prev, visible: false }));
-    setSelectionColorPaletteOpen(false);
-    setHighlightUndoStack([]);
-    setHighlightRedoStack([]);
+    return deferEffectState(() => {
+      setSelectedText("");
+      setNewHighlightNote("");
+      setNewTopicNote("");
+      setTopicNoteComposerOpen(false);
+      setTopicNoteEditOpenById({});
+      setTopicNoteEditDraftById({});
+      setHighlightNoteEditorOpenById({});
+      setNoteDraftById({});
+      setSelectionAction((prev) => ({ ...prev, visible: false }));
+      setSelectionColorPaletteOpen(false);
+      setHighlightUndoStack([]);
+      setHighlightRedoStack([]);
+    });
   }, [currentTopic.topic_index]);
 
   const handleOpenDrawingPad = useCallback(() => {
@@ -2146,7 +2155,7 @@ export default function TopicLayoutClient({
     const hash = new URLSearchParams(window.location.hash.slice(1));
     const shouldRestoreDrawingPad = readDrawingDrawerOpen(courseId);
     if (!hash.get("addLibrary") && !shouldRestoreDrawingPad) return;
-    handleOpenDrawingPad();
+    return deferEffectState(handleOpenDrawingPad);
   }, [courseId, drawingsEnabled, drawingPadOpen, handleOpenDrawingPad]);
 
   const handleToggleHighlightDrawer = useCallback(() => {
@@ -2219,8 +2228,9 @@ export default function TopicLayoutClient({
 
   useEffect(() => {
     if (!drawingsEnabled && drawingPadOpen) {
-      setDrawingPadOpen(false);
+      return deferEffectState(() => setDrawingPadOpen(false));
     }
+    return undefined;
   }, [drawingsEnabled, drawingPadOpen]);
 
   useEffect(() => {
@@ -2228,36 +2238,67 @@ export default function TopicLayoutClient({
   }, [courseId, drawingsEnabled, drawingPadOpen]);
 
   useEffect(() => {
+    let frameCancel: (() => void) | undefined;
+    let timeoutId: number | undefined;
     if (tocDrawerOpen) {
-      setTocDrawerMounted(true);
-      setTocDrawerVisible(false);
-      const timeoutId = window.setTimeout(() => setTocDrawerVisible(true), 18);
-      return () => window.clearTimeout(timeoutId);
+      frameCancel = deferEffectState(() => {
+        setTocDrawerMounted(true);
+        setTocDrawerVisible(false);
+        timeoutId = window.setTimeout(() => setTocDrawerVisible(true), 18);
+      });
+      return () => {
+        frameCancel?.();
+        if (timeoutId !== undefined) window.clearTimeout(timeoutId);
+      };
     }
-    setTocDrawerVisible(false);
-    const timeoutId = window.setTimeout(() => setTocDrawerMounted(false), DRAWER_ANIM_MS);
-    return () => window.clearTimeout(timeoutId);
+    frameCancel = deferEffectState(() => {
+      setTocDrawerVisible(false);
+      timeoutId = window.setTimeout(() => setTocDrawerMounted(false), DRAWER_ANIM_MS);
+    });
+    return () => {
+      frameCancel?.();
+      if (timeoutId !== undefined) window.clearTimeout(timeoutId);
+    };
   }, [tocDrawerOpen]);
 
   useEffect(() => {
+    let frameCancel: (() => void) | undefined;
+    let timeoutId: number | undefined;
     if (highlightDrawerOpen) {
-      setHighlightDrawerMounted(true);
-      setHighlightDrawerVisible(false);
-      const timeoutId = window.setTimeout(() => setHighlightDrawerVisible(true), 18);
-      return () => window.clearTimeout(timeoutId);
+      frameCancel = deferEffectState(() => {
+        setHighlightDrawerMounted(true);
+        setHighlightDrawerVisible(false);
+        timeoutId = window.setTimeout(() => setHighlightDrawerVisible(true), 18);
+      });
+      return () => {
+        frameCancel?.();
+        if (timeoutId !== undefined) window.clearTimeout(timeoutId);
+      };
     }
-    setHighlightDrawerVisible(false);
-    const timeoutId = window.setTimeout(() => setHighlightDrawerMounted(false), DRAWER_ANIM_MS);
-    return () => window.clearTimeout(timeoutId);
+    frameCancel = deferEffectState(() => {
+      setHighlightDrawerVisible(false);
+      timeoutId = window.setTimeout(() => setHighlightDrawerMounted(false), DRAWER_ANIM_MS);
+    });
+    return () => {
+      frameCancel?.();
+      if (timeoutId !== undefined) window.clearTimeout(timeoutId);
+    };
   }, [highlightDrawerOpen]);
 
   useEffect(() => {
+    let frameCancel: (() => void) | undefined;
+    let timeoutId: number | undefined;
     if (drawingPadOpen) {
-      setDrawingPanelVisible(false);
-      const timeoutId = window.setTimeout(() => setDrawingPanelVisible(true), 18);
-      return () => window.clearTimeout(timeoutId);
+      frameCancel = deferEffectState(() => {
+        setDrawingPanelVisible(false);
+        timeoutId = window.setTimeout(() => setDrawingPanelVisible(true), 18);
+      });
+      return () => {
+        frameCancel?.();
+        if (timeoutId !== undefined) window.clearTimeout(timeoutId);
+      };
     }
-    setDrawingPanelVisible(false);
+    return deferEffectState(() => setDrawingPanelVisible(false));
   }, [drawingPadOpen]);
 
   const clampDrawingPanelWidth = useCallback((next: number) => {
@@ -2276,22 +2317,32 @@ export default function TopicLayoutClient({
 
   useEffect(() => {
     if (!drawingPadOpen) return;
-    setDrawingPanelWidth((prev) => clampDrawingPanelWidth(prev));
+    const cancelClamp = deferEffectState(() => {
+      setDrawingPanelWidth((prev) => clampDrawingPanelWidth(prev));
+    });
     const onResize = () => {
       setDrawingPanelWidth((prev) => clampDrawingPanelWidth(prev));
     };
     window.addEventListener("resize", onResize);
-    return () => window.removeEventListener("resize", onResize);
+    return () => {
+      cancelClamp();
+      window.removeEventListener("resize", onResize);
+    };
   }, [clampDrawingPanelWidth, drawingPadOpen]);
 
   useEffect(() => {
     if (!highlightDrawerMounted) return;
-    setHighlightPanelWidth((prev) => clampHighlightPanelWidth(prev));
+    const cancelClamp = deferEffectState(() => {
+      setHighlightPanelWidth((prev) => clampHighlightPanelWidth(prev));
+    });
     const onResize = () => {
       setHighlightPanelWidth((prev) => clampHighlightPanelWidth(prev));
     };
     window.addEventListener("resize", onResize);
-    return () => window.removeEventListener("resize", onResize);
+    return () => {
+      cancelClamp();
+      window.removeEventListener("resize", onResize);
+    };
   }, [clampHighlightPanelWidth, highlightDrawerMounted]);
 
   useEffect(() => {
@@ -3184,7 +3235,7 @@ export default function TopicLayoutClient({
         </div>
       )}
 
-      {highlightsEnabled && selectionAction.visible && selectedText && selectedOffsetsRef.current && (
+      {highlightsEnabled && selectionAction.visible && selectedText && (
         <>
           {selectionColorPaletteOpen && (
             <div

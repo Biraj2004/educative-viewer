@@ -167,7 +167,7 @@ ${topicContext}
       {/* Chat Window */}
       {isOpen && (
         <div
-          className="course-chatbot-window fixed z-50 flex h-[550px] max-h-[calc(100dvh-8rem)] w-[400px] max-w-[calc(100vw-3rem)] flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-2xl shadow-slate-950/20 dark:border-gray-800 dark:bg-gray-900"
+          className="course-chatbot-window fixed z-50 flex flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-2xl shadow-slate-950/20 dark:border-gray-800 dark:bg-gray-900"
           style={floatingStyle}
         >
           
