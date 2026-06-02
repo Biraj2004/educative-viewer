@@ -25,6 +25,11 @@ export interface CodeComponentData {
   additionalContent?: AdditionalFile[];
 }
 
+interface MonacoEditorHandle {
+  setValue(value: string): void;
+  revealLine(lineNumber: number): void;
+}
+
 // ─── Language helpers ─────────────────────────────────────────────────────────
 
 const LANG_DISPLAY: Record<string, string> = {
@@ -38,6 +43,11 @@ const LANG_DISPLAY: Record<string, string> = {
 
 function langLabel(lang: string) {
   return LANG_DISPLAY[lang.toLowerCase()] ?? lang.toUpperCase();
+}
+
+function initialWordWrap(): "off" | "on" {
+  if (typeof window === "undefined") return "off";
+  return window.matchMedia("(max-width: 640px)").matches ? "on" : "off";
 }
 
 // ─── File icon ────────────────────────────────────────────────────────────────
@@ -83,10 +93,10 @@ export default function Code({ data }: { data: CodeComponentData }) {
 
   const [selectedIdx, setSelectedIdx] = useState(0);
   const [copied, setCopied] = useState(false);
-  const [wordWrap, setWordWrap] = useState<"off" | "on">("off");
+  const [wordWrap, setWordWrap] = useState<"off" | "on">(initialWordWrap);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const editorRef = useRef<any>(null);
+  const editorRef = useRef<MonacoEditorHandle | null>(null);
 
   const activeFile = allFiles[selectedIdx];
   const lineCount = activeFile.content.split("\n").length;
@@ -111,7 +121,7 @@ export default function Code({ data }: { data: CodeComponentData }) {
       <div className={
         isFullscreen
           ? "fixed inset-0 z-50 flex overflow-hidden"
-          : "rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700 shadow-lg flex"
+          : "flex min-w-0 overflow-hidden rounded-xl border border-gray-200 bg-white shadow-lg shadow-slate-900/5 dark:border-gray-700 dark:bg-[#0f172a]"
       }>
         {/* ── File sidebar ── */}
         {hasSidebar && sidebarOpen && (
@@ -151,8 +161,8 @@ export default function Code({ data }: { data: CodeComponentData }) {
         {/* ── Editor panel ── */}
         <div className="flex-1 flex flex-col min-w-0">
           {/* Tab / header bar */}
-          <div className="flex items-center justify-between bg-white dark:bg-[#0f172a] border-b border-gray-200 dark:border-gray-700 px-3 py-2 shrink-0">
-            <div className="flex items-center gap-2">
+          <div className="flex flex-col gap-2 bg-white dark:bg-[#0f172a] border-b border-gray-200 dark:border-gray-700 px-3 py-2 shrink-0 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex min-w-0 items-center gap-2">
               {/* Hamburger — toggle sidebar */}
               {hasSidebar && (
                 <button onClick={() => setSidebarOpen(o => !o)} title={sidebarOpen ? "Hide files" : "Show files"} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors mr-1 cursor-pointer">
@@ -164,10 +174,10 @@ export default function Code({ data }: { data: CodeComponentData }) {
               <svg className="w-4 h-4 text-blue-500 dark:text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
               </svg>
-              <span className="text-sm font-semibold text-gray-800 dark:text-gray-100">{activeFile.fileName}</span>
+              <span className="truncate text-sm font-semibold text-gray-800 dark:text-gray-100">{activeFile.fileName}</span>
             </div>
 
-            <div className="flex items-center gap-2.5">
+            <div className="no-scrollbar flex max-w-full items-center gap-2.5 overflow-x-auto pb-0.5 sm:overflow-visible sm:pb-0">
               {/* Language badge */}
               <div className="flex items-center gap-1 text-xs font-semibold text-gray-700 dark:text-gray-300">
                 <LangFileIcon lang={data.language} />
@@ -242,6 +252,7 @@ export default function Code({ data }: { data: CodeComponentData }) {
                 contextmenu: false,
                 folding: true,
                 wordWrap,
+                automaticLayout: true,
                 padding: { top: 8, bottom: 8 },
               }}
             />
@@ -257,4 +268,3 @@ export default function Code({ data }: { data: CodeComponentData }) {
     </div>
   );
 }
-

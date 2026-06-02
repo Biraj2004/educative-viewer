@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect, useMemo } from "react";
+import type { CSSProperties } from "react";
 import ReactMarkdown from "react-markdown";
 import { generateAIContent, AVAILABLE_MODELS } from "@/utils/aiClient";
 
@@ -34,6 +35,13 @@ function ChatIcon() {
 export default function CourseChatbot({ topicTitle, topicContext, rightOffsetPx = 24 }: CourseChatbotProps) {
   const [isOpen, setIsOpen] = useState(false);
   const chatbotRef = useRef<HTMLDivElement>(null);
+  const floatingStyle = {
+    right: `${rightOffsetPx}px`,
+    "--chatbot-bottom": "1.5rem",
+    "--chatbot-mobile-bottom": "5.75rem",
+    "--chatbot-window-bottom": "6rem",
+    "--chatbot-mobile-window-bottom": "9.75rem",
+  } as CSSProperties & Record<string, string>;
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -50,26 +58,21 @@ export default function CourseChatbot({ topicTitle, topicContext, rightOffsetPx 
     };
   }, [isOpen]);
 
-  const [messages, setMessages] = useState<Message[]>([
-    { role: "model", content: `Hi! I'm your AI assistant for this topic (**${topicTitle}**). Ask me anything about it!` }
-  ]);
+  const greetingMessage = useMemo<Message>(
+    () => ({ role: "model", content: `Hi! I'm your AI assistant for this topic (**${topicTitle}**). Ask me anything about it!` }),
+    [topicTitle]
+  );
+  const [messages, setMessages] = useState<Message[]>([]);
   const [inputValue, setInputValue] = useState("");
   const [loading, setLoading] = useState(false);
   const [selectedModel, setSelectedModel] = useState(AVAILABLE_MODELS[0].id);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
 
-  // Update greeting if topic changes and chat hasn't really started
-  useEffect(() => {
-    if (messages.length <= 1) {
-      setMessages([{ role: "model", content: `Hi! I'm your AI assistant for this topic (**${topicTitle}**). Ask me anything about it!` }]);
-    }
-  }, [messages.length, topicTitle]);
-
   useEffect(() => {
     if (scrollContainerRef.current) {
       scrollContainerRef.current.scrollTop = scrollContainerRef.current.scrollHeight;
     }
-  }, [messages, loading]);
+  }, [greetingMessage, messages, loading]);
 
   const handleSend = async () => {
     if (!inputValue.trim() || loading) return;
@@ -123,7 +126,7 @@ ${topicContext}
     }
   };
 
-  const renderedMessages = useMemo(() => messages.map((msg, i) => (
+  const renderedMessages = useMemo(() => [greetingMessage, ...messages].map((msg, i) => (
     <div key={i} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
       <div
         className={`max-w-[85%] rounded-2xl px-4 py-2.5 ${
@@ -139,16 +142,17 @@ ${topicContext}
         )}
       </div>
     </div>
-  )), [messages]);
+  )), [greetingMessage, messages]);
 
   return (
     <div ref={chatbotRef}>
       {/* Floating Action Button */}
-      <div className="fixed bottom-6 z-50" style={{ right: `${rightOffsetPx}px` }}>
+      <div className="course-chatbot-fab fixed z-50" style={floatingStyle}>
         <button
           onClick={() => setIsOpen(!isOpen)}
-          className="bg-indigo-600 hover:bg-indigo-700 text-white rounded-full p-4 shadow-lg shadow-indigo-600/30 transition-transform transform hover:scale-105 active:scale-95 flex items-center justify-center cursor-pointer"
+          className="flex h-14 w-14 items-center justify-center rounded-full bg-indigo-600 text-white shadow-xl shadow-indigo-600/30 ring-1 ring-white/20 transition-transform hover:scale-105 hover:bg-indigo-700 active:scale-95 dark:ring-indigo-300/10 sm:h-14 sm:w-14 cursor-pointer"
           aria-label="Toggle AI Chat"
+          aria-expanded={isOpen}
         >
           {isOpen ? (
             <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -163,8 +167,8 @@ ${topicContext}
       {/* Chat Window */}
       {isOpen && (
         <div
-          className="fixed bottom-24 z-50 w-[400px] max-w-[calc(100vw-3rem)] h-[550px] max-h-[calc(100vh-8rem)] bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-2xl shadow-2xl flex flex-col overflow-hidden"
-          style={{ right: `${rightOffsetPx}px` }}
+          className="course-chatbot-window fixed z-50 flex h-[550px] max-h-[calc(100dvh-8rem)] w-[400px] max-w-[calc(100vw-3rem)] flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-2xl shadow-slate-950/20 dark:border-gray-800 dark:bg-gray-900"
+          style={floatingStyle}
         >
           
           {/* Header */}
@@ -179,7 +183,7 @@ ${topicContext}
             </div>
             <button
               onClick={() => {
-                setMessages([{ role: "model", content: `Hi! I'm your AI assistant for this topic (**${topicTitle}**). Ask me anything about it!` }]);
+                setMessages([]);
                 setInputValue("");
               }}
               title="Reset Chat"

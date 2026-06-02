@@ -15,6 +15,11 @@ export interface EditorCodeComponentData {
   version: string;
 }
 
+interface MonacoEditorHandle {
+  setValue(value: string): void;
+  revealLine(lineNumber: number): void;
+}
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 const LANG_DISPLAY: Record<string, string> = {
@@ -46,13 +51,18 @@ function asString(value: unknown): string {
   return typeof value === "string" ? value : "";
 }
 
+function initialWordWrap(): "off" | "on" {
+  if (typeof window === "undefined") return "off";
+  return window.matchMedia("(max-width: 640px)").matches ? "on" : "off";
+}
+
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function EditorCode({ data }: { data: EditorCodeComponentData }) {
   const [copied, setCopied] = useState(false);
-  const [wordWrap, setWordWrap] = useState<"off" | "on">("off");
+  const [wordWrap, setWordWrap] = useState<"off" | "on">(initialWordWrap);
   const [isFullscreen, setIsFullscreen] = useState(false);
-  const editorRef = useRef<any>(null);
+  const editorRef = useRef<MonacoEditorHandle | null>(null);
 
   const safeLanguage = asString((data as unknown as Record<string, unknown>)?.language) || "text";
   const safeContent = asString((data as unknown as Record<string, unknown>)?.content);
@@ -79,16 +89,16 @@ export default function EditorCode({ data }: { data: EditorCodeComponentData }) 
 
   return (
     <div className="max-w-4xl mx-auto px-6 py-2">
-      <div className={isFullscreen ? "fixed inset-0 z-50 flex flex-col" : "rounded-lg overflow-hidden border border-gray-700 shadow-lg"}>
+      <div className={isFullscreen ? "fixed inset-0 z-50 flex flex-col" : "overflow-hidden rounded-xl border border-gray-700 shadow-lg shadow-slate-950/10"}>
         {/* Header */}
-        <div className="flex items-center justify-between bg-[#1a1a2e] px-4 py-2.5 border-b border-gray-700 shrink-0">
-          <div className="flex items-center gap-2 text-gray-300 text-sm font-medium">
+        <div className="flex flex-col gap-2 bg-[#1a1a2e] px-3 py-2.5 border-b border-gray-700 shrink-0 sm:flex-row sm:items-center sm:justify-between sm:px-4">
+          <div className="flex min-w-0 items-center gap-2 text-gray-300 text-sm font-medium">
             <svg className="w-4 h-4 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
             </svg>
-            <span>{fileName}</span>
+            <span className="truncate">{fileName}</span>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="no-scrollbar flex max-w-full items-center gap-3 overflow-x-auto pb-0.5 sm:overflow-visible sm:pb-0">
             <span className="text-xs font-semibold text-blue-300 bg-blue-900/40 px-2 py-0.5 rounded">
               {langLabel(safeLanguage)}
             </span>
@@ -157,6 +167,7 @@ export default function EditorCode({ data }: { data: EditorCodeComponentData }) 
               contextmenu: false,
               folding: true,
               wordWrap,
+              automaticLayout: true,
               padding: { top: 8, bottom: 8 },
             }}
           />
@@ -170,4 +181,3 @@ export default function EditorCode({ data }: { data: EditorCodeComponentData }) 
     </div>
   );
 }
-
