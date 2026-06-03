@@ -5,6 +5,7 @@ import AppNavbar from "@/components/edu-viewer/AppNavbar";
 import UserMenu from "@/components/edu-viewer/UserMenu";
 import { useAuth } from "@/components/edu-viewer/AuthProvider";
 import ActiveToggle from "@/components/edu-viewer/ActiveToggle";
+import LoadingSpinner from "@/components/edu-viewer/LoadingSpinner";
 import {
   adminGetUsers,
   adminCreateUser,
@@ -462,48 +463,63 @@ function UserSessionsModal({ user, onClose, onDone }: { user: AdminUser; onClose
       </div>
 
       {loading ? (
-        <div className="flex items-center justify-center py-8">
-          <div className="w-6 h-6 rounded-full border-2 border-indigo-600 border-t-transparent animate-spin" />
-        </div>
+        <LoadingSpinner label="Loading sessions..." size="sm" className="py-8" />
       ) : sessions.length === 0 ? (
         <div className="rounded-lg border border-dashed border-gray-300 dark:border-gray-700 px-3 py-5 text-xs text-gray-500 dark:text-gray-400 text-center">
           No active sessions found.
         </div>
       ) : (
         <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
-          <label className="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-300">
-            <input
-              type="checkbox"
-              checked={allSelected}
-              onChange={toggleAll}
-              className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
-            />
+          <div
+            onClick={toggleAll}
+            className="flex items-center gap-2.5 text-xs text-gray-600 dark:text-gray-300 cursor-pointer select-none"
+          >
+            <div className={`w-4 h-4 shrink-0 rounded flex items-center justify-center border transition-all duration-150 ${
+              allSelected
+                ? 'bg-indigo-600 border-indigo-600 dark:bg-indigo-500 dark:border-indigo-500 text-white shadow-sm'
+                : 'bg-white dark:bg-gray-950 border-gray-300 dark:border-gray-700'
+            }`}>
+              {allSelected && (
+                <svg className="w-2.5 h-2.5 stroke-current stroke-2" fill="none" viewBox="0 0 24 24">
+                  <polyline points="20 6 9 17 4 12" />
+                </svg>
+              )}
+            </div>
             Select all sessions ({sessions.length})
-          </label>
-          {sessions.map((session) => (
-            <label
-              key={session.session_key}
-              className="flex items-start gap-2 rounded-lg border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 px-3 py-2"
-            >
-              <input
-                type="checkbox"
-                checked={selectedKeys.has(session.session_key)}
-                onChange={() => toggleOne(session.session_key)}
-                className="mt-0.5 h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
-              />
-              <div className="min-w-0">
-                <p className="text-xs font-medium text-gray-900 dark:text-gray-100">
-                  {session.is_most_recent ? "Current in-use session" : "Active session"} - token ...{session.token_hint}
-                </p>
-                <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5">
-                  Issued: {session.issued_at ? new Date(session.issued_at).toLocaleString() : "Unknown"}
-                </p>
-                <p className="text-[11px] text-gray-500 dark:text-gray-400">
-                  IP: {session.ip || "Unknown"}
-                </p>
+          </div>
+          {sessions.map((session) => {
+            const isChecked = selectedKeys.has(session.session_key);
+            return (
+              <div
+                key={session.session_key}
+                onClick={() => toggleOne(session.session_key)}
+                className="flex items-start gap-2.5 rounded-lg border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 px-3 py-2 cursor-pointer select-none"
+              >
+                <div className={`mt-0.5 w-4 h-4 shrink-0 rounded flex items-center justify-center border transition-all duration-150 ${
+                  isChecked
+                    ? 'bg-indigo-600 border-indigo-600 dark:bg-indigo-500 dark:border-indigo-500 text-white shadow-sm'
+                    : 'bg-white dark:bg-gray-950 border-gray-300 dark:border-gray-700'
+                }`}>
+                  {isChecked && (
+                    <svg className="w-2.5 h-2.5 stroke-current stroke-2" fill="none" viewBox="0 0 24 24">
+                      <polyline points="20 6 9 17 4 12" />
+                    </svg>
+                  )}
+                </div>
+                <div className="min-w-0">
+                  <p className="text-xs font-medium text-gray-900 dark:text-gray-100">
+                    {session.is_most_recent ? "Current in-use session" : "Active session"} - token ...{session.token_hint}
+                  </p>
+                  <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5">
+                    Issued: {session.issued_at ? new Date(session.issued_at).toLocaleString() : "Unknown"}
+                  </p>
+                  <p className="text-[11px] text-gray-500 dark:text-gray-400">
+                    IP: {session.ip || "Unknown"}
+                  </p>
+                </div>
               </div>
-            </label>
-          ))}
+            );
+          })}
         </div>
       )}
 
@@ -638,20 +654,32 @@ function CleanupUserReaderDataModal({ user, onClose, onDone }: { user: AdminUser
       <div>
         <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1.5">Cleanup Scope</label>
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-2 sm:gap-3">
-          {USER_CLEANUP_SCOPE_OPTIONS.map((option) => (
-            <label key={option.key} className="flex items-start gap-3 rounded-lg border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-3 sm:p-4">
-              <input
-                type="checkbox"
-                checked={scopeSelection[option.key]}
-                onChange={() => setScopeSelection((prev) => toggleUserCleanupSelection(prev, option.key))}
-                className="mt-0.5 h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
-              />
-              <span>
-                <span className="block text-sm font-medium text-gray-900 dark:text-gray-100">{option.label}</span>
-                <span className="block text-xs text-gray-500 dark:text-gray-400">{option.description}</span>
-              </span>
-            </label>
-          ))}
+          {USER_CLEANUP_SCOPE_OPTIONS.map((option) => {
+            const isChecked = scopeSelection[option.key];
+            return (
+              <div
+                key={option.key}
+                onClick={() => setScopeSelection((prev) => toggleUserCleanupSelection(prev, option.key))}
+                className="flex items-start gap-3 rounded-lg border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-3 sm:p-4 cursor-pointer select-none"
+              >
+                <div className={`mt-0.5 w-4 h-4 shrink-0 rounded flex items-center justify-center border transition-all duration-150 ${
+                  isChecked
+                    ? 'bg-indigo-600 border-indigo-600 dark:bg-indigo-500 dark:border-indigo-500 text-white shadow-sm'
+                    : 'bg-white dark:bg-gray-950 border-gray-300 dark:border-gray-700'
+                }`}>
+                  {isChecked && (
+                    <svg className="w-2.5 h-2.5 stroke-current stroke-2" fill="none" viewBox="0 0 24 24">
+                      <polyline points="20 6 9 17 4 12" />
+                    </svg>
+                  )}
+                </div>
+                <span>
+                  <span className="block text-sm font-medium text-gray-900 dark:text-gray-100">{option.label}</span>
+                  <span className="block text-xs text-gray-500 dark:text-gray-400">{option.description}</span>
+                </span>
+              </div>
+            );
+          })}
         </div>
       </div>
       {error && <p className="text-xs text-red-600 dark:text-red-400">{error}</p>}
@@ -700,20 +728,32 @@ function GlobalCleanupReaderDataModal({ onClose, onDone }: { onClose: () => void
       <div>
         <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1.5">Cleanup Scope</label>
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-2 sm:gap-3">
-          {GLOBAL_CLEANUP_SCOPE_OPTIONS.map((option) => (
-            <label key={option.key} className="flex items-start gap-3 rounded-lg border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-3 sm:p-4">
-              <input
-                type="checkbox"
-                checked={scopeSelection[option.key]}
-                onChange={() => setScopeSelection((prev) => toggleGlobalCleanupSelection(prev, option.key))}
-                className="mt-0.5 h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
-              />
-              <span>
-                <span className="block text-sm font-medium text-gray-900 dark:text-gray-100">{option.label}</span>
-                <span className="block text-xs text-gray-500 dark:text-gray-400">{option.description}</span>
-              </span>
-            </label>
-          ))}
+          {GLOBAL_CLEANUP_SCOPE_OPTIONS.map((option) => {
+            const isChecked = scopeSelection[option.key];
+            return (
+              <div
+                key={option.key}
+                onClick={() => setScopeSelection((prev) => toggleGlobalCleanupSelection(prev, option.key))}
+                className="flex items-start gap-3 rounded-lg border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-3 sm:p-4 cursor-pointer select-none"
+              >
+                <div className={`mt-0.5 w-4 h-4 shrink-0 rounded flex items-center justify-center border transition-all duration-150 ${
+                  isChecked
+                    ? 'bg-indigo-600 border-indigo-600 dark:bg-indigo-500 dark:border-indigo-500 text-white shadow-sm'
+                    : 'bg-white dark:bg-gray-950 border-gray-300 dark:border-gray-700'
+                }`}>
+                  {isChecked && (
+                    <svg className="w-2.5 h-2.5 stroke-current stroke-2" fill="none" viewBox="0 0 24 24">
+                      <polyline points="20 6 9 17 4 12" />
+                    </svg>
+                  )}
+                </div>
+                <span>
+                  <span className="block text-sm font-medium text-gray-900 dark:text-gray-100">{option.label}</span>
+                  <span className="block text-xs text-gray-500 dark:text-gray-400">{option.description}</span>
+                </span>
+              </div>
+            );
+          })}
         </div>
       </div>
       {error && <p className="text-xs text-red-600 dark:text-red-400">{error}</p>}
@@ -789,6 +829,24 @@ export default function AdminUsersPage() {
   }, [users, search]);
 
 
+  if (loading && users.length === 0) {
+    return (
+      <div className="min-h-screen flex flex-col bg-gray-50 dark:bg-gray-950">
+        <AppNavbar
+          crumbs={[
+            { label: "Dashboard", href: "/dashboard" },
+            { label: "Admin", href: "/dashboard/admin" },
+            { label: "Users" },
+          ]}
+          actions={<UserMenu />}
+        />
+        <main className="flex-1 flex items-center justify-center p-8">
+          <LoadingSpinner label="Loading users..." size="lg" />
+        </main>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen flex flex-col bg-gray-50 dark:bg-gray-950">
       {/* Navbar */}
@@ -853,9 +911,7 @@ export default function AdminUsersPage() {
 
         {/* Table */}
         {loading ? (
-          <div className="flex items-center justify-center py-16">
-            <div className="w-8 h-8 rounded-full border-2 border-indigo-600 border-t-transparent animate-spin" />
-          </div>
+          <LoadingSpinner label="Loading users..." size="md" className="py-16" />
         ) : error ? (
           <div className="rounded-xl bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 px-4 py-3 text-sm text-red-700 dark:text-red-400">{error}</div>
         ) : (

@@ -4,6 +4,7 @@ import { useState, useEffect, type ChangeEvent } from "react";
 import AppNavbar from "@/components/edu-viewer/AppNavbar";
 import UserMenu from "@/components/edu-viewer/UserMenu";
 import { adminGetSettings, adminSaveSettings } from "@/utils/authClient";
+import LoadingSpinner from "@/components/edu-viewer/LoadingSpinner";
 
 type AdminSettings = Record<string, string>;
 
@@ -144,7 +145,16 @@ export default function GlobalSettingsPage() {
     setLoading(false);
   };
 
-  if (!settings) return <div>Loading...</div>;
+  if (!settings) {
+    return (
+      <div className="min-h-screen flex flex-col bg-gray-50 dark:bg-gray-950">
+        <AppNavbar crumbs={[{ label: "Dashboard", href: "/dashboard" }, { label: "Admin", href: "/dashboard/admin" }, { label: "Settings" }]} actions={<UserMenu />} />
+        <main className="flex-1 flex items-center justify-center p-8">
+          <LoadingSpinner label="Loading settings..." size="lg" />
+        </main>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen flex flex-col bg-gray-50 dark:bg-gray-950">

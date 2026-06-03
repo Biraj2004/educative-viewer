@@ -19,7 +19,7 @@ from backend.routes.admin.helpers import (
     require_admin,
     resolve_topic_url,
 )
-from flask import Blueprint, abort, jsonify
+from flask import Blueprint, abort, jsonify, request
 
 
 def register_test_component_routes(
@@ -29,6 +29,29 @@ def register_test_component_routes(
 ) -> None:
     """Register test-component admin routes onto *bp*."""
 
+    @bp.route("/test-components/types", methods=["GET"])
+    def list_component_types():
+        """Return all distinct component types from the components table.
+
+        Response 200 – list of strings.
+        """
+        require_admin(auth_service)
+
+        types = set()
+        for shard in db_manager.iter_course_shards():
+            conn = db_manager.open_course_connection(shard)
+            try:
+                rows = conn.execute("SELECT DISTINCT type FROM components").fetchall()
+                for r in rows:
+                    t = dict(r).get("type")
+                    if t:
+                        types.add(t)
+            finally:
+                conn.close()
+
+        sorted_types = sorted(list(types))
+        return jsonify(sorted_types), 200
+
     @bp.route("/test-components", methods=["GET"])
     def list_test_components():
         """Return all components currently on the test page.
@@ -37,8 +60,37 @@ def register_test_component_routes(
         """
         require_admin(auth_service)
 
+        types_arg = request.args.get("types")
+        types_filter = []
+        if types_arg:
+            types_filter = [t.strip() for t in types_arg.split(",") if t.strip()]
+        else:
+            types_list = request.args.getlist("types")
+            if types_list:
+                for item in types_list:
+                    for t in item.split(","):
+                        t_clean = t.strip()
+                        if t_clean and t_clean not in types_filter:
+                            types_filter.append(t_clean)
+
+        limit_arg = request.args.get("limit")
+        per_type_limit = 5
+        if limit_arg:
+            try:
+                per_type_limit = int(limit_arg)
+            except ValueError:
+                pass
+
         pinned_rows = _fetch_pinned_components(db_manager)
-        random_rows = _fetch_random_components(db_manager, per_type_limit=5)
+        if types_filter:
+            random_rows = _fetch_random_components(
+                db_manager,
+                per_type_limit=per_type_limit,
+                types_filter=types_filter
+            )
+        else:
+            random_rows = []
+
         pinned_ids = {row.get("component_id") for row in pinned_rows}
         combined = pinned_rows + [row for row in random_rows if row.get("component_id") not in pinned_ids]
         return jsonify(combined), 200
@@ -191,12 +243,27 @@ def _fetch_pinned_components(db_manager: DBManager) -> list[dict]:
 
 
 
-def _fetch_random_components(db_manager: DBManager, per_type_limit: int) -> list[dict]:
+def _fetch_random_components(
+    db_manager: DBManager,
+    per_type_limit: int,
+    types_filter: list[str] | None = None,
+) -> list[dict]:
         if per_type_limit <= 0:
+                return []
+        if types_filter is not None and len(types_filter) == 0:
                 return []
 
         rows: list[dict] = []
-        query = """
+
+        type_filter_clause = ""
+        params = []
+        if types_filter:
+            placeholders = ", ".join("?" for _ in types_filter)
+            type_filter_clause = f"WHERE components.type IN ({placeholders})"
+            params.extend(types_filter)
+        params.append(per_type_limit)
+
+        query = f"""
         WITH ranked_topics AS (
             SELECT
                 topics.course_id AS course_id,
@@ -222,6 +289,7 @@ def _fetch_random_components(db_manager: DBManager, per_type_limit: int) -> list
                     ORDER BY RANDOM()
                 ) AS row_number_within_type
             FROM components AS components
+            {type_filter_clause}
         )
         SELECT
             ranked_components.component_id,
@@ -247,7 +315,7 @@ def _fetch_random_components(db_manager: DBManager, per_type_limit: int) -> list
         for shard in db_manager.iter_course_shards():
                 conn = db_manager.open_course_connection(shard)
                 try:
-                        shard_rows = conn.execute(query, (per_type_limit,)).fetchall()
+                        shard_rows = conn.execute(query, tuple(params)).fetchall()
                         from backend.utils import process_content_json
                         for row in shard_rows:
                                 item = dict(row)

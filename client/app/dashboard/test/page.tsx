@@ -183,6 +183,14 @@ type FetchStatus = "idle" | "loading" | "forbidden" | "empty" | "ok" | "error";
 export default function ComponentTestPage() {
   const [components, setComponents] = useState<TestComponentRow[]>([]);
   const [fetchStatus, setFetchStatus] = useState<FetchStatus>("idle");
+  const [allTypes, setAllTypes] = useState<string[]>([]);
+  const [selectedTypes, setSelectedTypes] = useState<string[]>([]);
+  const [lastFetchedTypes, setLastFetchedTypes] = useState<string[]>([]);
+  const [variantsCount, setVariantsCount] = useState<number>(5);
+  const [isTypesDropdownOpen, setIsTypesDropdownOpen] = useState(false);
+  const [isVariantsDropdownOpen, setIsVariantsDropdownOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+  const variantsDropdownRef = useRef<HTMLDivElement>(null);
   const { authToken, user, loading } = useAuth();
 
   const didHaveUser = useRef(false);
@@ -201,34 +209,104 @@ export default function ComponentTestPage() {
   }, [loading, user]);
 
   useEffect(() => {
-    if (!authToken) return;
-    const fetchComponents = async () => {
-      setFetchStatus("loading");
-      try {
-        const BACKEND = getBackendApiBase();
-        const API = `${BACKEND}/api/admin`;
-        const response = await fetch(`${API}/test-components`, {
-          headers: { Authorization: `Bearer ${authToken}` },
-        });
-        if (response.status === 403 || response.status === 401) {
-          setFetchStatus("forbidden");
-          return;
-        }
-        if (response.ok) {
-          const data: unknown = await response.json();
-          const rows = Array.isArray(data) ? (data as TestComponentRow[]) : [];
-          setComponents(rows);
-          setFetchStatus(rows.length === 0 ? "empty" : "ok");
-        } else {
-          setFetchStatus("error");
-        }
-      } catch (error) {
-        console.error("Error fetching test components:", error);
-        setFetchStatus("error");
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setIsTypesDropdownOpen(false);
+      }
+      if (variantsDropdownRef.current && !variantsDropdownRef.current.contains(event.target as Node)) {
+        setIsVariantsDropdownOpen(false);
       }
     };
-    fetchComponents();
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  useEffect(() => {
+    if (!authToken) return;
+    const fetchTypes = async () => {
+      try {
+        const BACKEND = getBackendApiBase();
+        const response = await fetch(`${BACKEND}/api/admin/test-components/types`, {
+          headers: { Authorization: `Bearer ${authToken}` },
+        });
+        if (response.ok) {
+          const data = await response.json();
+          if (Array.isArray(data)) {
+            setAllTypes(data);
+          }
+        }
+      } catch (error) {
+        console.error("Error fetching component types:", error);
+      }
+    };
+    fetchTypes();
   }, [authToken]);
+
+  const fetchComponents = async (typesToFetch = selectedTypes, countToFetch = variantsCount) => {
+    if (!authToken) return;
+    setFetchStatus("loading");
+    try {
+      const BACKEND = getBackendApiBase();
+      const API = `${BACKEND}/api/admin`;
+      const params = new URLSearchParams();
+      if (typesToFetch.length > 0) {
+        params.append("types", typesToFetch.join(","));
+      }
+      params.append("limit", countToFetch.toString());
+
+      const response = await fetch(`${API}/test-components?${params.toString()}`, {
+        headers: { Authorization: `Bearer ${authToken}` },
+      });
+      if (response.status === 403 || response.status === 401) {
+        setFetchStatus("forbidden");
+        return;
+      }
+      if (response.ok) {
+        const data: unknown = await response.json();
+        const rows = Array.isArray(data) ? (data as TestComponentRow[]) : [];
+        setComponents(rows);
+        setLastFetchedTypes(typesToFetch);
+        setFetchStatus(rows.length === 0 ? "empty" : "ok");
+      } else {
+        setFetchStatus("error");
+      }
+    } catch (error) {
+      console.error("Error fetching test components:", error);
+      setFetchStatus("error");
+    }
+  };
+
+  useEffect(() => {
+    if (!authToken) return;
+    fetchComponents([], 5);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authToken]);
+
+  const handleLoadComponents = () => {
+    fetchComponents(selectedTypes, variantsCount);
+  };
+
+  const handleClearFilters = () => {
+    setSelectedTypes([]);
+    setLastFetchedTypes([]);
+    setVariantsCount(5);
+    setComponents([]);
+    setFetchStatus("empty");
+  };
+
+  const handleToggleType = (type: string) => {
+    setSelectedTypes((prev) =>
+      prev.includes(type) ? prev.filter((t) => t !== type) : [...prev, type]
+    );
+  };
+
+  const handleSelectAll = () => {
+    setSelectedTypes(allTypes);
+  };
+
+  const handleClearAll = () => {
+    setSelectedTypes([]);
+  };
 
   if (loading || !user) return null;
 
@@ -258,6 +336,193 @@ export default function ComponentTestPage() {
 
       <div className="overflow-x-hidden">
         <div className="max-w-5xl mx-auto px-4 sm:px-6 py-10 space-y-10">
+
+          {/* ── Controls Panel ─────────────────────────────────────────────── */}
+          <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl p-5 shadow-sm space-y-4">
+            <h2 className="text-sm font-semibold text-gray-900 dark:text-gray-100 flex items-center gap-2">
+              <svg className="w-4 h-4 text-indigo-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
+              </svg>
+              Filter Components
+            </h2>
+            <div className="flex flex-col md:flex-row items-end gap-4">
+              {/* Checkbox Dropdown for Component Types */}
+              <div className="relative flex-1 w-full" ref={dropdownRef}>
+                <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1.5">
+                  Component Types
+                </label>
+                <button
+                  type="button"
+                  onClick={() => setIsTypesDropdownOpen(!isTypesDropdownOpen)}
+                  className="w-full flex items-center justify-between gap-2 px-3 py-2 text-sm bg-gray-50 dark:bg-gray-950 border border-gray-300 dark:border-gray-700 rounded-lg text-left text-gray-700 dark:text-gray-300 hover:border-gray-400 dark:hover:border-gray-600 transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer"
+                >
+                  <span className="truncate">
+                    {selectedTypes.length === 0
+                      ? "None selected"
+                      : `${selectedTypes.length} selected (${selectedTypes.slice(0, 2).join(", ")}${selectedTypes.length > 2 ? "..." : ""})`}
+                  </span>
+                  <svg
+                    className={`w-4 h-4 text-gray-400 transition-transform duration-200 ${isTypesDropdownOpen ? 'rotate-180' : ''}`}
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                    strokeWidth={2}
+                  >
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                  </svg>
+                </button>
+
+                <div
+                  className={`absolute z-50 mt-1 w-full bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-lg shadow-lg max-h-60 overflow-y-auto p-2 space-y-1 transition-all duration-200 origin-top ${
+                    isTypesDropdownOpen
+                      ? 'opacity-100 translate-y-0 scale-100 pointer-events-auto'
+                      : 'opacity-0 -translate-y-2 scale-95 pointer-events-none'
+                  }`}
+                >
+                  <div className="flex items-center justify-between border-b border-gray-100 dark:border-gray-800 pb-2 mb-2 px-2 text-xs">
+                    <button
+                      type="button"
+                      onClick={handleSelectAll}
+                      className="text-indigo-600 dark:text-indigo-400 hover:underline font-semibold cursor-pointer"
+                    >
+                      Select All
+                    </button>
+                    <span className="text-gray-400 dark:text-gray-500 font-medium">
+                      {allTypes.length} types found
+                    </span>
+                    <button
+                      type="button"
+                      onClick={handleClearAll}
+                      className="text-gray-500 dark:text-gray-400 hover:underline font-semibold cursor-pointer"
+                    >
+                      Clear All
+                    </button>
+                  </div>
+                  {allTypes.length === 0 ? (
+                    <div className="text-xs text-gray-400 p-2 text-center">Loading types...</div>
+                  ) : (
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-1 px-1">
+                      {allTypes.map((type) => {
+                        const isChecked = selectedTypes.includes(type);
+                        return (
+                          <div
+                            key={type}
+                            onClick={() => handleToggleType(type)}
+                            className="flex items-center gap-2.5 px-2.5 py-1.5 hover:bg-gray-50 dark:hover:bg-gray-800/60 rounded-md cursor-pointer text-sm text-gray-700 dark:text-gray-300 transition-colors select-none"
+                          >
+                            <div className={`w-4 h-4 rounded flex items-center justify-center border transition-all duration-150 ${
+                              isChecked
+                                ? 'bg-indigo-600 border-indigo-600 dark:bg-indigo-500 dark:border-indigo-500 text-white shadow-sm'
+                                : 'bg-white dark:bg-gray-950 border-gray-300 dark:border-gray-700'
+                            }`}>
+                              {isChecked && (
+                                <svg className="w-2.5 h-2.5 stroke-current stroke-2" fill="none" viewBox="0 0 24 24">
+                                  <polyline points="20 6 9 17 4 12" />
+                                </svg>
+                              )}
+                            </div>
+                            <span className="font-mono text-xs">{type}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Custom Dropdown for Number of Variants */}
+              <div className="relative w-full md:w-48" ref={variantsDropdownRef}>
+                <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1.5">
+                  Variants count per type
+                </label>
+                <button
+                  type="button"
+                  onClick={() => setIsVariantsDropdownOpen(!isVariantsDropdownOpen)}
+                  className="w-full flex items-center justify-between gap-2 px-3 py-2 text-sm bg-gray-50 dark:bg-gray-950 border border-gray-300 dark:border-gray-700 rounded-lg text-left text-gray-700 dark:text-gray-300 hover:border-gray-400 dark:hover:border-gray-600 transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer"
+                >
+                  <span className="truncate">
+                    {variantsCount} variants
+                  </span>
+                  <svg
+                    className={`w-4 h-4 text-gray-400 transition-transform duration-200 ${isVariantsDropdownOpen ? 'rotate-180' : ''}`}
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                    strokeWidth={2}
+                  >
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                  </svg>
+                </button>
+
+                <div
+                  className={`absolute z-50 mt-1 w-full bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-lg shadow-lg max-h-60 overflow-y-auto p-1.5 space-y-0.5 transition-all duration-200 origin-top ${
+                    isVariantsDropdownOpen
+                      ? 'opacity-100 translate-y-0 scale-100 pointer-events-auto'
+                      : 'opacity-0 -translate-y-2 scale-95 pointer-events-none'
+                  }`}
+                >
+                  {[1, 2, 3, 5, 8, 10, 15, 20].map((v) => {
+                    const isSelected = variantsCount === v;
+                    return (
+                      <div
+                        key={v}
+                        onClick={() => {
+                          setVariantsCount(v);
+                          setIsVariantsDropdownOpen(false);
+                        }}
+                        className={`flex items-center justify-between px-2.5 py-1.5 rounded-md cursor-pointer text-sm transition-colors select-none ${
+                          isSelected
+                            ? 'bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 font-medium'
+                            : 'text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800/60'
+                        }`}
+                      >
+                        <span>{v} variants</span>
+                        {isSelected && (
+                          <svg className="w-4 h-4 text-indigo-600 dark:text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                          </svg>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex items-center gap-2 w-full md:w-auto shrink-0">
+                <button
+                  type="button"
+                  onClick={handleLoadComponents}
+                  disabled={fetchStatus === "loading"}
+                  className="flex-1 md:flex-initial flex items-center justify-center gap-2 px-4 py-2 text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-500 disabled:bg-indigo-400 dark:bg-indigo-600 dark:hover:bg-indigo-500 dark:disabled:bg-indigo-700/50 border border-transparent rounded-lg shadow-sm transition-colors cursor-pointer focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                >
+                  {fetchStatus === "loading" ? (
+                    <>
+                      <svg className="animate-spin h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                      </svg>
+                      Loading...
+                    </>
+                  ) : (
+                    <>
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99" />
+                      </svg>
+                      Load
+                    </>
+                  )}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleClearFilters}
+                  className="px-4 py-2 text-sm font-semibold text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 rounded-lg shadow-sm transition-colors cursor-pointer focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                >
+                  Clear
+                </button>
+              </div>
+            </div>
+          </div>
 
           {/* ── Loading skeleton ──────────────────────────────────────────── */}
           {fetchStatus === "loading" && (
@@ -294,7 +559,23 @@ export default function ComponentTestPage() {
           )}
 
           {/* ── Empty ─────────────────────────────────────────────────────── */}
-          {fetchStatus === "empty" && (
+          {fetchStatus === "empty" && lastFetchedTypes.length === 0 && (
+            <div className="flex flex-col items-center justify-center py-24 gap-5 text-center bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl">
+              <div className="w-16 h-16 rounded-2xl flex items-center justify-center bg-indigo-50 dark:bg-indigo-950/50 border border-indigo-200 dark:border-indigo-800">
+                <svg className="w-8 h-8 text-indigo-400 dark:text-indigo-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M15 15l-2 5L9 9l11 4-5 2zm0 0l5 5M7.188 2.239l.777 2.897M5.136 7.965l-2.898-.777M13.95 4.05l-2.122 2.122m-5.657 5.656l-2.12 2.122" />
+                </svg>
+              </div>
+              <div>
+                <p className="text-base font-semibold text-gray-900 dark:text-gray-100">No components loaded</p>
+                <p className="text-sm text-gray-500 dark:text-gray-400 mt-1 max-w-sm">
+                  Select component types from the filter dropdown above to load random variants from the database.
+                </p>
+              </div>
+            </div>
+          )}
+
+          {fetchStatus === "empty" && lastFetchedTypes.length > 0 && (
             <div className="flex flex-col items-center justify-center py-24 gap-5 text-center">
               <div className="w-16 h-16 rounded-2xl flex items-center justify-center bg-indigo-50 dark:bg-indigo-950/50 border border-indigo-200 dark:border-indigo-800">
                 <svg className="w-8 h-8 text-indigo-400 dark:text-indigo-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round">
