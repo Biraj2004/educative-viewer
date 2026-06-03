@@ -2564,13 +2564,13 @@ export default function TopicLayoutClient({
 
         {/* Main content — natural page scroll */}
         <main
-          className="topic-reader-main flex-1 min-w-0 transition-[margin-right] duration-300 ease-[cubic-bezier(0.4,0,0.2,1)]"
+          className="flex-1 min-w-0 transition-[margin-right] duration-300 ease-[cubic-bezier(0.4,0,0.2,1)]"
           style={contentShiftStyle}
         >
 
           {/* Topic Header */}
-          <div className="max-w-6xl mx-auto px-4 sm:px-6 pt-6 sm:pt-8 pb-2">
-            <h1 className="text-[2.05rem] sm:text-4xl font-extrabold tracking-tight text-gray-900 dark:text-gray-100 leading-[1.08] text-balance">
+          <div className="max-w-6xl mx-auto px-6 pt-8 pb-2">
+            <h1 className="text-3xl md:text-4xl font-extrabold tracking-tight text-gray-900 dark:text-gray-100 leading-tight">
               {currentTopic.topic_name}
             </h1>
             <div className="mt-3 flex flex-wrap items-center gap-2">
@@ -2600,7 +2600,7 @@ export default function TopicLayoutClient({
           </div>
 
           {/* Components */}
-          <div ref={contentRef} className="max-w-6xl mx-auto px-4 sm:px-6 pb-8 pt-4 space-y-6 topic-content-wrapper">
+          <div ref={contentRef} className="max-w-6xl mx-auto px-6 pb-8 pt-4 space-y-6 topic-content-wrapper">
             <TopicComponentsList
               currentComponents={currentComponents}
               topicIndex={currentTopic.topic_index}
@@ -2618,7 +2618,7 @@ export default function TopicLayoutClient({
           <FontInjector />
 
           {/* Mark complete + Prev / Next */}
-          <div className="max-w-6xl mx-auto px-4 sm:px-6 pb-10 space-y-4">
+          <div className="max-w-6xl mx-auto px-6 pb-10 space-y-4">
             {/* Mark complete checkbox */}
             <div className="flex justify-center">
               <button
@@ -2644,7 +2644,7 @@ export default function TopicLayoutClient({
             </div>
 
             {/* Prev / Next */}
-            <div className="grid gap-3 sm:flex sm:items-center sm:justify-between sm:gap-4">
+            <div className="flex items-center justify-between gap-4">
               {prev ? (
                 <button
                   onClick={() => {
@@ -2659,14 +2659,14 @@ export default function TopicLayoutClient({
                     }
                     handleTopicNav(buildTopicHref(prev.topic_index, prev.slug), prev.topic_index);
                   }}
-                  className="flex min-w-0 items-center gap-2 px-4 py-2.5 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-sm text-gray-700 dark:text-gray-300 hover:border-indigo-400 dark:hover:border-indigo-600 hover:text-indigo-700 dark:hover:text-indigo-400 transition-colors sm:max-w-xs cursor-pointer"
+                  className="flex items-center gap-2 px-4 py-2.5 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-sm text-gray-700 dark:text-gray-300 hover:border-indigo-400 dark:hover:border-indigo-600 hover:text-indigo-700 dark:hover:text-indigo-400 transition-colors max-w-xs cursor-pointer"
                 >
                   <svg className="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
                   </svg>
                   <span className="truncate">{prev.title}</span>
                 </button>
-              ) : <div className="hidden sm:block" />}
+              ) : <div />}
               {next ? (
                 <button
                   onClick={() => {
@@ -2681,14 +2681,14 @@ export default function TopicLayoutClient({
                     }
                     handleTopicNav(buildTopicHref(next.topic_index, next.slug), next.topic_index);
                   }}
-                  className="flex min-w-0 items-center justify-end gap-2 px-4 py-2.5 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-sm text-gray-700 dark:text-gray-300 hover:border-indigo-400 dark:hover:border-indigo-600 hover:text-indigo-700 dark:hover:text-indigo-400 transition-colors sm:max-w-xs cursor-pointer"
+                  className="flex items-center gap-2 px-4 py-2.5 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-sm text-gray-700 dark:text-gray-300 hover:border-indigo-400 dark:hover:border-indigo-600 hover:text-indigo-700 dark:hover:text-indigo-400 transition-colors max-w-xs cursor-pointer"
                 >
                   <span className="truncate">{next.title}</span>
                   <svg className="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
                   </svg>
                 </button>
-              ) : <div className="hidden sm:block" />}
+              ) : <div />}
             </div>
           </div>
 
@@ -2726,7 +2726,7 @@ export default function TopicLayoutClient({
           </button>
           <button
             onClick={handleOpenDrawingPad}
-            className="lg:hidden fixed bottom-[calc(1.25rem+env(safe-area-inset-bottom))] right-4 z-40 inline-flex items-center gap-1.5 px-3 py-2 rounded-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 shadow-md text-gray-600 dark:text-gray-300 hover:text-sky-700 dark:hover:text-sky-300 transition-colors cursor-pointer"
+            className="lg:hidden fixed bottom-5 right-4 z-40 inline-flex items-center gap-1.5 px-3 py-2 rounded-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 shadow-md text-gray-600 dark:text-gray-300 hover:text-sky-700 dark:hover:text-sky-300 transition-colors cursor-pointer"
             title="Drawing Notes"
           >
             <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
@@ -3316,3 +3316,4 @@ export default function TopicLayoutClient({
     </div>
   );
 }
+
