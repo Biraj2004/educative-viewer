@@ -410,12 +410,12 @@ export default function ComponentTestPage() {
                           <div
                             key={type}
                             onClick={() => handleToggleType(type)}
-                            className="flex items-center gap-2.5 px-2.5 py-1.5 hover:bg-gray-50 dark:hover:bg-gray-800/60 rounded-md cursor-pointer text-sm text-gray-700 dark:text-gray-300 transition-colors select-none"
+                            className="flex items-center gap-2.5 min-w-0 overflow-hidden rounded-lg border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 px-2.5 py-1.5 cursor-pointer select-none transition-colors hover:border-indigo-300 dark:hover:border-indigo-700 hover:bg-indigo-50/40 dark:hover:bg-indigo-950/30"
                           >
-                            <div className={`w-4 h-4 rounded flex items-center justify-center border transition-all duration-150 ${
+                            <div className={`w-4 h-4 shrink-0 rounded-md flex items-center justify-center border transition-all duration-150 ${
                               isChecked
-                                ? 'bg-indigo-600 border-indigo-600 dark:bg-indigo-500 dark:border-indigo-500 text-white shadow-sm'
-                                : 'bg-white dark:bg-gray-950 border-gray-300 dark:border-gray-700'
+                                ? 'bg-indigo-500 border-indigo-500 text-white shadow-sm'
+                                : 'bg-transparent dark:bg-gray-800 border-gray-300 dark:border-gray-700'
                             }`}>
                               {isChecked && (
                                 <svg className="w-2.5 h-2.5 stroke-current stroke-2" fill="none" viewBox="0 0 24 24">
@@ -423,7 +423,7 @@ export default function ComponentTestPage() {
                                 </svg>
                               )}
                             </div>
-                            <span className="font-mono text-xs">{type}</span>
+                            <span className="font-mono text-xs text-gray-700 dark:text-gray-300 truncate">{type}</span>
                           </div>
                         );
                       })}
