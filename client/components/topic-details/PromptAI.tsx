@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect, useMemo } from "react";
 import ReactMarkdown from "react-markdown";
+import parse from "html-react-parser";
 import { generateAIContent, AVAILABLE_MODELS } from "@/utils/aiClient";
 
 export interface PromptAIData {
@@ -11,6 +12,8 @@ export interface PromptAIData {
   temperature?: number;
   turnLimit?: number;
   version?: number | string;
+  introTextStatement?: string;
+  introPrompt?: string;
 }
 
 interface Message {
@@ -176,7 +179,22 @@ export default function PromptAI({ data }: { data: PromptAIData }) {
 
         {/* Chat History */}
         <div ref={scrollContainerRef} className="h-80 overflow-y-auto p-4 flex flex-col gap-4 relative scroll-smooth">
-          {messages.length === 0 ? (
+          {(data.introTextStatement || data.introPrompt) && (
+            <div className="flex flex-col gap-4 pb-2 text-gray-800 dark:text-gray-200">
+              {data.introTextStatement && (
+                <div className="prose prose-sm dark:prose-invert max-w-none text-[15px] leading-relaxed">
+                  {parse(data.introTextStatement)}
+                </div>
+              )}
+              {data.introPrompt && (
+                <div className="prose prose-sm dark:prose-invert max-w-none text-[15px] leading-relaxed [&_p]:mb-3 [&_ul]:list-disc [&_ul]:pl-6 [&_li]:mb-1">
+                  {parse(data.introPrompt)}
+                </div>
+              )}
+            </div>
+          )}
+
+          {messages.length === 0 && !data.introTextStatement && !data.introPrompt ? (
             <div className="h-full flex items-center justify-center text-gray-400 dark:text-gray-500 text-sm italic">
               Start a conversation...
             </div>
