@@ -46,6 +46,7 @@ import SequenceDiagrams from "@/components/topic-details/SequenceDiagrams";
 import PromptAI from "@/components/topic-details/PromptAI";
 import UML from "@/components/topic-details/UML";
 import WorkPreview from "@/components/topic-details/WorkPreview";
+import Sketch from "@/components/topic-details/Sketch";
 import "katex/dist/katex.min.css";
 
 // ─── Component Feature Flags ─────────────────────────────────────────────────
@@ -126,6 +127,7 @@ export const COMPONENT_REGISTRY: Record<string, RendererFn> = {
   PromptAI:              (c) => <div data-component-type="PromptAI">             <PromptAI               data={c as any} /></div>,
   UML:                   (c) => <div data-component-type="UML">                  <UML                    data={c as any} /></div>,
   WorkPreview:           (c) => <div data-component-type="WorkPreview">          <WorkPreview           data={c as any} /></div>,
+  Sketch:                (c) => <div data-component-type="Sketch">               <Sketch                 data={c as any} /></div>,
 };
 
 // ─── Lookup Helper ───────────────────────────────────────────────────────────

@@ -50,6 +50,7 @@ import SequenceDiagrams, { SequenceDiagramData } from "@/components/topic-detail
 import PromptAI, { PromptAIData } from "@/components/topic-details/PromptAI";
 import UML, { UMLData } from "@/components/topic-details/UML";
 import WorkPreview, { WorkPreviewData } from "@/components/topic-details/WorkPreview";
+import Sketch, { SketchData } from "@/components/topic-details/Sketch";
 import { getBackendApiBase } from "@/utils/runtime-config";
 
 interface TestComponentRow {
@@ -176,6 +177,7 @@ const componentMapping: { [key: string]: React.ComponentType<any> } = {
     "PromptAI": (props: { data: PromptAIData }) => <PromptAI {...props} />,
     "UML": (props: { data: UMLData }) => <UML {...props} />,
     "WorkPreview": (props: { data: WorkPreviewData }) => <WorkPreview {...props} />,
+    "Sketch": (props: { data: SketchData }) => <Sketch {...props} />,
 };
 
 type FetchStatus = "idle" | "loading" | "forbidden" | "empty" | "ok" | "error";

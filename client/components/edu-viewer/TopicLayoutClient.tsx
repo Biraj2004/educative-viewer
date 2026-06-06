@@ -51,6 +51,7 @@ const HEAVY_COMPONENT_TYPES = new Set([
   "Chart",
   "InstaCalc",
   "MatchTheAnswers",
+  "Sketch",
 ]);
 
 // ─── LazyComponent ────────────────────────────────────────────────────────────
