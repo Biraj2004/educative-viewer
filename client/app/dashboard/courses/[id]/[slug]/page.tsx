@@ -1520,35 +1520,33 @@ export default function CourseDetailPage() {
                       ) : (
                         <div className="space-y-3">
                           <div className="flex items-center justify-between pb-2 border-b border-gray-100 dark:border-gray-800/60">
-                            <div
-                              onClick={() => {
-                                const allIndices = [...bookmarkedTopicIndices];
-                                if (selectedBookmarkIndices.size === allIndices.length) {
-                                  setSelectedBookmarkIndices(new Set());
-                                } else {
-                                  setSelectedBookmarkIndices(new Set(allIndices));
-                                }
-                              }}
-                              className="flex items-center gap-2 cursor-pointer select-none"
-                            >
-                              {(() => {
-                                const allSelected = [...bookmarkedTopicIndices].length > 0 && selectedBookmarkIndices.size === bookmarkedTopicIndices.size;
-                                return (
-                                  <div className={`w-4 h-4 shrink-0 rounded-md flex items-center justify-center border transition-all duration-150 ${
-                                    allSelected
-                                      ? 'bg-indigo-500 border-indigo-500 text-white shadow-sm'
-                                      : 'bg-transparent dark:bg-gray-800 border-gray-300 dark:border-gray-700'
-                                  }`}>
-                                    {allSelected && (
-                                      <svg className="w-2.5 h-2.5 stroke-current stroke-2" fill="none" viewBox="0 0 24 24">
-                                        <polyline points="20 6 9 17 4 12" />
-                                      </svg>
-                                    )}
-                                  </div>
-                                );
-                              })()}
-                              <span className="text-xs font-semibold text-gray-500 dark:text-gray-400">Select All</span>
-                            </div>
+                            <label className="flex items-center gap-2 cursor-pointer text-xs font-semibold text-gray-500 dark:text-gray-400 select-none">
+                              <input
+                                type="checkbox"
+                                checked={[...bookmarkedTopicIndices].length > 0 && selectedBookmarkIndices.size === bookmarkedTopicIndices.size}
+                                onChange={() => {
+                                  const allIndices = [...bookmarkedTopicIndices];
+                                  if (selectedBookmarkIndices.size === allIndices.length) {
+                                    setSelectedBookmarkIndices(new Set());
+                                  } else {
+                                    setSelectedBookmarkIndices(new Set(allIndices));
+                                  }
+                                }}
+                                className="hidden"
+                              />
+                              <div className={`w-4 h-4 shrink-0 rounded flex items-center justify-center border transition-all duration-150 ${
+                                [...bookmarkedTopicIndices].length > 0 && selectedBookmarkIndices.size === bookmarkedTopicIndices.size
+                                  ? 'bg-indigo-600 border-indigo-600 dark:bg-indigo-500 dark:border-indigo-500 text-white shadow-sm'
+                                  : 'bg-white dark:bg-gray-950 border-gray-300 dark:border-gray-700'
+                              }`}>
+                                {([...bookmarkedTopicIndices].length > 0 && selectedBookmarkIndices.size === bookmarkedTopicIndices.size) && (
+                                  <svg className="w-2.5 h-2.5 stroke-current stroke-2" fill="none" viewBox="0 0 24 24">
+                                    <polyline points="20 6 9 17 4 12" />
+                                  </svg>
+                                )}
+                              </div>
+                              <span>Select All</span>
+                            </label>
                           </div>
 
                           <ul className="space-y-2">
@@ -1564,30 +1562,36 @@ export default function CourseDetailPage() {
                                     ? "border-indigo-300 dark:border-indigo-800 bg-indigo-50/20 dark:bg-indigo-950/10"
                                     : "border-gray-200 dark:border-gray-800 bg-gray-50/70 dark:bg-gray-900/40"
                                 }`}>
-                                  <div
-                                    className="flex items-center gap-3 cursor-pointer select-none"
-                                    onClick={(e) => {
-                                      // Don't intercept clicks on the link itself
-                                      if ((e.target as HTMLElement).closest('a')) return;
-                                      setSelectedBookmarkIndices((prev) => {
-                                        const next = new Set(prev);
-                                        if (next.has(topicIndex)) next.delete(topicIndex);
-                                        else next.add(topicIndex);
-                                        return next;
-                                      });
-                                    }}
-                                  >
-                                    <div className={`w-4 h-4 shrink-0 rounded-md flex items-center justify-center border transition-all duration-150 ${
-                                      isChecked
-                                        ? 'bg-indigo-500 border-indigo-500 text-white shadow-sm'
-                                        : 'bg-transparent dark:bg-gray-800 border-gray-300 dark:border-gray-700'
-                                    }`}>
-                                      {isChecked && (
-                                        <svg className="w-2.5 h-2.5 stroke-current stroke-2" fill="none" viewBox="0 0 24 24">
-                                          <polyline points="20 6 9 17 4 12" />
-                                        </svg>
-                                      )}
-                                    </div>
+                                  <div className="flex items-center gap-3">
+                                    <label className="flex items-center cursor-pointer select-none">
+                                      <input
+                                        type="checkbox"
+                                        checked={isChecked}
+                                        onChange={() => {
+                                          setSelectedBookmarkIndices((prev) => {
+                                            const next = new Set(prev);
+                                            if (next.has(topicIndex)) {
+                                              next.delete(topicIndex);
+                                            } else {
+                                              next.add(topicIndex);
+                                            }
+                                            return next;
+                                          });
+                                        }}
+                                        className="hidden"
+                                      />
+                                      <div className={`w-4 h-4 shrink-0 rounded flex items-center justify-center border transition-all duration-150 ${
+                                        isChecked
+                                          ? 'bg-indigo-600 border-indigo-600 dark:bg-indigo-500 dark:border-indigo-500 text-white shadow-sm'
+                                          : 'bg-white dark:bg-gray-950 border-gray-300 dark:border-gray-700'
+                                      }`}>
+                                        {isChecked && (
+                                          <svg className="w-2.5 h-2.5 stroke-current stroke-2" fill="none" viewBox="0 0 24 24">
+                                            <polyline points="20 6 9 17 4 12" />
+                                          </svg>
+                                        )}
+                                      </div>
+                                    </label>
                                     <div className="flex-1 min-w-0">
                                       <a href={href} className="group flex max-w-full items-baseline gap-2 text-sm font-medium leading-6 text-indigo-600 hover:underline dark:text-indigo-300">
                                         <span className="shrink-0 font-medium text-gray-500 dark:text-gray-400">

@@ -188,7 +188,7 @@ export default function ComponentTestPage() {
   const [allTypes, setAllTypes] = useState<string[]>([]);
   const [selectedTypes, setSelectedTypes] = useState<string[]>([]);
   const [lastFetchedTypes, setLastFetchedTypes] = useState<string[]>([]);
-  const [variantsCount, setVariantsCount] = useState<number>(5);
+  const [variantsCount, setVariantsCount] = useState<number>(1);
   const [isTypesDropdownOpen, setIsTypesDropdownOpen] = useState(false);
   const [isVariantsDropdownOpen, setIsVariantsDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -280,7 +280,7 @@ export default function ComponentTestPage() {
 
   useEffect(() => {
     if (!authToken) return;
-    fetchComponents([], 5);
+    fetchComponents([], 1);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authToken]);
 
@@ -291,7 +291,7 @@ export default function ComponentTestPage() {
   const handleClearFilters = () => {
     setSelectedTypes([]);
     setLastFetchedTypes([]);
-    setVariantsCount(5);
+    setVariantsCount(1);
     setComponents([]);
     setFetchStatus("empty");
   };
@@ -673,7 +673,7 @@ export default function ComponentTestPage() {
                         Open Local
                       </button>
 
-                      {/* Open Educative */}
+                      {/* Open External */}
                       <button
                         type="button"
                         onClick={() => handleOpenTopic(topicUrl)}
@@ -684,9 +684,9 @@ export default function ComponentTestPage() {
                             ? "bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:border-indigo-400 dark:hover:border-indigo-600 hover:text-indigo-700 dark:hover:text-indigo-400 cursor-pointer"
                             : "bg-gray-100 dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-400 dark:text-gray-500 cursor-not-allowed",
                         ].join(" ")}
-                        aria-label={`Open Educative topic for ${component.component_type} in a new tab`}
+                        aria-label={`Open external topic for ${component.component_type} in a new tab`}
                       >
-                        Open Educative
+                        Open External
                         <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                           <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 6H18m0 0v4.5M18 6l-7.5 7.5M6.75 6h3M6 9.75V17.25A.75.75 0 006.75 18h7.5a.75.75 0 00.75-.75v-3" />
                         </svg>

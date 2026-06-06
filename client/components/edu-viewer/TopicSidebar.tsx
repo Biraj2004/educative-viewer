@@ -221,25 +221,32 @@ export default function TopicSidebar({
                                                                     : "text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-gray-100 border-l-2 border-l-transparent",
                                                             ].join(" ")}
                                                         >
-                                                            {isDone ? (
-                                                                <svg className="w-3.5 h-3.5 mt-0.5 shrink-0 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                                                                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                                                </svg>
-                                                            ) : (
-                                                                <span
-                                                                    className={[
-                                                                        "text-[11px] font-mono mt-0.5 w-3.5 shrink-0 text-right",
-                                                                        isActive ? "text-indigo-400 dark:text-indigo-400" : "text-gray-300 dark:text-gray-600",
-                                                                    ].join(" ")}
-                                                                >
-                                                                    {topic.topic_index + 1}
-                                                                </span>
-                                                            )}
+                                                            <span
+                                                                className={[
+                                                                    "text-[11px] font-mono mt-0.5 w-3.5 shrink-0 text-right",
+                                                                    isActive
+                                                                        ? "text-indigo-400 dark:text-indigo-400"
+                                                                        : isDone
+                                                                        ? "text-emerald-600 dark:text-emerald-400"
+                                                                        : "text-gray-300 dark:text-gray-600",
+                                                                ].join(" ")}
+                                                            >
+                                                                {topic.topic_index + 1}
+                                                            </span>
                                                             <span className="leading-snug">{topic.title}</span>
-                                                            {isBookmarked && (
-                                                                <svg className="w-3.5 h-3.5 mt-0.5 ml-auto shrink-0 text-amber-500" fill="currentColor" viewBox="0 0 20 20" aria-label="Bookmarked topic">
-                                                                    <path d="M5 2a2 2 0 0 0-2 2v14l7-3 7 3V4a2 2 0 0 0-2-2H5Z" />
-                                                                </svg>
+                                                            {(isDone || isBookmarked) && (
+                                                                <div className="flex items-center gap-1.5 shrink-0 ml-auto mt-0.5">
+                                                                    {isDone && (
+                                                                        <svg className="w-3.5 h-3.5 text-emerald-500 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                                                                            <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                                                        </svg>
+                                                                    )}
+                                                                    {isBookmarked && (
+                                                                        <svg className="w-3.5 h-3.5 text-amber-500 shrink-0" fill="currentColor" viewBox="0 0 20 20" aria-label="Bookmarked topic">
+                                                                            <path d="M5 2a2 2 0 0 0-2 2v14l7-3 7 3V4a2 2 0 0 0-2-2H5Z" />
+                                                                        </svg>
+                                                                    )}
+                                                                </div>
                                                             )}
                                                         </Link>
                                                     </li>
@@ -276,25 +283,32 @@ export default function TopicSidebar({
                                                         : "text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-gray-100 border-l-2 border-l-transparent",
                                                 ].join(" ")}
                                             >
-                                                {isDone ? (
-                                                    <svg className="w-3.5 h-3.5 mt-0.5 shrink-0 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                                                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                                    </svg>
-                                                ) : (
-                                                    <span
-                                                        className={[
-                                                            "text-[11px] font-mono mt-0.5 w-3.5 shrink-0 text-right",
-                                                            isActive ? "text-indigo-400 dark:text-indigo-400" : "text-gray-300 dark:text-gray-600",
-                                                        ].join(" ")}
-                                                    >
-                                                        {entry.topic_index + 1}
-                                                    </span>
-                                                )}
+                                                <span
+                                                    className={[
+                                                        "text-[11px] font-mono mt-0.5 w-3.5 shrink-0 text-right",
+                                                        isActive
+                                                            ? "text-indigo-400 dark:text-indigo-400"
+                                                            : isDone
+                                                            ? "text-emerald-600 dark:text-emerald-400"
+                                                            : "text-gray-300 dark:text-gray-600",
+                                                    ].join(" ")}
+                                                >
+                                                    {entry.topic_index + 1}
+                                                </span>
                                                 <span className="leading-snug">{entry.title}</span>
-                                                {isBookmarked && (
-                                                    <svg className="w-3.5 h-3.5 mt-0.5 ml-auto shrink-0 text-amber-500" fill="currentColor" viewBox="0 0 20 20" aria-label="Bookmarked topic">
-                                                        <path d="M5 2a2 2 0 0 0-2 2v14l7-3 7 3V4a2 2 0 0 0-2-2H5Z" />
-                                                    </svg>
+                                                {(isDone || isBookmarked) && (
+                                                    <div className="flex items-center gap-1.5 shrink-0 ml-auto mt-0.5">
+                                                        {isDone && (
+                                                            <svg className="w-3.5 h-3.5 text-emerald-500 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                                                                <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                                            </svg>
+                                                        )}
+                                                        {isBookmarked && (
+                                                            <svg className="w-3.5 h-3.5 text-amber-500 shrink-0" fill="currentColor" viewBox="0 0 20 20" aria-label="Bookmarked topic">
+                                                                <path d="M5 2a2 2 0 0 0-2 2v14l7-3 7 3V4a2 2 0 0 0-2-2H5Z" />
+                                                            </svg>
+                                                        )}
+                                                    </div>
                                                 )}
                                             </Link>
                                         </li>

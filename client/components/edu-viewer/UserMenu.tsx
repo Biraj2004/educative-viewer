@@ -262,6 +262,23 @@ export default function UserMenu() {
 
                 <div className="h-px bg-gray-100 dark:bg-gray-800 my-1" />
 
+                {/* About Link */}
+                <Link
+                  href="/about"
+                  prefetch={false}
+                  onClick={() => setOpen(false)}
+                  className="flex items-center gap-2.5 px-4 py-2.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 hover:text-indigo-700 dark:hover:text-indigo-400 transition-colors cursor-pointer"
+                >
+                  <svg className="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="12" cy="12" r="10" />
+                    <line x1="12" y1="16" x2="12" y2="12" />
+                    <line x1="12" y1="8" x2="12.01" y2="8" />
+                  </svg>
+                  <span className="text-xs font-medium">About</span>
+                </Link>
+
+                <div className="h-px bg-gray-100 dark:bg-gray-800 my-1" />
+
                 {isStandalone && (
                   <>
                     <button

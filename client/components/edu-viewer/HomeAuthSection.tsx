@@ -104,22 +104,18 @@ export function HomeHeroCTA() {
     }
   };
 
-  const buttonClasses = "relative group inline-flex items-stretch overflow-hidden rounded-full p-[1px]";
-  const innerClasses = "inline-flex items-center gap-2 px-6 py-3 rounded-full bg-indigo-600 group-hover:bg-indigo-700 text-white text-base font-semibold transition-colors shadow-[0_0_20px_rgba(99,102,241,0.4)] backdrop-blur-xl relative z-10";
+  const buttonClasses = "inline-flex items-center gap-2 px-6 py-3 rounded-full bg-indigo-600 hover:bg-indigo-500 text-white text-base font-semibold border border-indigo-700/50 dark:border-indigo-500/30 shadow-xs shadow-indigo-600/10 hover:shadow-md hover:shadow-indigo-600/20 active:scale-98 transition-all duration-200 cursor-pointer relative z-10";
 
   if (isAuthed) {
     return (
       <motion.button 
         onClick={handleLaunch} 
         className={buttonClasses}
-        whileHover={{ scale: 1.05 }}
-        whileTap={{ scale: 0.95 }}
+        whileHover={{ scale: 1.02 }}
+        whileTap={{ scale: 0.98 }}
       >
-        <div className="absolute inset-0 bg-linear-to-r from-indigo-400 via-fuchsia-400 to-indigo-400 opacity-70 group-hover:opacity-100 animate-[marquee_3s_linear_infinite]" style={{ backgroundSize: '200% auto' }} />
-        <span className={innerClasses}>
-          Launch App
-          <Rocket className="w-5 h-5" />
-        </span>
+        Launch App
+        <Rocket className="w-4 h-4" />
       </motion.button>
     );
   }
@@ -128,14 +124,11 @@ export function HomeHeroCTA() {
     <MotionLink 
       href={signInHref} 
       className={buttonClasses}
-      whileHover={{ scale: 1.05 }}
-      whileTap={{ scale: 0.95 }}
+      whileHover={{ scale: 1.02 }}
+      whileTap={{ scale: 0.98 }}
     >
-      <div className="absolute inset-0 bg-linear-to-r from-indigo-400 via-violet-500 to-fuchsia-400 opacity-70 group-hover:opacity-100 animate-[marquee_3s_linear_infinite]" style={{ backgroundSize: '200% auto' }} />
-      <span className={innerClasses}>
-        Sign In to Platform
-        <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
-      </span>
+      Sign In to Platform
+      <ArrowRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
     </MotionLink>
   );
 }
@@ -166,21 +159,17 @@ export function HomeBottomCTA() {
     }
   };
 
-  const ctaButtonClasses = "inline-flex items-center gap-2 px-6 py-3 rounded-full bg-gray-900 border border-transparent dark:bg-white dark:text-gray-900 text-white hover:bg-gray-800 dark:hover:bg-gray-100 text-base font-semibold shadow-xl hover:shadow-2xl transition-all relative z-10";
+  const ctaButtonClasses = "inline-flex items-center gap-2 px-6 py-3 rounded-full bg-zinc-900 dark:bg-white text-white dark:text-zinc-950 hover:bg-zinc-800 dark:hover:bg-zinc-100 text-base font-semibold border border-zinc-900 dark:border-transparent shadow-xs hover:shadow-md transition-all duration-200 relative z-10 cursor-pointer";
 
   return (
-    <motion.div 
-      className="max-w-xl mx-auto rounded-4xl p-10 bg-white/5 dark:bg-gray-900/40 backdrop-blur-2xl border border-gray-200/50 dark:border-gray-800/50 relative overflow-hidden"
-      initial={{ opacity: 0, y: 40 }}
-      whileInView={{ opacity: 1, y: 0 }}
-      viewport={{ once: true }}
-      transition={{ duration: 0.6, ease: "easeOut" }}
+    <div 
+      className="max-w-xl mx-auto rounded-3xl p-10 bg-white/60 dark:bg-zinc-950/40 backdrop-blur-2xl border border-zinc-200 dark:border-zinc-900/60 relative overflow-hidden shadow-2xl"
     >
-      <div className="absolute inset-0 bg-linear-to-b from-indigo-500/10 to-transparent pointer-events-none" />
-      <h2 className="text-3xl font-extrabold text-gray-900 dark:text-white mb-4 relative z-10">
+      <div className="absolute inset-0 bg-linear-to-b from-indigo-500/5 to-transparent pointer-events-none" />
+      <h2 className="text-3xl font-bold text-zinc-950 dark:text-white mb-3 relative z-10 tracking-tight">
         Ready to build the future?
       </h2>
-      <p className="text-base text-gray-600 dark:text-gray-400 mb-8 relative z-10">
+      <p className="text-sm text-zinc-650 dark:text-zinc-400 mb-8 relative z-10 leading-relaxed font-normal">
         {isAuthed
           ? "Welcome back. Jump straight into your workspace."
           : "Join today and experience the most advanced learning viewer."}
@@ -189,8 +178,8 @@ export function HomeBottomCTA() {
         <motion.button
           onClick={handleLaunch}
           className={ctaButtonClasses}
-          whileHover={{ scale: 1.05 }}
-          whileTap={{ scale: 0.95 }}
+          whileHover={{ scale: 1.02 }}
+          whileTap={{ scale: 0.98 }}
         >
           Launch Edu-Viewer PRO
           <Rocket className="w-4 h-4" />
@@ -199,13 +188,13 @@ export function HomeBottomCTA() {
         <MotionLink
           href={signInHref}
           className={ctaButtonClasses}
-          whileHover={{ scale: 1.05 }}
-          whileTap={{ scale: 0.95 }}
+          whileHover={{ scale: 1.02 }}
+          whileTap={{ scale: 0.98 }}
         >
           Get Started Now
-          <ArrowRight className="w-5 h-5 ml-1" />
+          <ArrowRight className="w-4 h-4 ml-0.5" />
         </MotionLink>
       )}
-    </motion.div>
+    </div>
   );
 }

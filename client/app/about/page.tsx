@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import Link from "next/link";
 import AppNavbar from "@/components/edu-viewer/AppNavbar";
 import { HomeAuthProvider } from "@/components/edu-viewer/HomeAuthSection";
 import { motion, Variants } from "framer-motion";
@@ -13,6 +14,7 @@ import {
   Video,
   FileText,
   ServerOff,
+  Zap,
 } from "lucide-react";
 
 function IconGitHub({ className }: { className?: string }) {
@@ -89,12 +91,12 @@ const builders = [
       "from-violet-500 to-fuchsia-500 dark:from-violet-400 dark:to-fuchsia-400",
     projects: [
       {
-        name: "educative.io_scraper",
+        name: "Data Scraper Module",
         type: "Data Extraction Tool",
         icon: Code2,
         iconColor:
           "text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20",
-        href: "https://github.com/anilabhadatta/educative.io_scraper",
+        href: "https://github.com/anilabhadatta",
         isCurrent: false,
       },
     ],
@@ -440,6 +442,86 @@ export default function AboutPage() {
             </div>
           </motion.div>
         </section>
+
+        {/* ── Footer ──────────────────────────────────────────────────────── */}
+        <footer className="border-t border-zinc-200/50 dark:border-zinc-900/50 bg-white/40 dark:bg-[#030712]/40 backdrop-blur-md">
+          <div className="max-w-6xl mx-auto px-6 py-16">
+            <div className="grid grid-cols-1 md:grid-cols-12 gap-10 md:gap-8 pb-12 border-b border-zinc-200/50 dark:border-zinc-900/50">
+              
+              {/* Brand & Tagline */}
+              <div className="md:col-span-4 flex flex-col gap-4">
+                <div className="flex items-center gap-2">
+                  <Zap className="w-5 h-5 text-indigo-500 fill-indigo-500/20" />
+                  <span className="font-bold text-zinc-950 dark:text-white tracking-tight">
+                    Edu-Viewer <span className="text-indigo-500">PRO</span>
+                  </span>
+                </div>
+                <p className="text-xs text-zinc-550 dark:text-zinc-400 leading-relaxed">
+                  A high-performance offline content viewer for developer documentation, code playpens, and interactive course components.
+                </p>
+              </div>
+
+              {/* Navigation */}
+              <div className="md:col-span-2 flex flex-col gap-3">
+                <h4 className="text-xs font-semibold uppercase tracking-wider text-zinc-950 dark:text-zinc-300">Navigation</h4>
+                <ul className="flex flex-col gap-2">
+                  <li>
+                    <Link href="/" className="text-xs text-zinc-550 dark:text-zinc-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors font-medium">
+                      Home
+                    </Link>
+                  </li>
+                  <li>
+                    <Link href="/about" className="text-xs text-zinc-550 dark:text-zinc-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors font-medium">
+                      About Project
+                    </Link>
+                  </li>
+                  <li>
+                    <Link href="/dashboard" className="text-xs text-zinc-550 dark:text-zinc-400 hover:text-indigo-650 dark:hover:text-indigo-400 transition-colors font-medium">
+                      Dashboard
+                    </Link>
+                  </li>
+                </ul>
+              </div>
+
+              {/* Resources */}
+              <div className="md:col-span-2 flex flex-col gap-3">
+                <h4 className="text-xs font-semibold uppercase tracking-wider text-zinc-950 dark:text-zinc-300">Resources</h4>
+                <ul className="flex flex-col gap-2">
+                  <li>
+                    <a href="https://github.com/Biraj2004/educative-viewer" target="_blank" rel="noopener noreferrer" className="group inline-flex items-center gap-1 text-xs text-zinc-550 dark:text-zinc-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors font-medium">
+                      GitHub Repository
+                      <ExternalLink className="w-3 h-3 opacity-60 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
+                    </a>
+                  </li>
+                  <li>
+                    <a href="https://educative-viewer-guide.vercel.app/" target="_blank" rel="noopener noreferrer" className="group inline-flex items-center gap-1 text-xs text-zinc-550 dark:text-zinc-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors font-medium">
+                      Setup Guide
+                      <ExternalLink className="w-3 h-3 opacity-60 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
+                    </a>
+                  </li>
+                </ul>
+              </div>
+
+              {/* Disclaimer */}
+              <div className="md:col-span-4 flex flex-col gap-3">
+                <h4 className="text-xs font-semibold uppercase tracking-wider text-zinc-950 dark:text-zinc-300">Disclaimer</h4>
+                <p className="text-xs text-zinc-550 dark:text-zinc-400 leading-relaxed font-normal">
+                  Edu-Viewer PRO is an independent open-source client viewer. It is not affiliated with, authorized, or endorsed by any proprietary course hosting platforms.
+                </p>
+              </div>
+
+            </div>
+
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-8 text-xs font-medium text-zinc-500 dark:text-zinc-500">
+              <div>
+                © 2026 Crafted with precision. Open-source under the MIT License.
+              </div>
+              <div className="flex items-center gap-4">
+                <span>v1.0.193</span>
+              </div>
+            </div>
+          </div>
+        </footer>
       </div>
     </HomeAuthProvider>
   );
