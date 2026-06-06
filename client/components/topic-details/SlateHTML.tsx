@@ -1,6 +1,9 @@
 "use client";
 
 
+import parse, { DOMNode, Element, attributesToProps, domToReact, HTMLReactParserOptions } from 'html-react-parser';
+import Callout from "./Callout";
+
 export interface SlateHtmlData {
   comp_id: string;
   html: string;
@@ -8,6 +11,19 @@ export interface SlateHtmlData {
 
 export default function SlateHTML({ data }: { data: SlateHtmlData }) {
   if (!data?.html?.trim()) return null;
+
+  const options: HTMLReactParserOptions = {
+    replace(domNode) {
+      if (domNode instanceof Element && domNode.name === 'callout') {
+        const props = attributesToProps(domNode.attribs);
+        return (
+          <Callout type={props['data-message-type'] as string} emoji={props['data-emoji'] as string}>
+            {domToReact(domNode.children as DOMNode[], options)}
+          </Callout>
+        );
+      }
+    }
+  };
 
   return (
     <article className="max-w-6xl mx-auto px-6 py-2">
@@ -51,8 +67,9 @@ export default function SlateHTML({ data }: { data: SlateHtmlData }) {
           [&_a]:text-blue-600 [&_a]:underline [&_a:hover]:text-blue-800
           dark:[&_a]:text-blue-400 dark:[&_a:hover]:text-blue-300
         "
-        dangerouslySetInnerHTML={{ __html: data.html }}
-      />
+      >
+        {parse(data.html, options)}
+      </div>
     </article>
   );
 }

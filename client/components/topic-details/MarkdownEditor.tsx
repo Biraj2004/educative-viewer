@@ -1,5 +1,7 @@
 "use client";
 import { useMemo } from "react";
+import parse, { DOMNode, Element, attributesToProps, domToReact, HTMLReactParserOptions } from 'html-react-parser';
+import Callout from "./Callout";
 
 export interface MarkdownEditorData {
   comp_id?: string;
@@ -21,6 +23,19 @@ function processHtml(html: string): string {
 
 export default function MarkdownEditor({ data }: { data: MarkdownEditorData }) {
   const processedHtml = useMemo(() => processHtml(data.mdHtml), [data.mdHtml]);
+
+  const options: HTMLReactParserOptions = {
+    replace(domNode) {
+      if (domNode instanceof Element && domNode.name === 'callout') {
+        const props = attributesToProps(domNode.attribs);
+        return (
+          <Callout type={props['data-message-type'] as string} emoji={props['data-emoji'] as string}>
+            {domToReact(domNode.children as DOMNode[], options)}
+          </Callout>
+        );
+      }
+    }
+  };
 
   return (
     <div className="max-w-6xl mx-auto px-6 py-2">
@@ -64,8 +79,9 @@ export default function MarkdownEditor({ data }: { data: MarkdownEditorData }) {
           [&_a]:text-blue-600 [&_a]:underline [&_a:hover]:text-blue-800
           dark:[&_a]:text-blue-400 dark:[&_a:hover]:text-blue-300
         "
-        dangerouslySetInnerHTML={{ __html: processedHtml }}
-      />
+      >
+        {parse(processedHtml, options)}
+      </div>
     </div>
   );
 }
