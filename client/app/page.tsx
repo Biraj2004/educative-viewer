@@ -27,6 +27,9 @@ import {
   Code2,
   Hash,
   HelpCircle,
+  GitBranch,
+  RotateCcw,
+  FileCode2,
 } from "lucide-react";
 
 // ─── Data ─────────────────────────────────────────────────────────────────────
@@ -59,7 +62,7 @@ const itemVariants: Variants = {
 };
 
 function InteractiveShowcase() {
-  const [activeTab, setActiveTab] = useState<"sandbox" | "array" | "quiz" | "latex">("sandbox");
+  const [activeTab, setActiveTab] = useState<"sandbox" | "array" | "quiz" | "latex" | "diagram" | "flashcard" | "diff">("sandbox");
   
   // Sandbox State
   const [isRunning, setIsRunning] = useState(false);
@@ -100,6 +103,9 @@ function InteractiveShowcase() {
     { text: "O(log N)", correct: true },
     { text: "O(1)", correct: false },
   ];
+
+  // Flashcard State
+  const [isFlipped, setIsFlipped] = useState(false);
 
   return (
     <div className="w-full max-w-5xl mx-auto rounded-2xl border border-zinc-200/80 dark:border-zinc-800/80 bg-white dark:bg-zinc-950 shadow-2xl overflow-hidden flex flex-col md:flex-row h-[550px] md:h-[450px]">
@@ -158,6 +164,42 @@ function InteractiveShowcase() {
         >
           <span className="font-serif font-bold italic text-[11px] leading-none shrink-0 w-5 flex items-center justify-center">f(x)</span>
           4. Mathematical LaTeX
+        </button>
+
+        <button
+          onClick={() => setActiveTab("diagram")}
+          className={`flex items-center gap-3 px-3 py-2.5 border-l-2 text-sm font-semibold transition-all cursor-pointer ${
+            activeTab === "diagram"
+              ? "border-indigo-600 dark:border-indigo-500 bg-indigo-50/50 dark:bg-indigo-950/30 text-indigo-600 dark:text-indigo-400 rounded-r-xl"
+              : "border-transparent text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100/60 dark:hover:bg-zinc-900/40 hover:text-zinc-900 dark:hover:text-zinc-200 rounded-r-xl"
+          }`}
+        >
+          <GitBranch className="w-4 h-4" />
+          5. Diagram Engine
+        </button>
+
+        <button
+          onClick={() => { setActiveTab("flashcard"); setIsFlipped(false); }}
+          className={`flex items-center gap-3 px-3 py-2.5 border-l-2 text-sm font-semibold transition-all cursor-pointer ${
+            activeTab === "flashcard"
+              ? "border-indigo-600 dark:border-indigo-500 bg-indigo-50/50 dark:bg-indigo-950/30 text-indigo-600 dark:text-indigo-400 rounded-r-xl"
+              : "border-transparent text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100/60 dark:hover:bg-zinc-900/40 hover:text-zinc-900 dark:hover:text-zinc-200 rounded-r-xl"
+          }`}
+        >
+          <RotateCcw className="w-4 h-4" />
+          6. Flip Flashcards
+        </button>
+
+        <button
+          onClick={() => setActiveTab("diff")}
+          className={`flex items-center gap-3 px-3 py-2.5 border-l-2 text-sm font-semibold transition-all cursor-pointer ${
+            activeTab === "diff"
+              ? "border-indigo-600 dark:border-indigo-500 bg-indigo-50/50 dark:bg-indigo-950/30 text-indigo-600 dark:text-indigo-400 rounded-r-xl"
+              : "border-transparent text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100/60 dark:hover:bg-zinc-900/40 hover:text-zinc-900 dark:hover:text-zinc-200 rounded-r-xl"
+          }`}
+        >
+          <FileCode2 className="w-4 h-4" />
+          7. Code Diff View
         </button>
       </div>
 
@@ -377,6 +419,154 @@ function InteractiveShowcase() {
               </div>
             </div>
           )}
+
+          {/* ── 5. Diagram Engine ─────────────────────────────────────── */}
+          {activeTab === "diagram" && (
+            <div className="h-full flex flex-col gap-3 flex-1 w-full">
+              <div className="pb-2 border-b border-zinc-100 dark:border-zinc-900 w-full">
+                <span className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Mermaid Diagram Engine</span>
+              </div>
+              <div className="h-[280px] md:h-[285px] flex items-center justify-center p-2 w-full overflow-hidden">
+                <div className="flex flex-col items-center gap-0 select-none font-mono text-[11px] w-full max-w-[200px]">
+                  {/* Start */}
+                  <div className="px-7 py-1 rounded-full bg-indigo-600 text-white font-bold shadow-sm shadow-indigo-500/30">Start</div>
+                  <div className="w-px h-3 bg-zinc-300 dark:bg-zinc-700" />
+                  <div style={{ width: 0, height: 0, borderLeft: "4px solid transparent", borderRight: "4px solid transparent", borderTop: "6px solid #9ca3af" }} />
+                  {/* Parse */}
+                  <div className="w-full text-center py-1.5 px-3 rounded-lg border border-zinc-200 dark:border-zinc-700/70 bg-white dark:bg-zinc-900/50 text-zinc-700 dark:text-zinc-300 font-medium">Parse Input Data</div>
+                  <div className="w-px h-3 bg-zinc-300 dark:bg-zinc-700" />
+                  <div style={{ width: 0, height: 0, borderLeft: "4px solid transparent", borderRight: "4px solid transparent", borderTop: "6px solid #9ca3af" }} />
+                  {/* Diamond decision */}
+                  <div className="relative flex items-center justify-center" style={{ width: 140, height: 54 }}>
+                    <div
+                      className="absolute bg-violet-50/60 dark:bg-violet-950/30 border border-violet-400 dark:border-violet-600"
+                      style={{ width: 40, height: 40, transform: "rotate(45deg)" }}
+                    />
+                    <span className="relative z-10 text-[9px] font-bold text-violet-700 dark:text-violet-400 text-center leading-tight">
+                      Is<br />Valid?
+                    </span>
+                    <span className="absolute right-0 text-[9px] font-semibold text-emerald-500" style={{ top: "48%", transform: "translateY(-50%)" }}>Yes →</span>
+                  </div>
+                  <div className="w-px h-3 bg-zinc-300 dark:bg-zinc-700" />
+                  <div style={{ width: 0, height: 0, borderLeft: "4px solid transparent", borderRight: "4px solid transparent", borderTop: "6px solid #9ca3af" }} />
+                  {/* Process */}
+                  <div className="w-full text-center py-1.5 px-3 rounded-lg border border-indigo-200 dark:border-indigo-800/50 bg-indigo-50/40 dark:bg-indigo-950/20 text-indigo-700 dark:text-indigo-300 font-medium">Process & Transform</div>
+                  <div className="w-px h-3 bg-zinc-300 dark:bg-zinc-700" />
+                  <div style={{ width: 0, height: 0, borderLeft: "4px solid transparent", borderRight: "4px solid transparent", borderTop: "6px solid #9ca3af" }} />
+                  {/* End */}
+                  <div className="px-7 py-1 rounded-full bg-teal-600 text-white font-bold shadow-sm shadow-teal-500/30">End</div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ── 6. Flip Flashcards ────────────────────────────────────── */}
+          {activeTab === "flashcard" && (
+            <div className="h-full flex flex-col gap-4 flex-1 w-full">
+              <div className="flex justify-between items-center pb-2 border-b border-zinc-100 dark:border-zinc-900 w-full">
+                <span className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Flip Flashcard Deck</span>
+                <span className="text-[10px] font-mono text-zinc-400 dark:text-zinc-500 bg-zinc-100 dark:bg-zinc-800/60 px-2 py-0.5 rounded">1 / 3</span>
+              </div>
+              <div className="h-[280px] md:h-[285px] flex flex-col items-center justify-center gap-5 p-4 w-full">
+                <div
+                  className="cursor-pointer"
+                  style={{ perspective: "900px", width: 280, height: 145 }}
+                  onClick={() => setIsFlipped((f) => !f)}
+                >
+                  <div
+                    style={{
+                      transformStyle: "preserve-3d",
+                      transform: isFlipped ? "rotateY(180deg)" : "rotateY(0deg)",
+                      transition: "transform 0.55s cubic-bezier(0.4, 0.2, 0.2, 1)",
+                      position: "relative",
+                      width: "100%",
+                      height: "100%",
+                    }}
+                  >
+                    {/* Front */}
+                    <div
+                      style={{ backfaceVisibility: "hidden", position: "absolute", inset: 0 }}
+                      className="rounded-2xl border border-zinc-200 dark:border-zinc-700/80 bg-gradient-to-br from-indigo-50 to-violet-50/30 dark:from-zinc-900 dark:to-indigo-950/30 flex flex-col items-center justify-center gap-2.5 p-5 shadow-lg"
+                    >
+                      <div className="text-[9px] font-bold uppercase tracking-widest text-indigo-400 dark:text-indigo-500">Question</div>
+                      <p className="text-[12px] font-semibold text-zinc-900 dark:text-zinc-100 text-center leading-snug">
+                        What is the average-case time complexity of a Hash Table lookup?
+                      </p>
+                      <div className="text-[10px] text-zinc-400 dark:text-zinc-600">Tap to reveal answer →</div>
+                    </div>
+                    {/* Back */}
+                    <div
+                      style={{ backfaceVisibility: "hidden", transform: "rotateY(180deg)", position: "absolute", inset: 0 }}
+                      className="rounded-2xl border border-emerald-200/80 dark:border-emerald-800/60 bg-gradient-to-br from-emerald-50 to-teal-50/20 dark:from-emerald-950/20 dark:to-teal-950/20 flex flex-col items-center justify-center gap-2 p-5 shadow-lg"
+                    >
+                      <div className="text-[9px] font-bold uppercase tracking-widest text-emerald-500">Answer</div>
+                      <p className="text-3xl font-black text-emerald-700 dark:text-emerald-400">O(1)</p>
+                      <p className="text-[10.5px] text-zinc-600 dark:text-zinc-400 text-center leading-relaxed">
+                        Hash tables use a hash function to map keys to indices, giving constant-time average lookup.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setIsFlipped((f) => !f)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-semibold text-zinc-600 dark:text-zinc-400 border border-zinc-200 dark:border-zinc-700 rounded-lg hover:bg-zinc-50 dark:hover:bg-zinc-900/40 transition-all cursor-pointer active:scale-95"
+                >
+                  <RotateCcw className="w-3 h-3" />
+                  Flip Card
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* ── 7. Code Diff View ─────────────────────────────────────── */}
+          {activeTab === "diff" && (
+            <div className="h-full flex flex-col gap-4 flex-1 w-full">
+              <div className="flex justify-between items-center pb-2 border-b border-zinc-100 dark:border-zinc-900 w-full">
+                <span className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Code Diff Viewer</span>
+                <span className="text-[10px] font-mono bg-zinc-100 dark:bg-zinc-800/60 text-zinc-500 dark:text-zinc-400 px-2 py-0.5 rounded-md">
+                  <span className="text-emerald-600 dark:text-emerald-400">+4</span>{" / "}<span className="text-red-500">-3</span>
+                </span>
+              </div>
+              <div className="h-[280px] md:h-[285px] w-full overflow-hidden">
+                <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-[#0B0F19] h-full overflow-auto p-4 font-mono text-[11px] leading-[1.75]">
+                  <div className="text-zinc-500 mb-2 text-[10px] select-none">{"@@ -12,8 +12,9 @@ class BinarySearch:"}</div>
+                  <div className="text-zinc-400">{"  def __init__(self, data):"}</div>
+                  <div className="text-zinc-400">{"    self.data = sorted(data)"}</div>
+                  <div className="flex gap-1.5 items-start">
+                    <span className="text-red-400 font-bold select-none shrink-0">-</span>
+                    <span className="bg-red-500/10 text-red-400 px-1 rounded-sm flex-1">{"  def find(self, target):"}</span>
+                  </div>
+                  <div className="flex gap-1.5 items-start">
+                    <span className="text-red-400 font-bold select-none shrink-0">-</span>
+                    <span className="bg-red-500/10 text-red-400 px-1 rounded-sm flex-1">{"    for i, v in enumerate(self.data):"}</span>
+                  </div>
+                  <div className="flex gap-1.5 items-start">
+                    <span className="text-red-400 font-bold select-none shrink-0">-</span>
+                    <span className="bg-red-500/10 text-red-400 px-1 rounded-sm flex-1">{"      if v == target: return i"}</span>
+                  </div>
+                  <div className="flex gap-1.5 items-start">
+                    <span className="text-emerald-400 font-bold select-none shrink-0">+</span>
+                    <span className="bg-emerald-500/10 text-emerald-400 px-1 rounded-sm flex-1">{"  def find(self, target) -> int:"}</span>
+                  </div>
+                  <div className="flex gap-1.5 items-start">
+                    <span className="text-emerald-400 font-bold select-none shrink-0">+</span>
+                    <span className="bg-emerald-500/10 text-emerald-400 px-1 rounded-sm flex-1">{"    lo, hi = 0, len(self.data) - 1"}</span>
+                  </div>
+                  <div className="flex gap-1.5 items-start">
+                    <span className="text-emerald-400 font-bold select-none shrink-0">+</span>
+                    <span className="bg-emerald-500/10 text-emerald-400 px-1 rounded-sm flex-1">{"    while lo <= hi:"}</span>
+                  </div>
+                  <div className="flex gap-1.5 items-start">
+                    <span className="text-emerald-400 font-bold select-none shrink-0">+</span>
+                    <span className="bg-emerald-500/10 text-emerald-400 px-1 rounded-sm flex-1">{"      mid = (lo + hi) // 2"}</span>
+                  </div>
+                  <div className="text-zinc-400">{"      if self.data[mid] == target: return mid"}</div>
+                  <div className="text-zinc-400">{"    return -1"}</div>
+                </div>
+              </div>
+            </div>
+          )}
+
         </div>
         
         {/* Footer of the showcase mockup */}
