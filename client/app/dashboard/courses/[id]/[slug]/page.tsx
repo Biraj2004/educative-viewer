@@ -67,6 +67,10 @@ function clearLastVisitedTopicFromStorage(courseId: number): void {
 
 type ReaderPanelMode = "bookmarks" | "highlightNotes" | "drawing";
 const READER_PANEL_ANIM_MS = 220;
+function deferEffectState(callback: () => void): () => void {
+  const frameId = window.requestAnimationFrame(callback);
+  return () => window.cancelAnimationFrame(frameId);
+}
 const RESET_SCOPE_OPTIONS: Array<{ key: CourseResetScope; label: string; description: string }> = [
   { key: "progress", label: "Progress", description: "Completed topics and course progress." },
   { key: "bookmarks", label: "Bookmarks", description: "All bookmarks saved in this course." },
@@ -311,17 +315,17 @@ export default function CourseDetailPage() {
     }
     if (!readDrawingDrawerOpen(courseId)) return;
     if (readerPanelMounted && readerPanelMode === "drawing") return;
-    setReaderPanelMode("drawing");
-    setSelectedBookmarkIndices(new Set());
-    if (typeof window !== "undefined") {
+    return deferEffectState(() => {
+      setReaderPanelMode("drawing");
+      setSelectedBookmarkIndices(new Set());
       setReaderPanelWidth(clampReaderPanelWidth(window.innerWidth * 0.6));
-    }
-    if (panelCloseTimerRef.current) {
-      clearTimeout(panelCloseTimerRef.current);
-      panelCloseTimerRef.current = null;
-    }
-    setReaderPanelMounted(true);
-    requestAnimationFrame(() => setReaderPanelVisible(true));
+      if (panelCloseTimerRef.current) {
+        clearTimeout(panelCloseTimerRef.current);
+        panelCloseTimerRef.current = null;
+      }
+      setReaderPanelMounted(true);
+      requestAnimationFrame(() => setReaderPanelVisible(true));
+    });
   }, [
     clampReaderPanelWidth,
     courseId,
@@ -1478,18 +1482,24 @@ export default function CourseDetailPage() {
                     {readerPanelMode === "highlightNotes" && (
                       <>
                         <button
+                          type="button"
                           onClick={() => void handleUndoNoteAction()}
                           disabled={readerBusy || noteHistoryBusy || noteUndoStack.length === 0}
-                          className="inline-flex items-center px-2 py-1 text-[11px] rounded border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:text-indigo-600 dark:hover:text-indigo-300 hover:border-indigo-300 dark:hover:border-indigo-700 disabled:opacity-45 disabled:cursor-not-allowed cursor-pointer transition-colors"
+                          aria-label="Undo note action"
+                          title="Undo"
+                          className="inline-flex h-8 w-8 items-center justify-center rounded border border-gray-200 text-gray-600 transition-colors hover:border-indigo-300 hover:text-indigo-600 disabled:cursor-not-allowed disabled:opacity-45 dark:border-gray-700 dark:text-gray-300 dark:hover:border-indigo-700 dark:hover:text-indigo-300 cursor-pointer"
                         >
-                          Undo
+                          <Undo2 className="h-4 w-4" aria-hidden="true" />
                         </button>
                         <button
+                          type="button"
                           onClick={() => void handleRedoNoteAction()}
                           disabled={readerBusy || noteHistoryBusy || noteRedoStack.length === 0}
-                          className="inline-flex items-center px-2 py-1 text-[11px] rounded border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:text-indigo-600 dark:hover:text-indigo-300 hover:border-indigo-300 dark:hover:border-indigo-700 disabled:opacity-45 disabled:cursor-not-allowed cursor-pointer transition-colors"
+                          aria-label="Redo note action"
+                          title="Redo"
+                          className="inline-flex h-8 w-8 items-center justify-center rounded border border-gray-200 text-gray-600 transition-colors hover:border-indigo-300 hover:text-indigo-600 disabled:cursor-not-allowed disabled:opacity-45 dark:border-gray-700 dark:text-gray-300 dark:hover:border-indigo-700 dark:hover:text-indigo-300 cursor-pointer"
                         >
-                          Redo
+                          <Redo2 className="h-4 w-4" aria-hidden="true" />
                         </button>
                       </>
                     )}

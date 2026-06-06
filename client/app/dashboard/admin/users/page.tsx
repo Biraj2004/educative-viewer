@@ -53,6 +53,25 @@ const btnPrimary = "px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-
 const btnGhost = "px-4 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 text-sm font-medium transition-colors cursor-pointer";
 const btnDanger = "px-4 py-2 rounded-lg bg-red-600 hover:bg-red-700 text-white text-sm font-semibold transition-colors cursor-pointer disabled:opacity-60";
 
+const USER_LIMIT_MIN = 1;
+const USER_LIMIT_MAX = 20;
+
+function normalizeLimitInput(value: string): string {
+  return value.replace(/\D/g, "");
+}
+
+function parseUserLimit(value: string, label: string): number {
+  const trimmed = value.trim();
+  const parsed = Number(trimmed);
+  if (!trimmed || !Number.isInteger(parsed) || parsed < USER_LIMIT_MIN) {
+    throw new Error(`${label} must be at least ${USER_LIMIT_MIN}.`);
+  }
+  if (parsed > USER_LIMIT_MAX) {
+    throw new Error(`${label} cannot be more than ${USER_LIMIT_MAX}.`);
+  }
+  return parsed;
+}
+
 // ─── Temp password reveal card ────────────────────────────────────────────────
 
 function TempPasswordCard({ password, expiresAt, onClose }: { password: string; expiresAt: string; onClose: () => void }) {
@@ -145,22 +164,31 @@ function CreateUserModal({ onClose, onCreated }: { onClose: () => void; onCreate
   const [email, setEmail] = useState("");
   const [name, setName] = useState("");
   const [roleId, setRoleId] = useState(1);
-  const [maxActiveSessions, setMaxActiveSessions] = useState(1);
-  const [maxIpAddresses, setMaxIpAddresses] = useState(2);
+  const [maxActiveSessions, setMaxActiveSessions] = useState("1");
+  const [maxIpAddresses, setMaxIpAddresses] = useState("2");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError("");
+    let activeSessionLimit: number;
+    let ipAddressLimit: number;
+    try {
+      activeSessionLimit = parseUserLimit(maxActiveSessions, "Max active tokens");
+      ipAddressLimit = parseUserLimit(maxIpAddresses, "Max IP addresses per token");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Enter valid user limits.");
+      return;
+    }
     setLoading(true);
     try {
       const result = await adminCreateUser(
         email.trim().toLowerCase(),
         name.trim() || null,
         roleId,
-        maxActiveSessions,
-        maxIpAddresses,
+        activeSessionLimit,
+        ipAddressLimit,
       );
       onCreated({ password: result.temp_password, expiresAt: result.temp_password_expires_at });
     } catch (err) {
@@ -191,22 +219,28 @@ function CreateUserModal({ onClose, onCreated }: { onClose: () => void; onCreate
         <div>
           <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1.5">Max Active Tokens Allowed</label>
           <input
-            type="number"
-            min={1}
-            max={20}
+            type="text"
+            inputMode="numeric"
+            pattern="[0-9]*"
             value={maxActiveSessions}
-            onChange={(e) => setMaxActiveSessions(Math.max(1, Number(e.target.value) || 1))}
+            onChange={(e) => {
+              setMaxActiveSessions(normalizeLimitInput(e.target.value));
+              setError("");
+            }}
             className={numberInputCls}
           />
         </div>
         <div>
           <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1.5">Max IP Addresses Per Token</label>
           <input
-            type="number"
-            min={1}
-            max={20}
+            type="text"
+            inputMode="numeric"
+            pattern="[0-9]*"
             value={maxIpAddresses}
-            onChange={(e) => setMaxIpAddresses(Math.max(1, Number(e.target.value) || 1))}
+            onChange={(e) => {
+              setMaxIpAddresses(normalizeLimitInput(e.target.value));
+              setError("");
+            }}
             className={numberInputCls}
           />
         </div>
@@ -236,8 +270,8 @@ function EditUserModal({
   const [email, setEmail] = useState(user.email);
   const [name, setName] = useState(user.name ?? "");
   const [roleId, setRoleId] = useState(user.role_id);
-  const [maxActiveSessions, setMaxActiveSessions] = useState(user.max_active_sessions || 1);
-  const [maxIpAddresses, setMaxIpAddresses] = useState(user.max_ip_addresses || 2);
+  const [maxActiveSessions, setMaxActiveSessions] = useState(String(user.max_active_sessions || 1));
+  const [maxIpAddresses, setMaxIpAddresses] = useState(String(user.max_ip_addresses || 2));
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -246,6 +280,15 @@ function EditUserModal({
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError("");
+    let activeSessionLimit: number;
+    let ipAddressLimit: number;
+    try {
+      activeSessionLimit = parseUserLimit(maxActiveSessions, "Max active tokens");
+      ipAddressLimit = parseUserLimit(maxIpAddresses, "Max IP addresses per token");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Enter valid user limits.");
+      return;
+    }
     setLoading(true);
     try {
       await adminEditUser(
@@ -253,8 +296,8 @@ function EditUserModal({
         email.trim().toLowerCase(),
         name.trim() || null,
         isSelf ? undefined : roleId,
-        maxActiveSessions,
-        maxIpAddresses,
+        activeSessionLimit,
+        ipAddressLimit,
       );
       onSaved();
     } catch (err) {
@@ -292,22 +335,28 @@ function EditUserModal({
         <div>
           <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1.5">Max Active Tokens Allowed</label>
           <input
-            type="number"
-            min={1}
-            max={20}
+            type="text"
+            inputMode="numeric"
+            pattern="[0-9]*"
             value={maxActiveSessions}
-            onChange={(e) => setMaxActiveSessions(Math.max(1, Number(e.target.value) || 1))}
+            onChange={(e) => {
+              setMaxActiveSessions(normalizeLimitInput(e.target.value));
+              setError("");
+            }}
             className={numberInputCls}
           />
         </div>
         <div>
           <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1.5">Max IP Addresses Per Token</label>
           <input
-            type="number"
-            min={1}
-            max={20}
+            type="text"
+            inputMode="numeric"
+            pattern="[0-9]*"
             value={maxIpAddresses}
-            onChange={(e) => setMaxIpAddresses(Math.max(1, Number(e.target.value) || 1))}
+            onChange={(e) => {
+              setMaxIpAddresses(normalizeLimitInput(e.target.value));
+              setError("");
+            }}
             className={numberInputCls}
           />
         </div>
@@ -409,7 +458,10 @@ function UserSessionsModal({ user, onClose, onDone }: { user: AdminUser; onClose
   }, [user.id]);
 
   useEffect(() => {
-    void fetchSessions();
+    const frameId = window.requestAnimationFrame(() => {
+      void fetchSessions();
+    });
+    return () => window.cancelAnimationFrame(frameId);
   }, [fetchSessions]);
 
   const selectedCount = selectedKeys.size;
@@ -815,7 +867,12 @@ export default function AdminUsersPage() {
     }
   }, []);
 
-  useEffect(() => { fetchUsers(); }, [fetchUsers]);
+  useEffect(() => {
+    const frameId = window.requestAnimationFrame(() => {
+      void fetchUsers();
+    });
+    return () => window.cancelAnimationFrame(frameId);
+  }, [fetchUsers]);
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase();
