@@ -3,6 +3,8 @@
 
 import parse, { DOMNode, Element, attributesToProps, domToReact, HTMLReactParserOptions } from 'html-react-parser';
 import Callout from "./Callout";
+import InternalLink from "./InternalLink";
+import { replaceEducativeLink } from "./link-resolver";
 
 export interface SlateHtmlData {
   comp_id: string;
@@ -22,12 +24,17 @@ export default function SlateHTML({ data }: { data: SlateHtmlData }) {
           </Callout>
         );
       }
+
+      const linkResult = replaceEducativeLink(domNode as Element, options);
+      if (linkResult) {
+        return linkResult;
+      }
     }
   };
 
   return (
     <article className="max-w-6xl mx-auto px-6 py-2">
-      <div 
+      <div
         className="
           prose max-w-none text-gray-900 dark:text-gray-200
           [&_h1]:text-2xl [&_h1]:font-bold [&_h1]:text-gray-900 [&_h1]:mt-6 [&_h1]:mb-3

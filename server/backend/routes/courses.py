@@ -317,6 +317,92 @@ def _score_doc(
 def create_courses_blueprint(auth_service: AuthService, db_manager: DBManager) -> Blueprint:
     bp = Blueprint("courses_api", __name__, url_prefix="/api")
 
+    @bp.route("/resolve-link", methods=["GET"])
+    def resolve_link():
+        from urllib.parse import urlparse
+        import re
+
+        user, _ = auth_service.resolve_user(require_full=True)
+        if not user:
+            abort(401, description="Authentication required")
+
+        url_param = request.args.get("url", "").strip()
+        if not url_param:
+            return jsonify({"resolved": False})
+
+        parsed = urlparse(url_param)
+        path = parsed.path
+
+        # 1. /courses/slug, /lesson/slug, /pal/slug, /interview-prep/slug, /module/lesson/slug
+        match = re.match(r"^/(?:courses|lesson|pal|interview-prep|module/lesson)/([^/]+)(?:/([^/]+))?", path)
+        if match:
+            course_slug = match.group(1).strip()
+            topic_slug = match.group(2).strip() if match.group(2) else None
+
+            for shard in db_manager.iter_course_shards():
+                conn = db_manager.open_course_connection(shard)
+                try:
+                    # Use LIKE to be robust against full URLs or trailing spaces in the slug column
+                    row = conn.execute(
+                        "SELECT id, slug FROM courses WHERE LOWER(TRIM(slug)) LIKE ?", 
+                        (f"%{course_slug.lower()}%",)
+                    ).fetchone()
+                    
+                    if row:
+                        global_course_id = db_manager.course_global_id(shard, row["id"])
+                        course_slug_db = row["slug"]
+                        if topic_slug:
+                            topic_row = conn.execute(
+                                "SELECT topic_index FROM topics WHERE course_id = ? AND LOWER(TRIM(topic_slug)) LIKE ?", 
+                                (row["id"], f"%{topic_slug.lower()}%")
+                            ).fetchone()
+                            if topic_row:
+                                topic_index = topic_row["topic_index"]
+                                return jsonify({"resolved": True, "path": f"/dashboard/courses/{global_course_id}/{course_slug_db}/topics/{topic_index}/{topic_slug}"})
+                            # fallback to course if topic not found
+                        return jsonify({"resolved": True, "path": f"/dashboard/courses/{global_course_id}/{course_slug_db}"})
+                finally:
+                    conn.close()
+
+        # 2. /module/page/hash/authorid/collectionid/pageid (or just authorid/collectionid/pageid)
+        match = re.match(r"^/(?:module/page/[^/]+/)?(\d+)/(\d+)(?:/(\d+))?", path)
+        if match and not path.startswith("/api/"):
+            author_id = match.group(1)
+            collection_id = match.group(2)
+            page_id = match.group(3)
+
+            for shard in db_manager.iter_course_shards():
+                conn = db_manager.open_course_connection(shard)
+                try:
+                    if db_manager.course_db_has_column(conn, shard, "courses", "author_id") and \
+                       db_manager.course_db_has_column(conn, shard, "courses", "collection_id"):
+                        row = conn.execute("SELECT id, slug FROM courses WHERE author_id = ? AND collection_id = ?", 
+                                           (int(author_id), int(collection_id))).fetchone()
+                        if row:
+                            global_course_id = db_manager.course_global_id(shard, row["id"])
+                            course_slug_db = row["slug"]
+                            return jsonify({"resolved": True, "path": f"/dashboard/courses/{global_course_id}/{course_slug_db}"})
+                finally:
+                    conn.close()
+
+        # 3. /path/slug
+        match = re.match(r"^/path/([^/]+)", path)
+        if match:
+            path_slug = match.group(1).strip()
+            for shard in db_manager.iter_course_shards():
+                conn = db_manager.open_course_connection(shard)
+                try:
+                    if db_manager.course_db_has_column(conn, shard, "paths", "path_url_slug"):
+                        row = conn.execute("SELECT id FROM paths WHERE LOWER(TRIM(path_url_slug)) LIKE ?", 
+                                           (f"%{path_slug.lower()}%",)).fetchone()
+                        if row:
+                            global_path_id = db_manager.course_global_id(shard, row["id"])
+                            return jsonify({"resolved": True, "path": f"/dashboard/paths?path={global_path_id}"})
+                finally:
+                    conn.close()
+
+        return jsonify({"resolved": False})
+
     @bp.route("/paths", methods=["GET"])
     def get_all_paths():
         user, _ = auth_service.resolve_user(require_full=True)

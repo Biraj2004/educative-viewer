@@ -2,6 +2,8 @@
 import { useMemo } from "react";
 import parse, { DOMNode, Element, attributesToProps, domToReact, HTMLReactParserOptions } from 'html-react-parser';
 import Callout from "./Callout";
+import InternalLink from "./InternalLink";
+import { replaceEducativeLink } from "./link-resolver";
 
 export interface MarkdownEditorData {
   comp_id?: string;
@@ -33,6 +35,11 @@ export default function MarkdownEditor({ data }: { data: MarkdownEditorData }) {
             {domToReact(domNode.children as DOMNode[], options)}
           </Callout>
         );
+      }
+
+      const linkResult = replaceEducativeLink(domNode as Element, options);
+      if (linkResult) {
+        return linkResult;
       }
     }
   };
