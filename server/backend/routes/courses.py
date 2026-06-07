@@ -370,7 +370,8 @@ def create_courses_blueprint(auth_service: AuthService, db_manager: DBManager) -
                             if topic_row:
                                 topic_index = topic_row["topic_index"]
                                 return jsonify({"resolved": True, "path": f"/dashboard/courses/{global_course_id}/{course_slug_db}/topics/{topic_index}/{topic_slug}"})
-                            # fallback to course if topic not found
+                            else:
+                                return jsonify({"resolved": False})
                         return jsonify({"resolved": True, "path": f"/dashboard/courses/{global_course_id}/{course_slug_db}"})
                 finally:
                     conn.close()
