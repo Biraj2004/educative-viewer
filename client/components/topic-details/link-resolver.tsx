@@ -32,13 +32,13 @@ export function replaceEducativeLink(domNode: Element, options: HTMLReactParserO
         relativePath.startsWith("/module/lesson/") ||
         relativePath.startsWith("/interview-prep/") ||
         relativePath.startsWith("/path/") ||
+        relativePath.startsWith("/answers/") ||
+        relativePath.startsWith("/blog/") ||
+        relativePath.startsWith("/newsletter/") ||
         /^\/\d+\/\d+(?:\/\d+)?/.test(relativePath)
       ) {
         isEducativeInternalLink = true;
       } else if (
-        relativePath.startsWith("/answers/") ||
-        relativePath.startsWith("/blog/") ||
-        relativePath.startsWith("/newsletter/") ||
         relativePath.startsWith("/assessments/") ||
         relativePath.startsWith("/catalog/")
       ) {

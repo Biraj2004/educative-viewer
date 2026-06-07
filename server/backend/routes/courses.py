@@ -338,6 +338,17 @@ def create_courses_blueprint(auth_service: AuthService, db_manager: DBManager) -
         if match:
             course_slug = match.group(1).strip()
             topic_slug = match.group(2).strip() if match.group(2) else None
+        else:
+            # 1.5. /answers/slug, /blog/slug, /newsletter/slug
+            match = re.match(r"^/(answers|blog|newsletter)/([^/]+)", path)
+            if match:
+                course_slug = match.group(1).strip()
+                topic_slug = match.group(2).strip()
+            else:
+                course_slug = None
+                topic_slug = None
+
+        if course_slug:
 
             for shard in db_manager.iter_course_shards():
                 conn = db_manager.open_course_connection(shard)

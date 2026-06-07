@@ -32,10 +32,18 @@ export default function InternalLink({ href, children }: { href: string; childre
       }
       
       // Fallback: If API fails or course not resolved locally, open it in a new tab
-      window.open(href, "_blank");
+      let targetHref = href;
+      if (href.startsWith("/answers/") || href.startsWith("/blog/") || href.startsWith("/newsletter/")) {
+        targetHref = `https://www.educative.io${href}`;
+      }
+      window.open(targetHref, "_blank");
     } catch (err) {
       console.error("Failed to resolve link", err);
-      window.open(href, "_blank");
+      let targetHref = href;
+      if (href.startsWith("/answers/") || href.startsWith("/blog/") || href.startsWith("/newsletter/")) {
+        targetHref = `https://www.educative.io${href}`;
+      }
+      window.open(targetHref, "_blank");
     } finally {
       setLoading(false);
     }
