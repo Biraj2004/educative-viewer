@@ -4,7 +4,7 @@
 import parse, { DOMNode, Element, attributesToProps, domToReact, HTMLReactParserOptions } from 'html-react-parser';
 import Callout from "./Callout";
 import InternalLink from "./InternalLink";
-import { replaceEducativeLink } from "./link-resolver";
+import { replaceEducativeLink, interceptInlineStyles } from "./link-resolver";
 
 export interface SlateHtmlData {
   comp_id: string;
@@ -16,18 +16,22 @@ export default function SlateHTML({ data }: { data: SlateHtmlData }) {
 
   const options: HTMLReactParserOptions = {
     replace(domNode) {
-      if (domNode instanceof Element && domNode.name === 'callout') {
-        const props = attributesToProps(domNode.attribs);
-        return (
-          <Callout type={props['data-message-type'] as string} emoji={props['data-emoji'] as string}>
-            {domToReact(domNode.children as DOMNode[], options)}
-          </Callout>
-        );
-      }
+      if (domNode instanceof Element) {
+        interceptInlineStyles(domNode);
+        
+        if (domNode.name === 'callout') {
+          const props = attributesToProps(domNode.attribs);
+          return (
+            <Callout type={props['data-message-type'] as string} emoji={props['data-emoji'] as string}>
+              {domToReact(domNode.children as DOMNode[], options)}
+            </Callout>
+          );
+        }
 
-      const linkResult = replaceEducativeLink(domNode as Element, options);
-      if (linkResult) {
-        return linkResult;
+        const linkResult = replaceEducativeLink(domNode, options);
+        if (linkResult) {
+          return linkResult;
+        }
       }
     }
   };

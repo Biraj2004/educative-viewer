@@ -55,7 +55,7 @@ function SvgRenderer({
 }) {
   return (
     <div
-      className={forceWhiteBackgroundInDarkMode ? "dark:bg-white" : undefined}
+      className={`w-full max-w-full overflow-x-auto ${forceWhiteBackgroundInDarkMode ? "dark:bg-white" : ""}`.trim()}
       dangerouslySetInnerHTML={{ __html: prepareSvg(svgString) }}
       style={{ lineHeight: 0, fontSize: 0, display: "block" }}
     />
@@ -84,7 +84,7 @@ export default function MxGraphWidget({ data }: { data: MxGraphWidgetData }) {
   );
 
   return (
-    <div className="flex flex-col items-center justify-center h-full py-2">
+    <div className="flex flex-col items-center justify-center h-full py-2 w-full max-w-full overflow-hidden">
       {hasPath ? (
         isPreparing ? (
           <div className="text-sm text-gray-400 italic py-6">Preparing diagram...</div>
