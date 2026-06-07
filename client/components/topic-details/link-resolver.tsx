@@ -33,6 +33,9 @@ export function replaceEducativeLink(domNode: Element, options: HTMLReactParserO
     }
 
     if (relativePath && relativePath.startsWith("/") && !relativePath.startsWith("/api/")) {
+      if (relativePath.startsWith("/edpresso/")) {
+        relativePath = "/answers/" + relativePath.substring("/edpresso/".length);
+      }
       if (
         relativePath.startsWith("/courses/") ||
         relativePath.startsWith("/lesson/") ||
