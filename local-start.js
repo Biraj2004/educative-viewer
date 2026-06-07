@@ -995,12 +995,23 @@ function sniffAndServe(filePath, req, res, stats) {
         return;
       }
 
-      const textStart = buf.slice(0, bytesRead).toString('utf8');
-      const trimmed = textStart.trimStart();
-      const contentType =
-        trimmed.startsWith('<svg') || trimmed.startsWith('<?xml')
-          ? 'image/svg+xml'
-          : 'application/octet-stream';
+      let contentType = 'application/octet-stream';
+
+      if (bytesRead >= 8 && buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4e && buf[3] === 0x47) {
+        contentType = 'image/png';
+      } else if (bytesRead >= 3 && buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff) {
+        contentType = 'image/jpeg';
+      } else if (bytesRead >= 6 && buf[0] === 0x47 && buf[1] === 0x49 && buf[2] === 0x46 && buf[3] === 0x38) {
+        contentType = 'image/gif';
+      } else if (bytesRead >= 12 && buf[0] === 0x52 && buf[1] === 0x49 && buf[2] === 0x46 && buf[3] === 0x46 && buf[8] === 0x57 && buf[9] === 0x45 && buf[10] === 0x42 && buf[11] === 0x50) {
+        contentType = 'image/webp';
+      } else {
+        const textStart = buf.slice(0, bytesRead).toString('utf8');
+        const trimmed = textStart.trimStart();
+        if (trimmed.startsWith('<svg') || trimmed.startsWith('<?xml')) {
+          contentType = 'image/svg+xml';
+        }
+      }
 
       res.setHeader('Content-Type', contentType);
       pipeFile(filePath, req, res, stats);

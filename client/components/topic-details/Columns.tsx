@@ -34,7 +34,8 @@ function normalizeComps(value: unknown): ColumnComp[] {
   return list.map((item, index) => {
     const rec = asRecord(item);
     const widthNum = asNumber(rec.width);
-    const widthFromStr = Number(asString(rec.width));
+    const widthStr = asString(rec.width).trim();
+    const widthFromStr = widthStr !== "" ? Number(widthStr) : NaN;
     const normalizedWidth =
       widthNum !== null
         ? widthNum
@@ -42,10 +43,16 @@ function normalizeComps(value: unknown): ColumnComp[] {
           ? widthFromStr
           : fallbackWidth;
 
+    let typeStr = asString(rec.type);
+    const contentRec = asRecord(rec.content);
+    if (!typeStr && typeof contentRec.mdHtml === "string") {
+      typeStr = "MarkdownEditor";
+    }
+
     return {
-      type: asString(rec.type),
+      type: typeStr,
       width: String(Math.max(1, normalizedWidth)),
-      content: asRecord(rec.content),
+      content: contentRec,
       hash: (typeof rec.hash === "string" || typeof rec.hash === "number") ? rec.hash : index,
     };
   });
