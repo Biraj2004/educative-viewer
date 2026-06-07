@@ -6,6 +6,15 @@ export function replaceEducativeLink(domNode: Element, options: HTMLReactParserO
   if (domNode.name !== "a") return undefined;
 
   const href = domNode.attribs.href || "";
+  
+  if (href.startsWith("#")) {
+    return (
+      <a href={href} className="text-blue-600 dark:text-blue-400 hover:underline">
+        {domToReact(domNode.children as DOMNode[], options)}
+      </a>
+    );
+  }
+
   let isEducativeInternalLink = false;
   let isEducativeExternalRedirect = false;
   let relativePath = "";
