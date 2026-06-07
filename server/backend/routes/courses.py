@@ -364,7 +364,7 @@ def create_courses_blueprint(auth_service: AuthService, db_manager: DBManager) -
                         course_slug_db = row["slug"]
                         if topic_slug:
                             topic_row = conn.execute(
-                                "SELECT topic_index FROM topics WHERE course_id = ? AND LOWER(TRIM(topic_slug)) LIKE ?", 
+                                "SELECT topic_index FROM topics WHERE course_id = ? AND LOWER(TRIM(topic_slug)) LIKE ? AND status = 'done'", 
                                 (row["id"], f"%{topic_slug.lower()}%")
                             ).fetchone()
                             if topic_row:
@@ -376,7 +376,7 @@ def create_courses_blueprint(auth_service: AuthService, db_manager: DBManager) -
                                 words = {w for w in words if len(w) > 2 and w not in ('the', 'and', 'for', 'tutorial', 'guide', 'introduction', 'how', 'what', 'why', 'with')}
                                 
                                 if words:
-                                    all_topics = conn.execute("SELECT topic_index, topic_slug FROM topics WHERE course_id = ?", (row["id"],)).fetchall()
+                                    all_topics = conn.execute("SELECT topic_index, topic_slug FROM topics WHERE course_id = ? AND status = 'done'", (row["id"],)).fetchall()
                                     best_match = None
                                     best_score = 0
                                     
