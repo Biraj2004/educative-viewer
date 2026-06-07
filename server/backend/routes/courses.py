@@ -371,6 +371,27 @@ def create_courses_blueprint(auth_service: AuthService, db_manager: DBManager) -
                                 topic_index = topic_row["topic_index"]
                                 return jsonify({"resolved": True, "path": f"/dashboard/courses/{global_course_id}/{course_slug_db}/topics/{topic_index}/{topic_slug}"})
                             else:
+                                # Fuzzy fallback for Educative slug changes (e.g. python-dynamic-programming-tutorial -> dynamic-programming-in-python)
+                                words = set(re.split(r'[^a-z0-9]+', topic_slug.lower()))
+                                words = {w for w in words if len(w) > 2 and w not in ('the', 'and', 'for', 'tutorial', 'guide', 'introduction', 'how', 'what', 'why', 'with')}
+                                
+                                if words:
+                                    all_topics = conn.execute("SELECT topic_index, topic_slug FROM topics WHERE course_id = ?", (row["id"],)).fetchall()
+                                    best_match = None
+                                    best_score = 0
+                                    
+                                    for t_idx, t_slug in all_topics:
+                                        t_words = set(re.split(r'[^a-z0-9]+', (t_slug or "").lower()))
+                                        intersection = len(words.intersection(t_words))
+                                        score = intersection / max(1, len(words.union(t_words)))
+                                        if intersection >= 2 or intersection == len(words):
+                                            if score > best_score:
+                                                best_score = score
+                                                best_match = (t_idx, t_slug)
+                                                
+                                    if best_match and best_score >= 0.3:
+                                        return jsonify({"resolved": True, "path": f"/dashboard/courses/{global_course_id}/{course_slug_db}/topics/{best_match[0]}/{best_match[1]}"})
+
                                 return jsonify({"resolved": False})
                         return jsonify({"resolved": True, "path": f"/dashboard/courses/{global_course_id}/{course_slug_db}"})
                 finally:
