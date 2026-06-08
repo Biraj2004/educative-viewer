@@ -147,7 +147,7 @@ ${topicContext}
   return (
     <div ref={chatbotRef}>
       {/* Floating Action Button */}
-      <div className="course-chatbot-fab fixed z-50" style={floatingStyle}>
+      <div className="course-chatbot-fab fixed z-50 bottom-[var(--chatbot-mobile-bottom)] sm:bottom-[var(--chatbot-bottom)]" style={floatingStyle}>
         <button
           onClick={() => setIsOpen(!isOpen)}
           className="flex h-14 w-14 items-center justify-center rounded-full bg-indigo-600 text-white shadow-xl shadow-indigo-600/30 ring-1 ring-white/20 transition-transform hover:scale-105 hover:bg-indigo-700 active:scale-95 dark:ring-indigo-300/10 sm:h-14 sm:w-14 cursor-pointer"
@@ -167,7 +167,7 @@ ${topicContext}
       {/* Chat Window */}
       {isOpen && (
         <div
-          className="course-chatbot-window fixed z-50 flex flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-2xl shadow-slate-950/20 dark:border-gray-800 dark:bg-gray-900"
+          className="course-chatbot-window fixed z-50 flex flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-2xl shadow-slate-950/20 dark:border-gray-800 dark:bg-gray-900 bottom-[var(--chatbot-mobile-window-bottom)] sm:bottom-[var(--chatbot-window-bottom)] w-[360px] h-[500px] max-w-[calc(100vw-2rem)] max-h-[calc(100vh-10rem)]"
           style={floatingStyle}
         >
           
