@@ -671,12 +671,12 @@ function ensureClientEnv({ proxyPort, publicKeyOneline }) {
   ensureEnvFile(CLIENT_ENV_PATH, CLIENT_ENV_EXAMPLE_PATH);
 
   const current = parseEnvFile(CLIENT_ENV_PATH);
-  
+
   const lanIp = getLanIp();
   console.log(`[info] Auto-detected local network IP: ${lanIp}`);
-  
+
   const portSuffix = (proxyPort === 443) ? '' : `:${proxyPort}`;
-  
+
   const updates = {
     PROXY_SECRET: 'local-proxy',
     NEXT_PUBLIC_BACKEND_API_BASE: `https://${lanIp}${portSuffix}/`,
@@ -941,7 +941,18 @@ function serveStatic(req, res, staticRoot, pathname) {
     return;
   }
 
-  const filePath = path.resolve(staticRoot, `.${safePath}`);
+  // Fully decode any double-encoded URLs (e.g. %2520 -> %20 -> space)
+  let fullyDecoded = pathname;
+  try {
+    let prev = '';
+    while (fullyDecoded !== prev) {
+      prev = fullyDecoded;
+      fullyDecoded = decodeURIComponent(fullyDecoded);
+    }
+    safePath = fullyDecoded;
+  } catch { }
+
+  let filePath = path.resolve(staticRoot, `.${safePath}`);
   const rootResolved = path.resolve(staticRoot);
   if (!filePath.startsWith(rootResolved)) {
     console.log(`[static] ${req.method} ${pathname} -> 403 Forbidden`);
@@ -952,7 +963,7 @@ function serveStatic(req, res, staticRoot, pathname) {
 
   fs.stat(filePath, (err, stats) => {
     if (err || !stats.isFile()) {
-      console.log(`[static] ${req.method} ${pathname} -> 404 Not Found`);
+      console.log(`[static] ${req.method} ${pathname} -> 404 Not Found (tried ${filePath})`);
       res.statusCode = 404;
       res.end('Not Found');
       return;
