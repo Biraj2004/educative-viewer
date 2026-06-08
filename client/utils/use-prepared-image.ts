@@ -8,10 +8,10 @@ function revokeTarget(url: string): string {
   return hashIndex >= 0 ? url.slice(0, hashIndex) : url;
 }
 
-export function usePreparedImageSource(sourceUrl: string): string {
-  const [prepared, setPrepared] = useState<{ inputUrl: string; outputUrl: string }>({
+export function usePreparedImageSource(sourceUrl: string): string | undefined {
+  const [prepared, setPrepared] = useState<{ inputUrl: string; outputUrl: string | undefined }>({
     inputUrl: sourceUrl,
-    outputUrl: sourceUrl,
+    outputUrl: undefined,
   });
   const currentObjectUrl = useRef<string | null>(null);
 
@@ -65,7 +65,7 @@ export function usePreparedImageSource(sourceUrl: string): string {
     };
   }, []);
 
-  return prepared.inputUrl === sourceUrl ? prepared.outputUrl : sourceUrl;
+  return prepared.inputUrl === sourceUrl ? prepared.outputUrl : undefined;
 }
 
 export function usePreparedImageSources(sourceUrls: string[]): {

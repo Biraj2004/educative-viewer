@@ -229,6 +229,8 @@ function getRequestHeaders(url: string): HeadersInit | undefined {
   };
 }
 
+const inFlightFetches = new Map<string, Promise<{ bytes: Uint8Array | null; contentType: string; ok: boolean }>>();
+
 export async function prepareImageSource(url: string): Promise<PreparedImageSource> {
   if (!url) return { src: url, shouldRevoke: false };
 
@@ -237,24 +239,46 @@ export async function prepareImageSource(url: string): Promise<PreparedImageSour
   const needsAuthenticatedBlob = Boolean(headers);
 
   try {
-    const resp = await fetch(requestUrl, { cache: "force-cache", headers });
-    if (!resp.ok) return { src: requestUrl, shouldRevoke: false };
+    let fetchResult: { bytes: Uint8Array | null; contentType: string; ok: boolean };
 
-    const contentType = normalizeContentType(resp.headers.get("Content-Type"));
+    if (inFlightFetches.has(requestUrl)) {
+      fetchResult = await inFlightFetches.get(requestUrl)!;
+    } else {
+      const fetchPromise = (async () => {
+        const resp = await fetch(requestUrl, { cache: "force-cache", headers });
+        const contentType = normalizeContentType(resp.headers.get("Content-Type"));
+        
+        if (!resp.ok) {
+          return { bytes: null, contentType, ok: false };
+        }
 
-    // Fast-path: skip blob creation only for formats that cannot carry transparency
-    // (JPEG, GIF) when no auth header is required. SVG, PNG, and WebP must always
-    // go through the blob path so that:
-    //   1. Transparency is detected and `#transparent-bg` is appended when needed.
-    //   2. The browser receives a proper MIME type even if the server returned
-    //      application/octet-stream (content-sniffed on the client side).
-    const isOpaqueFormat =
-      contentType === "image/jpeg" || contentType === "image/gif";
-    if (!needsAuthenticatedBlob && isOpaqueFormat) {
+        const isOpaqueFormat = contentType === "image/jpeg" || contentType === "image/gif";
+        if (!needsAuthenticatedBlob && isOpaqueFormat) {
+          return { bytes: null, contentType, ok: true };
+        }
+
+        const bytes = new Uint8Array(await resp.arrayBuffer());
+        return { bytes, contentType, ok: true };
+      })();
+
+      inFlightFetches.set(requestUrl, fetchPromise);
+      try {
+        fetchResult = await fetchPromise;
+      } finally {
+        inFlightFetches.delete(requestUrl);
+      }
+    }
+
+    if (!fetchResult.ok) return { src: requestUrl, shouldRevoke: false };
+
+    const { bytes, contentType } = fetchResult;
+
+    if (!bytes) {
+      // This happens when it's an opaque format and we didn't need a blob
       return { src: requestUrl, shouldRevoke: false };
     }
 
-    const bytes = new Uint8Array(await resp.arrayBuffer());
+
     const sniffedType = detectImageMime(bytes);
     const finalType = sniffedType || contentType || "application/octet-stream";
 
@@ -265,7 +289,7 @@ export async function prepareImageSource(url: string): Promise<PreparedImageSour
     }
 
     const hasTransparency = detectImageHasTransparency(bytes, finalType);
-    const blob = new Blob([bytes], { type: finalType });
+    const blob = new Blob([bytes.buffer as ArrayBuffer], { type: finalType });
     const blobUrl = URL.createObjectURL(blob);
     return {
       src: markTransparentBlobSrc(blobUrl, hasTransparency),
