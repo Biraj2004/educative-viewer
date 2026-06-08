@@ -4,7 +4,8 @@
 import parse, { DOMNode, Element, attributesToProps, domToReact, HTMLReactParserOptions } from 'html-react-parser';
 import Callout from "./Callout";
 import InternalLink from "./InternalLink";
-import { replaceEducativeLink, interceptInlineStyles } from "./link-resolver";
+import { replaceEducativeLink } from "@/utils/link-resolver";
+import { interceptLightBackgrounds } from "@/utils/html-interceptor";
 
 export interface SlateHtmlData {
   comp_id: string;
@@ -17,8 +18,6 @@ export default function SlateHTML({ data }: { data: SlateHtmlData }) {
   const options: HTMLReactParserOptions = {
     replace(domNode) {
       if (domNode instanceof Element) {
-        interceptInlineStyles(domNode);
-        
         if (domNode.name === 'callout') {
           const props = attributesToProps(domNode.attribs);
           return (
@@ -31,6 +30,11 @@ export default function SlateHTML({ data }: { data: SlateHtmlData }) {
         const linkResult = replaceEducativeLink(domNode, options);
         if (linkResult) {
           return linkResult;
+        }
+
+        const bgResult = interceptLightBackgrounds(domNode, options);
+        if (bgResult) {
+          return bgResult;
         }
       }
     }
