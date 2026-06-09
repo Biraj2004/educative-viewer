@@ -47,6 +47,7 @@ import PromptAI from "@/components/topic-details/PromptAI";
 import UML from "@/components/topic-details/UML";
 import WorkPreview from "@/components/topic-details/WorkPreview";
 import Sketch from "@/components/topic-details/Sketch";
+import LegacyHTML from "@/components/topic-details/LegacyHTML";
 import "katex/dist/katex.min.css";
 
 // ─── Component Feature Flags ─────────────────────────────────────────────────
@@ -128,6 +129,7 @@ export const COMPONENT_REGISTRY: Record<string, RendererFn> = {
   UML:                   (c) => <div data-component-type="UML">                  <UML                    data={c as any} /></div>,
   WorkPreview:           (c) => <div data-component-type="WorkPreview">          <WorkPreview           data={c as any} /></div>,
   Sketch:                (c) => <div data-component-type="Sketch">               <Sketch                 data={c as any} /></div>,
+  LegacyHTML:            (c) => <div data-component-type="LegacyHTML">           <LegacyHTML             data={c as any} /></div>,
 };
 
 // ─── Lookup Helper ───────────────────────────────────────────────────────────
