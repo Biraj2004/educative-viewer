@@ -25,17 +25,6 @@ _ENTITY_TABLE: dict[str, tuple[str, str]] = {
 }
 
 
-def _ensure_is_active_column(conn, table: str) -> None:
-    """Add is_active column if it doesn't exist yet (idempotent)."""
-    try:
-        conn.execute(
-            f"ALTER TABLE {table} ADD COLUMN is_active INTEGER NOT NULL DEFAULT 1"
-        )
-        conn.commit()
-    except Exception:
-        pass  # Column already exists – that's fine
-
-
 def register_status_routes(
     bp: Blueprint,
     auth_service: AuthService,
@@ -74,7 +63,6 @@ def register_status_routes(
 
         conn = db_manager.open_course_connection(shard)
         try:
-            _ensure_is_active_column(conn, table)
             db_manager.course_db_invalidate_columns(shard, table)
 
             result = conn.execute(

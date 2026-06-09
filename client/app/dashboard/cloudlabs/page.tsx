@@ -28,8 +28,8 @@ interface Course {
   [key: string]: unknown;
 }
 
-export default function ProjectsPage() {
-  const [projects, setProjects] = useState<Course[]>([]);
+export default function CloudlabsPage() {
+  const [cloudlabs, setCloudlabs] = useState<Course[]>([]);
   const [progress, setProgress] = useState<ProgressData>({ course_order: [], completed: {} });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -40,7 +40,7 @@ export default function ProjectsPage() {
 
   useEffect(() => {
     let cancelled = false;
-    const nextPath = "/dashboard/projects";
+    const nextPath = "/dashboard/cloudlabs";
     const hadToken = Boolean(getAuthToken());
 
     getUser()
@@ -53,32 +53,32 @@ export default function ProjectsPage() {
           return;
         }
 
-        const fetchKey = "projects-list";
-        let projectsPromise = inflightFetches.get(fetchKey);
-        if (!projectsPromise) {
-          projectsPromise = fetch(`${BACKEND}/api/projects`, {
+        const fetchKey = "cloudlabs-list";
+        let cloudlabsPromise = inflightFetches.get(fetchKey);
+        if (!cloudlabsPromise) {
+          cloudlabsPromise = fetch(`${BACKEND}/api/cloudlabs`, {
             headers: { Authorization: `Bearer ${token}` },
           }).then(async (r) => {
             if (r.status === 401) throw Object.assign(new Error("Unauthorized"), { status: 401 });
-            if (!r.ok) throw new Error(`Failed to load projects (${r.status})`);
+            if (!r.ok) throw new Error(`Failed to load cloudlabs (${r.status})`);
             const json = await r.json();
-            const items = (Array.isArray(json) ? json : (json.projects ?? json.data ?? []));
+            const items = (Array.isArray(json) ? json : (json.cloudlabs ?? json.data ?? []));
             return items.map((item: any) => ({
               ...item,
               id: item.course_id || item.id,
               original_id: item.id,
-              title: item.project_title || item.project_url_slug || `${item.project_collection_id || 'unknown'}/${item.project_work_id || 'unknown'}` || "Untitled Project",
+              title: item.cloudlab_title || item.cloudlab_url_slug || `${item.cloudlab_collection_id || 'unknown'}/${item.cloudlab_work_id || 'unknown'}` || "Untitled Cloudlab",
               slug: item.course_slug,
-              type: "project"
+              type: "cloudlab"
             })) as Course[];
           }).finally(() => setTimeout(() => inflightFetches.delete(fetchKey), 50));
-          inflightFetches.set(fetchKey, projectsPromise);
+          inflightFetches.set(fetchKey, cloudlabsPromise);
         }
 
-        Promise.all([projectsPromise, getProgress(), getViewerFeatures()])
+        Promise.all([cloudlabsPromise, getProgress(), getViewerFeatures()])
           .then(([data, prog, viewerFeatures]) => {
             if (cancelled) return;
-            setProjects(data);
+            setCloudlabs(data);
             setProgress(prog);
             setSearchEnabled(viewerFeatures.search_enabled !== false);
             setLoading(false);
@@ -90,7 +90,7 @@ export default function ProjectsPage() {
               window.location.replace("/auth?reason=session_expired");
               return;
             }
-            setError(err instanceof Error ? err.message : "Failed to load projects");
+            setError(err instanceof Error ? err.message : "Failed to load cloudlabs");
             setLoading(false);
           });
       })
@@ -114,7 +114,7 @@ export default function ProjectsPage() {
     return (
       <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
         <AppNavbar
-          crumbs={[{ label: "Dashboard", href: "/dashboard" }, { label: "Projects" }]}
+          crumbs={[{ label: "Dashboard", href: "/dashboard" }, { label: "Cloudlabs" }]}
           backHref="/dashboard"
           backLabel="Dashboard"
           actions={<UserMenu />}
@@ -146,7 +146,7 @@ export default function ProjectsPage() {
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
       <AppNavbar
-        crumbs={[{ label: "Dashboard", href: "/dashboard" }, { label: "Projects" }]}
+        crumbs={[{ label: "Dashboard", href: "/dashboard" }, { label: "Cloudlabs" }]}
         backHref="/dashboard"
         backLabel="Dashboard"
         actions={<UserMenu />}
@@ -154,17 +154,17 @@ export default function ProjectsPage() {
       <div className="border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900">
         <div className="max-w-5xl mx-auto px-6 py-5 flex items-end justify-between gap-4">
           <div>
-            <h1 className="text-xl font-bold text-gray-900 dark:text-white">All Projects</h1>
+            <h1 className="text-xl font-bold text-gray-900 dark:text-white">All Cloudlabs</h1>
             {!error && (
               <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
-                {projects.length} project{projects.length !== 1 ? "s" : ""} available
+                {cloudlabs.length} cloudlab{cloudlabs.length !== 1 ? "s" : ""} available
               </p>
             )}
           </div>
         </div>
       </div>
       <CoursesListClient
-        courses={projects}
+        courses={cloudlabs}
         courseOrder={progress.course_order}
         error={error ?? undefined}
         isAdmin={isAdmin}

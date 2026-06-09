@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useSearchParams } from "next/navigation";
+import { useSearchParams, usePathname } from "next/navigation";
 import Link from "next/link";
 import CourseSearchInput from "./CourseSearchInput";
 import ActiveToggle from "./ActiveToggle";
@@ -21,6 +21,7 @@ interface Course {
   chapters?: number;
   rating?: number;
   is_active?: number | boolean;
+  is_legacy?: boolean;
   [key: string]: unknown;
 }
 
@@ -68,7 +69,7 @@ const PALETTE = [
 
 function CourseAvatar({ title, index }: { title: string; index: number }) {
   const [bg, text] = PALETTE[index % PALETTE.length];
-  const initials = title
+  const initials = (title || "Unknown")
     .split(" ")
     .filter(Boolean)
     .slice(0, 2)
@@ -111,6 +112,7 @@ export default function CoursesListClient({
   const enableGlobalSearch = enableCourseSearch && envSearchEnabled;
 
   const searchParams = useSearchParams();
+  const pathname = usePathname();
   const [q, setQ] = useState(() => searchParams.get("q") ?? "");
   const [page, setPage] = useState(1);
   const [globalResults, setGlobalResults] = useState<GlobalSearchResult[]>([]);
@@ -315,7 +317,10 @@ export default function CoursesListClient({
         {filtered.length > 0 && (
           <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 overflow-hidden divide-y divide-gray-100 dark:divide-gray-800">
             {paginated.map((course, idx) => {
-              const href = `/dashboard/courses/${course.id}/${course.slug ?? course.id}`;
+              const baseHref = `/dashboard/courses/${course.id}/${course.slug ?? course.id}`;
+              const href = pathname && pathname !== "/dashboard/courses" 
+                ? `${baseHref}?from=${encodeURIComponent(pathname)}` 
+                : baseHref;
               const inProgress = orderMap.has(Number(course.id));
               const globalIndex = (page - 1) * ITEMS_PER_PAGE + idx;
               const isActive = course.is_active === undefined ? true : Boolean(course.is_active);
@@ -344,6 +349,11 @@ export default function CoursesListClient({
                         {course.title}
                       </h2>
                       {levelBadge(course.level)}
+                      {course.is_legacy && (
+                        <span className="inline-flex items-center text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400">
+                          Legacy
+                        </span>
+                      )}
                       {inProgress && (
                         <span className="inline-flex items-center gap-1 text-[10px] font-medium text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/30 px-1.5 py-0.5 rounded-full">
                           <svg

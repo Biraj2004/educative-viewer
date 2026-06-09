@@ -474,7 +474,8 @@ def create_courses_blueprint(auth_service: AuthService, db_manager: DBManager) -
                         p.path_title,
                         p.scraped_at,
                         {is_active_select},
-                        COUNT(c.id) AS course_count
+                        COUNT(c.id) AS course_count,
+                        MAX(CASE WHEN c.url LIKE '%/legacy/%' THEN 1 ELSE 0 END) AS is_legacy
                     FROM paths p
                     LEFT JOIN courses c ON c.path_id = p.id
                     {active_filter}
@@ -486,6 +487,7 @@ def create_courses_blueprint(auth_service: AuthService, db_manager: DBManager) -
                 shard_rows_list = _rows_to_list(shard_rows)
                 for row in shard_rows_list:
                     _offset_row(row, shard.offset, ("id",))
+                    row["is_legacy"] = bool(row.get("is_legacy", 0))
                 rows.extend(shard_rows_list)
             finally:
                 conn.close()
@@ -523,9 +525,10 @@ def create_courses_blueprint(auth_service: AuthService, db_manager: DBManager) -
             course_is_active_select = _select_is_active(has_courses_active, "c.is_active")
             course_rows = conn.execute(
                 f"""
-                SELECT id, slug, title, type, path_id, {course_is_active_select}
+                SELECT c.id, c.slug, c.title, c.type, c.path_id, {course_is_active_select},
+                CASE WHEN c.url LIKE '%/legacy/%' THEN 1 ELSE 0 END AS is_legacy
                 FROM courses c
-                WHERE path_id = ? {active_filter}
+                WHERE c.path_id = ? {active_filter}
                 ORDER BY id
                 """,
                 (local_path_id,),
@@ -534,6 +537,7 @@ def create_courses_blueprint(auth_service: AuthService, db_manager: DBManager) -
             courses = _rows_to_list(course_rows)
             for row in courses:
                 _offset_row(row, shard.offset, ("id", "path_id"))
+                row["is_legacy"] = bool(row.get("is_legacy", 0))
 
             return jsonify(
                 {
@@ -561,12 +565,6 @@ def create_courses_blueprint(auth_service: AuthService, db_manager: DBManager) -
             try:
                 has_projects_active = _has_is_active(db_manager, conn, shard, "projects")
                 has_courses_active = _has_is_active(db_manager, conn, shard, "courses")
-                has_project_course_id = db_manager.course_db_has_column(
-                    conn,
-                    shard,
-                    "projects",
-                    "course_id",
-                )
                 has_course_project_id = db_manager.course_db_has_column(
                     conn,
                     shard,
@@ -574,11 +572,7 @@ def create_courses_blueprint(auth_service: AuthService, db_manager: DBManager) -
                     "project_id",
                 )
 
-                if has_project_course_id:
-                    join_clause = "LEFT JOIN courses c ON c.id = p.course_id"
-                    course_id_select = "COALESCE(c.id, p.course_id) AS course_id"
-                    allow_course_active = has_courses_active
-                elif has_course_project_id:
+                if has_course_project_id:
                     join_clause = "LEFT JOIN courses c ON c.project_id = p.id"
                     course_id_select = "c.id AS course_id"
                     allow_course_active = has_courses_active
@@ -609,7 +603,8 @@ def create_courses_blueprint(auth_service: AuthService, db_manager: DBManager) -
                         {project_is_active_select},
                         c.slug AS course_slug,
                         c.title AS course_title,
-                        c.type AS course_type
+                        c.type AS course_type,
+                        CASE WHEN c.url LIKE '%/legacy/%' THEN 1 ELSE 0 END AS is_legacy
                     FROM projects p
                     {join_clause}
                     WHERE 1=1 {active_filter}
@@ -620,6 +615,7 @@ def create_courses_blueprint(auth_service: AuthService, db_manager: DBManager) -
                 shard_rows_list = _rows_to_list(shard_rows)
                 for row in shard_rows_list:
                     _offset_row(row, shard.offset, ("id", "course_id"))
+                    row["is_legacy"] = bool(row.get("is_legacy", 0))
                 rows.extend(shard_rows_list)
             finally:
                 conn.close()
@@ -682,7 +678,8 @@ def create_courses_blueprint(auth_service: AuthService, db_manager: DBManager) -
                     c.id AS course_id,
                     c.slug AS course_slug,
                     c.title AS course_title,
-                    c.type AS course_type
+                    c.type AS course_type,
+                    CASE WHEN c.url LIKE '%/legacy/%' THEN 1 ELSE 0 END AS is_legacy
                 FROM projects p
                 {join_clause}
                 WHERE p.id = ? {active_filter}
@@ -709,6 +706,7 @@ def create_courses_blueprint(auth_service: AuthService, db_manager: DBManager) -
                         "slug": row["course_slug"],
                         "title": row["course_title"],
                         "type": row["course_type"],
+                        "is_legacy": bool(row.get("is_legacy", 0)),
                     },
                 }
             )
@@ -905,9 +903,10 @@ def create_courses_blueprint(auth_service: AuthService, db_manager: DBManager) -
 
                 shard_rows = conn.execute(
                     f"""
-                    SELECT id, slug, title, type, {course_is_active_select}
-                    FROM courses
-                    WHERE COALESCE(LOWER(TRIM(type)), '') NOT IN ('path', 'project')
+                    SELECT c.id, c.slug, c.title, c.type, {course_is_active_select},
+                    CASE WHEN c.url LIKE '%/legacy/%' THEN 1 ELSE 0 END AS is_legacy
+                    FROM courses c
+                    WHERE COALESCE(LOWER(TRIM(c.type)), '') NOT IN ('path', 'project', 'cloudlab')
                     {active_filter}
                     ORDER BY id
                     """
@@ -916,12 +915,86 @@ def create_courses_blueprint(auth_service: AuthService, db_manager: DBManager) -
                 shard_rows_list = _rows_to_list(shard_rows)
                 for row in shard_rows_list:
                     _offset_row(row, shard.offset, ("id",))
+                    row["is_legacy"] = bool(row.get("is_legacy", 0))
                 rows.extend(shard_rows_list)
             finally:
                 conn.close()
 
         rows.sort(key=lambda row: row["id"])
         return jsonify(rows)
+
+    @bp.route("/cloudlabs", methods=["GET"])
+    def get_all_cloudlabs():
+        user, _ = auth_service.resolve_user(require_full=True)
+        if not user:
+            abort(401, description="Authentication required")
+
+        admin = _is_admin(user)
+
+        rows: list[dict[str, Any]] = []
+        for shard in db_manager.iter_course_shards():
+            conn = db_manager.open_course_connection(shard)
+            try:
+                has_cloudlabs_active = _has_is_active(db_manager, conn, shard, "cloudlabs")
+                has_courses_active = _has_is_active(db_manager, conn, shard, "courses")
+                has_course_cloudlab_id = db_manager.course_db_has_column(
+                    conn,
+                    shard,
+                    "courses",
+                    "cloudlab_id",
+                )
+
+                if has_course_cloudlab_id:
+                    join_clause = "LEFT JOIN courses c ON c.cloudlab_id = p.id"
+                    course_id_select = "c.id AS course_id"
+                    allow_course_active = has_courses_active
+                else:
+                    join_clause = "LEFT JOIN courses c ON 1=0"
+                    course_id_select = "NULL AS course_id"
+                    allow_course_active = False
+
+                active_filters: list[str] = []
+                if not admin and has_cloudlabs_active:
+                    active_filters.append("p.is_active = 1")
+                if not admin and allow_course_active:
+                    active_filters.append("c.is_active = 1")
+                active_filter = f"AND {' AND '.join(active_filters)}" if active_filters else ""
+
+                cloudlab_is_active_select = _select_is_active(has_cloudlabs_active, "p.is_active")
+                shard_rows = conn.execute(
+                    f"""
+                    SELECT
+                        p.id,
+                        {course_id_select},
+                        p.cloudlab_author_id,
+                        p.cloudlab_collection_id,
+                        p.cloudlab_work_id,
+                        p.cloudlab_title,
+                        p.cloudlab_url_slug,
+                        p.scraped_at,
+                        {cloudlab_is_active_select},
+                        c.slug AS course_slug,
+                        c.title AS course_title,
+                        c.type AS course_type,
+                        CASE WHEN c.url LIKE '%/legacy/%' THEN 1 ELSE 0 END AS is_legacy
+                    FROM cloudlabs p
+                    {join_clause}
+                    WHERE 1=1 {active_filter}
+                    ORDER BY p.id
+                    """
+                ).fetchall()
+
+                shard_rows_list = _rows_to_list(shard_rows)
+                for row in shard_rows_list:
+                    _offset_row(row, shard.offset, ("id", "course_id"))
+                    row["is_legacy"] = bool(row.get("is_legacy", 0))
+                rows.extend(shard_rows_list)
+            finally:
+                conn.close()
+
+        rows.sort(key=lambda row: row["id"])
+        return jsonify(rows)
+
 
     @bp.route("/course-details", methods=["POST"])
     def get_course_data():
@@ -949,7 +1022,8 @@ def create_courses_blueprint(auth_service: AuthService, db_manager: DBManager) -
             project_id_select = "c.project_id AS project_id" if has_course_project_id else "NULL AS project_id"
 
             row = conn.execute(
-                f"SELECT c.id, c.slug, c.title, c.type, c.toc_json, c.path_id, {project_id_select} "
+                f"SELECT c.id, c.slug, c.title, c.type, c.toc_json, c.path_id, {project_id_select}, "
+                f"CASE WHEN c.url LIKE '%/legacy/%' THEN 1 ELSE 0 END AS is_legacy "
                 f"FROM courses c WHERE c.id = ? {active_filter}",
                 (local_course_id,),
             ).fetchone()
@@ -980,6 +1054,7 @@ def create_courses_blueprint(auth_service: AuthService, db_manager: DBManager) -
 
             data = dict(row)
             data["id"] = course_id
+            data["is_legacy"] = bool(data.get("is_legacy", 0))
             data.pop("path_id", None)
             data.pop("project_id", None)
             data["toc"] = json.loads(data.pop("toc_json") or "[]")

@@ -21,6 +21,7 @@ interface PathItem {
   scraped_at: string;
   course_count: number;
   is_active?: number | boolean;
+  is_legacy?: boolean;
 }
 
 interface CourseItem {
@@ -30,6 +31,7 @@ interface CourseItem {
   type: string | null;
   path_id: number;
   is_active?: number | boolean;
+  is_legacy?: boolean;
 }
 
 interface PathCoursesResponse {
@@ -284,8 +286,15 @@ export default function PathsPage() {
                   ].join(" ")}
                 >
                   <div className="flex items-start justify-between gap-2">
-                    <div className="inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-semibold bg-violet-50 dark:bg-violet-950/50 text-violet-600 dark:text-violet-400">
-                      {Number(path.course_count) || 0} course{Number(path.course_count) === 1 ? "" : "s"}
+                    <div className="flex gap-2 flex-wrap">
+                      <div className="inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-semibold bg-violet-50 dark:bg-violet-950/50 text-violet-600 dark:text-violet-400">
+                        {Number(path.course_count) || 0} course{Number(path.course_count) === 1 ? "" : "s"}
+                      </div>
+                      {path.is_legacy && (
+                        <div className="inline-flex items-center rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400">
+                          Legacy
+                        </div>
+                      )}
                     </div>
                     {isAdmin && (
                       <ActiveToggle
@@ -350,7 +359,14 @@ export default function PathsPage() {
                         ].join(" ")}
                       >
                         <div className="min-w-0">
-                          <p className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">{title}</p>
+                          <p className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
+                            {title}
+                            {course.is_legacy && (
+                              <span className="ml-2 inline-flex items-center text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400 align-middle">
+                                Legacy
+                              </span>
+                            )}
+                          </p>
                           <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
                             Course ID: {course.id}
                             {course.type ? ` · ${course.type}` : ""}

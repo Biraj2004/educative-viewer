@@ -152,6 +152,39 @@ class DBManager:
         self.auth_backend.ensure_course_reader_state_table()
         self._ensure_bootstrap_admin_user()
 
+    def init_course_dbs(self) -> None:
+        """Ensure dynamic schema additions exist across all course shards."""
+        for shard in self.iter_course_shards():
+            conn = self.open_course_connection(shard)
+            try:
+                conn.execute("""
+                    CREATE TABLE IF NOT EXISTS cloudlabs (
+                        id                     INTEGER PRIMARY KEY AUTOINCREMENT,
+                        cloudlab_author_id     TEXT    NOT NULL,
+                        cloudlab_collection_id TEXT    NOT NULL,
+                        cloudlab_work_id       TEXT    NOT NULL,
+                        cloudlab_title         TEXT,
+                        cloudlab_url_slug      TEXT,
+                        is_active              INTEGER NOT NULL DEFAULT 1,
+                        scraped_at             TEXT    NOT NULL,
+                        UNIQUE(cloudlab_author_id, cloudlab_collection_id, cloudlab_work_id)
+                    )
+                """)
+                
+                if not self.course_db_has_column(conn, shard, "courses", "cloudlab_id"):
+                    try:
+                        conn.execute("ALTER TABLE courses ADD COLUMN cloudlab_id INTEGER REFERENCES cloudlabs(id)")
+                    except Exception:
+                        pass
+
+                self.course_db_invalidate_columns(shard, "courses")
+                self.course_db_invalidate_columns(shard, "cloudlabs")
+                conn.commit()
+            except Exception as e:
+                log.error(f"Failed to init course db {shard.db_path}: {e}")
+            finally:
+                conn.close()
+
     def _ensure_bootstrap_admin_user(self) -> None:
         """Create one bootstrap admin account when no admin account exists."""
         conn = self.get_auth_connection()

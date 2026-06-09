@@ -31,7 +31,7 @@ _DDL = """
         collection_id   TEXT,
         title           TEXT,
         toc_json        TEXT,
-        cloudlab_id     TEXT,
+        cloudlab_id     INTEGER REFERENCES cloudlabs(id),
         project_id      INTEGER REFERENCES projects(id),
         is_active       INTEGER NOT NULL DEFAULT 1,
         scraped_at      TEXT    NOT NULL,
@@ -48,6 +48,18 @@ _DDL = """
         is_active             INTEGER NOT NULL DEFAULT 1,
         scraped_at            TEXT    NOT NULL,
         UNIQUE(project_author_id, project_collection_id, project_work_id)
+    );
+
+    CREATE TABLE IF NOT EXISTS cloudlabs (
+        id                     INTEGER PRIMARY KEY AUTOINCREMENT,
+        cloudlab_author_id     TEXT    NOT NULL,
+        cloudlab_collection_id TEXT    NOT NULL,
+        cloudlab_work_id       TEXT    NOT NULL,
+        cloudlab_title         TEXT,
+        cloudlab_url_slug      TEXT,
+        is_active              INTEGER NOT NULL DEFAULT 1,
+        scraped_at             TEXT    NOT NULL,
+        UNIQUE(cloudlab_author_id, cloudlab_collection_id, cloudlab_work_id)
     );
 
     CREATE TABLE IF NOT EXISTS topics (
@@ -81,6 +93,7 @@ _DDL = """
     CREATE INDEX IF NOT EXISTS idx_courses_path       ON courses(path_id);
     CREATE INDEX IF NOT EXISTS idx_paths_author_collection ON paths(path_author_id, path_collection_id);
     CREATE INDEX IF NOT EXISTS idx_projects_triplet   ON projects(project_author_id, project_collection_id, project_work_id);
+    CREATE INDEX IF NOT EXISTS idx_cloudlabs_triplet  ON cloudlabs(cloudlab_author_id, cloudlab_collection_id, cloudlab_work_id);
     CREATE INDEX IF NOT EXISTS idx_topics_course      ON topics(course_id);
     CREATE INDEX IF NOT EXISTS idx_components_topic   ON components(course_id, topic_index);
     CREATE INDEX IF NOT EXISTS idx_components_type    ON components(type);
@@ -184,6 +197,11 @@ def process_course(course_dir, course_title, args, conn, cursor, now_iso, path_i
     
     if not url:
         url = f"https://educative.io/legacy/{course_slug}/{generate_id()[:8]}"
+    elif "/legacy/" not in url:
+        if "educative.io/" in url:
+            url = url.replace("educative.io/", "educative.io/legacy/", 1)
+        else:
+            url = f"https://educative.io/legacy/{course_slug}/{generate_id()[:8]}"
 
     structure_hash = hashlib.md5(url.encode()).hexdigest()
     toc_json = None
@@ -344,8 +362,19 @@ def main():
         process_course(base_dir, args.title, args, conn, cursor, now_iso, project_id=project_id)
         
     elif args.type == "Cloudlab":
-        cloudlab_id = generate_id()
-        logging.info(f"Set Cloudlab id to {cloudlab_id}")
+        cloudlab_title = args.title or os.path.basename(base_dir)
+        cloudlab_slug = slugify(cloudlab_title)
+        author_id = generate_id()
+        collection_id = generate_id()
+        work_id = generate_id()
+        
+        cursor.execute("""
+            INSERT INTO cloudlabs (cloudlab_author_id, cloudlab_collection_id, cloudlab_work_id, cloudlab_title, cloudlab_url_slug, is_active, scraped_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        """, (author_id, collection_id, work_id, cloudlab_title, cloudlab_slug, 1, now_iso))
+        cloudlab_id = cursor.lastrowid
+        logging.info(f"Created Cloudlab entry '{cloudlab_title}' with ID {cloudlab_id}")
+        
         process_course(base_dir, args.title, args, conn, cursor, now_iso, cloudlab_id=cloudlab_id)
 
     else:

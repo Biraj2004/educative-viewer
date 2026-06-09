@@ -375,6 +375,7 @@ export default function TopicLayoutClient({
   const validFromPath = fromPath && fromPath.startsWith("/") && !fromPath.startsWith("//") ? fromPath : null;
   const fromPathsPage = Boolean(validFromPath?.startsWith("/dashboard/paths"));
   const fromProjectsPage = Boolean(validFromPath?.startsWith("/dashboard/projects"));
+  const fromCloudlabsPage = Boolean(validFromPath?.startsWith("/dashboard/cloudlabs"));
   const currentComponents = React.useMemo(
     () => (Array.isArray(currentTopic.components) ? currentTopic.components : []),
     [currentTopic.components]
@@ -686,7 +687,9 @@ export default function TopicLayoutClient({
     ? { label: "Paths", href: validFromPath ?? "/dashboard/paths" }
     : fromProjectsPage
       ? { label: "Projects", href: validFromPath ?? "/dashboard/projects" }
-      : { label: "Courses", href: "/dashboard/courses" };
+      : fromCloudlabsPage
+        ? { label: "Cloudlabs", href: validFromPath ?? "/dashboard/cloudlabs" }
+        : { label: "Courses", href: "/dashboard/courses" };
   const courseBaseHref = `/dashboard/courses/${courseId}/${slug}`;
   const courseHref = validFromPath
     ? `${courseBaseHref}?from=${encodeURIComponent(validFromPath)}`

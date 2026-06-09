@@ -55,10 +55,10 @@ const sections = [
     tags: ["Build", "Portfolio", "Guided"],
   },
   {
-    href: "#",
+    href: "/dashboard/cloudlabs",
     label: "Cloud Labs",
     accent: "sky",
-    available: false,
+    available: true,
     desc: "Pre-configured cloud environments for hands-on practice. No setup required — just open and code.",
     icon: (
       <svg className="w-7 h-7" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round">

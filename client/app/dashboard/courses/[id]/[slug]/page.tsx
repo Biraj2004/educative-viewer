@@ -107,17 +107,22 @@ export default function CourseDetailPage() {
   const fromPath = safeFromPath(searchParams.get("from"));
   const fromPathsPage = Boolean(fromPath?.startsWith("/dashboard/paths"));
   const fromProjectsPage = Boolean(fromPath?.startsWith("/dashboard/projects"));
+  const fromCloudlabsPage = Boolean(fromPath?.startsWith("/dashboard/cloudlabs"));
   const sectionCrumb = fromPathsPage
     ? { label: "Paths", href: fromPath ?? "/dashboard/paths" }
     : fromProjectsPage
       ? { label: "Projects", href: fromPath ?? "/dashboard/projects" }
-      : { label: "Courses", href: "/dashboard/courses" };
+      : fromCloudlabsPage
+        ? { label: "Cloudlabs", href: fromPath ?? "/dashboard/cloudlabs" }
+        : { label: "Courses", href: "/dashboard/courses" };
   const backHref = fromPathsPage
     ? (fromPath ?? "/dashboard/paths")
     : fromProjectsPage
       ? (fromPath ?? "/dashboard/projects")
-      : "/dashboard/courses";
-  const backLabel = fromPathsPage ? "Paths" : fromProjectsPage ? "Projects" : "Courses";
+      : fromCloudlabsPage
+        ? (fromPath ?? "/dashboard/cloudlabs")
+        : "/dashboard/courses";
+  const backLabel = fromPathsPage ? "Paths" : fromProjectsPage ? "Projects" : fromCloudlabsPage ? "Cloudlabs" : "Courses";
   const isInvalidCourseId = Number.isNaN(courseId);
 
   const [course, setCourse] = useState<CourseDetail | null>(null);
@@ -1098,6 +1103,11 @@ export default function CourseDetailPage() {
                   {course.type}
                 </span>
               )}
+              {course.is_legacy && (
+                <span className="text-[10px] font-bold uppercase tracking-wider bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400 px-2.5 py-0.5 rounded-full border border-orange-200 dark:border-orange-800">
+                  Legacy
+                </span>
+              )}
             </div>
             <h1 className="text-xl font-bold text-gray-900 dark:text-white leading-snug">{course.title}</h1>
             <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
@@ -1988,4 +1998,5 @@ interface CourseDetail {
   title: string;
   toc: TocEntry[];
   type: string;
+  is_legacy?: boolean;
 }

@@ -65,6 +65,7 @@ def create_app(
 
     if initialize_db:
         db_manager.init_auth_db()
+        db_manager.init_course_dbs()
 
     if start_background_jobs:
         db_manager.start_keepalive_scheduler(app)
