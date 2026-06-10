@@ -418,7 +418,7 @@ def process_content_by_type(base_dir, content_type, content_title, args, conn, c
         for entry in os.listdir(base_dir):
             full_path = os.path.join(base_dir, entry)
             if os.path.isdir(full_path):
-                process_course(full_path, entry, args, conn, cursor, now_iso, course_type="Course", path_id=path_id)
+                process_course(full_path, entry, args, conn, cursor, now_iso, course_type="Path", path_id=path_id)
 
     elif content_type == "Project":
         project_title = content_title or os.path.basename(base_dir)
