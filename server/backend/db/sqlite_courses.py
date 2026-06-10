@@ -66,9 +66,25 @@ class SQLiteCourseDatabase:
         return local_id + shard.offset
 
     def get_connection(self, shard: CourseDbShard) -> sqlite3.Connection:
-        conn = sqlite3.connect(shard.db_path)
+        import pathlib
+        
+        # Construct a robust cross-platform SQLite URI
+        abs_uri = pathlib.Path(shard.db_path).absolute().as_uri()
+        # immutable=1 & nolock=1 completely bypass SQLite file-locking overhead on FUSE/rclone mounts
+        optimized_uri = f"{abs_uri}?mode=ro&nolock=1&immutable=1"
+        
+        conn = sqlite3.connect(optimized_uri, uri=True)
         conn.row_factory = sqlite3.Row
         conn.execute("PRAGMA foreign_keys=ON;")
+        
+        # Aggressively tune PRAGMAs for network read performance
+        try:
+            conn.execute("PRAGMA mmap_size=268435456;") # 256MB mmap
+            conn.execute("PRAGMA cache_size=-64000;")  # 64MB memory page cache
+            conn.execute("PRAGMA journal_mode=OFF;")   # No journals for immutable files
+        except sqlite3.OperationalError as e:
+            log.warning("Could not apply some PRAGMAs to %s: %s", shard.db_path, e)
+            
         return conn
 
     def has_column(
