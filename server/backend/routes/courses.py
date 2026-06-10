@@ -113,6 +113,31 @@ def _project_is_active_for_course(
 
 _SEARCH_WORD_RE = re.compile(r"[a-z0-9]+")
 _SEARCH_CACHE_LOCK = threading.Lock()
+
+_API_LIST_CACHE_LOCK = threading.Lock()
+_API_LIST_CACHE: dict[str, list[dict[str, Any]]] = {}
+
+def _get_from_cache_or_fetch(cache_key: str, admin: bool, fetch_fn):
+    full_key = f"{cache_key}_admin_{int(admin)}"
+    with _API_LIST_CACHE_LOCK:
+        if full_key in _API_LIST_CACHE:
+            return _API_LIST_CACHE[full_key]
+    
+    result = fetch_fn(admin)
+    
+    with _API_LIST_CACHE_LOCK:
+        _API_LIST_CACHE[full_key] = result
+        
+    return result
+
+def clear_metadata_cache():
+    with _API_LIST_CACHE_LOCK:
+        _API_LIST_CACHE.clear()
+    with _SEARCH_CACHE_LOCK:
+        _SEARCH_DOC_CACHE.clear()
+
+TRIGGER_ASYNC_METADATA_WARMUP = None
+
 _SEARCH_DOC_CACHE: dict[str, dict[str, Any]] = {}
 _SEMANTIC_HINTS: dict[str, tuple[str, ...]] = {
     "dfs": ("depth", "first", "search"),
@@ -436,13 +461,8 @@ def create_courses_blueprint(auth_service: AuthService, db_manager: DBManager) -
 
         return jsonify({"resolved": False})
 
-    @bp.route("/paths", methods=["GET"])
-    def get_all_paths():
-        user, _ = auth_service.resolve_user(require_full=True)
-        if not user:
-            abort(401, description="Authentication required")
-
-        admin = _is_admin(user)
+    
+    def _fetch_paths(admin: bool):
 
         rows: list[dict[str, Any]] = []
         for shard in db_manager.iter_course_shards():
@@ -493,7 +513,18 @@ def create_courses_blueprint(auth_service: AuthService, db_manager: DBManager) -
                 conn.close()
 
         rows.sort(key=lambda row: row["id"])
+        return rows
+
+    @bp.route("/paths", methods=["GET"])
+    def get_all_paths():
+        user, _ = auth_service.resolve_user(require_full=True)
+        if not user:
+            abort(401, description="Authentication required")
+
+        admin = _is_admin(user)
+        rows = _get_from_cache_or_fetch("paths", admin, _fetch_paths)
         return jsonify(rows)
+
 
     @bp.route("/paths/<int:path_id>/courses", methods=["GET"])
     def get_courses_by_path(path_id: int):
@@ -551,13 +582,8 @@ def create_courses_blueprint(auth_service: AuthService, db_manager: DBManager) -
         finally:
             conn.close()
 
-    @bp.route("/projects", methods=["GET"])
-    def get_all_projects():
-        user, _ = auth_service.resolve_user(require_full=True)
-        if not user:
-            abort(401, description="Authentication required")
-
-        admin = _is_admin(user)
+    
+    def _fetch_projects(admin: bool):
 
         rows: list[dict[str, Any]] = []
         for shard in db_manager.iter_course_shards():
@@ -621,6 +647,16 @@ def create_courses_blueprint(auth_service: AuthService, db_manager: DBManager) -
                 conn.close()
 
         rows.sort(key=lambda row: row["id"])
+        return rows
+
+    @bp.route("/projects", methods=["GET"])
+    def get_all_projects():
+        user, _ = auth_service.resolve_user(require_full=True)
+        if not user:
+            abort(401, description="Authentication required")
+
+        admin = _is_admin(user)
+        rows = _get_from_cache_or_fetch("projects", admin, _fetch_projects)
         return jsonify(rows)
 
     @bp.route("/projects/<int:project_id>/course", methods=["GET"])
@@ -885,13 +921,7 @@ def create_courses_blueprint(auth_service: AuthService, db_manager: DBManager) -
         top = scored[:limit]
         return jsonify({"query": query, "count": len(top), "results": top})
 
-    @bp.route("/courses", methods=["GET"])
-    def get_all_courses():
-        user, _ = auth_service.resolve_user(require_full=True)
-        if not user:
-            abort(401, description="Authentication required")
-
-        admin = _is_admin(user)
+    def _fetch_courses(admin: bool):
 
         rows: list[dict[str, Any]] = []
         for shard in db_manager.iter_course_shards():
@@ -921,15 +951,19 @@ def create_courses_blueprint(auth_service: AuthService, db_manager: DBManager) -
                 conn.close()
 
         rows.sort(key=lambda row: row["id"])
-        return jsonify(rows)
+        return rows
 
-    @bp.route("/cloudlabs", methods=["GET"])
-    def get_all_cloudlabs():
+    @bp.route("/courses", methods=["GET"])
+    def get_all_courses():
         user, _ = auth_service.resolve_user(require_full=True)
         if not user:
             abort(401, description="Authentication required")
 
         admin = _is_admin(user)
+        rows = _get_from_cache_or_fetch("courses", admin, _fetch_courses)
+        return jsonify(rows)
+
+    def _fetch_cloudlabs(admin: bool):
 
         rows: list[dict[str, Any]] = []
         for shard in db_manager.iter_course_shards():
@@ -993,8 +1027,17 @@ def create_courses_blueprint(auth_service: AuthService, db_manager: DBManager) -
                 conn.close()
 
         rows.sort(key=lambda row: row["id"])
-        return jsonify(rows)
+        return rows
 
+    @bp.route("/cloudlabs", methods=["GET"])
+    def get_all_cloudlabs():
+        user, _ = auth_service.resolve_user(require_full=True)
+        if not user:
+            abort(401, description="Authentication required")
+
+        admin = _is_admin(user)
+        rows = _get_from_cache_or_fetch("cloudlabs", admin, _fetch_cloudlabs)
+        return jsonify(rows)
 
     @bp.route("/course-details", methods=["POST"])
     def get_course_data():
@@ -1174,4 +1217,24 @@ def create_courses_blueprint(auth_service: AuthService, db_manager: DBManager) -
         finally:
             conn.close()
 
+    def _warm_metadata_cache():
+        import logging
+        log = logging.getLogger(__name__)
+        log.info("Warming up API list caches in the background...")
+        try:
+            for admin in (True, False):
+                _get_from_cache_or_fetch("paths", admin, _fetch_paths)
+                _get_from_cache_or_fetch("projects", admin, _fetch_projects)
+                _get_from_cache_or_fetch("courses", admin, _fetch_courses)
+                _get_from_cache_or_fetch("cloudlabs", admin, _fetch_cloudlabs)
+            log.info("API list caches warmed successfully.")
+        except Exception as e:
+            log.error("Failed to warm API list caches: %s", e)
+            
+    global TRIGGER_ASYNC_METADATA_WARMUP
+    TRIGGER_ASYNC_METADATA_WARMUP = lambda: threading.Thread(target=_warm_metadata_cache, daemon=True).start()
+    
+    TRIGGER_ASYNC_METADATA_WARMUP()
+
     return bp
+

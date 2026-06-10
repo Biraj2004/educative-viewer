@@ -176,6 +176,10 @@ def register_settings_routes(bp: Blueprint, auth_service: AuthService) -> None:
         if course_db_updated:
             try:
                 auth_service.db_manager.reload_course_backend()
+                from backend.routes.courses import clear_metadata_cache, TRIGGER_ASYNC_METADATA_WARMUP
+                clear_metadata_cache()
+                if TRIGGER_ASYNC_METADATA_WARMUP:
+                    TRIGGER_ASYNC_METADATA_WARMUP()
             except Exception as e:
                 return jsonify({"error": str(e)}), 400
 
