@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
+import { createPortal } from "react-dom";
 import Editor, { Monaco } from "@monaco-editor/react";
 import type { editor as MonacoEditor } from "monaco-editor";
 import JSZip from "jszip";
@@ -176,12 +177,12 @@ function normalizeCodeContents(raw: unknown): CodeContents {
   const parsed =
     typeof raw === "string"
       ? (() => {
-          try {
-            return JSON.parse(raw) as unknown;
-          } catch {
-            return null;
-          }
-        })()
+        try {
+          return JSON.parse(raw) as unknown;
+        } catch {
+          return null;
+        }
+      })()
       : raw;
 
   if (!isRecord(parsed)) return fallback;
@@ -233,42 +234,128 @@ function parseHighlightedLines(raw: string | null | undefined): number[] {
 
 /** Resolve Monaco language id from file extension, falling back to stored language. */
 function resolveMonacoLang(filename: string, storedLang?: string): string {
-  const ext = filename.split(".").pop()?.toLowerCase() ?? "";
   const EXT_MAP: Record<string, string> = {
-    java: "java",
-    jsp: "html",
-    xml: "xml",
-    json: "json",
-    html: "html",
-    htm: "html",
-    css: "css",
-    scss: "scss",
     js: "javascript",
-    ts: "typescript",
-    tsx: "typescript",
-    jsx: "javascript",
+    javascript: "javascript",
+    csharp: "csharp",
+    cplusplus: "cpp",
+    python3: "python",
+    html: "html",
+    css: "css",
     py: "python",
-    go: "go",
-    rs: "rust",
+    java: "java",
+    rb: "ruby",
+    php: "php",
     cpp: "cpp",
     c: "c",
     cs: "csharp",
-    rb: "ruby",
-    kt: "kotlin",
     swift: "swift",
-    sh: "shell",
-    bash: "shell",
-    sql: "sql",
+    go: "go",
+    rust: "rust",
+    ts: "typescript",
+    jsx: "javascript",
+    tsx: "typescript",
+    json: "json",
     yaml: "yaml",
-    yml: "yaml",
-    properties: "ini",
-    env: "ini",
-    cfg: "ini",
-    gradle: "groovy",
-    md: "markdown",
+    xml: "xml",
+    sql: "sql",
+    asm: "assembly",
+    sh: "shell",
+    perl: "perl",
+    r: "r",
+    lua: "lua",
     dart: "dart",
+    scala: "scala",
+    matlab: "matlab",
+    powershell: "powershell",
+    sass: "sass",
+    scss: "scss",
+    less: "less",
+    coffee: "coffeescript",
+    hbs: "handlebars",
+    ejs: "ejs",
+    md: "markdown",
+    tex: "latex",
+    bat: "batchfile",
+    csv: "csv",
+    graphql: "graphql",
+    vb: "vb",
+    vbs: "vbscript",
+    yml: "yaml",
+    ini: "ini",
+    toml: "toml",
+    diff: "diff",
+    patch: "patch",
+    nginx: "nginx",
+    dockerfile: "dockerfile",
+    racket: "racket",
+    elm: "elm",
+    erl: "erlang",
+    ex: "elixir",
+    vue: "vue",
+    makefile: "makefile",
+    cmake: "cmake",
+    raku: "raku",
+    f: "fortran",
+    f90: "fortran",
+    f95: "fortran",
+    for: "fortran",
+    f03: "fortran",
+    f08: "fortran",
+    hs: "haskell",
+    kt: "kotlin",
+    kts: "kotlin",
+    adoc: "asciidoc",
+    csh: "shell",
+    bash: "shell",
+    zsh: "shell",
+    fish: "shell",
+    rmd: "rmarkdown",
+    ipynb: "jupyter-notebook",
+    pl: "perl",
+    groovy: "groovy",
+    jsp: "jsp",
+    d: "d",
+    nim: "nim",
+    styl: "stylus",
+    moon: "moonscript",
+    nix: "nix",
+    mm: "objectivec",
+    tcl: "tcl",
+    ps1: "powershell",
+    gradle: "gradle",
+    properties: "properties",
+    rst: "restructuredtext",
+    as: "actionscript",
+    mxml: "mxml",
+    pm: "perl",
+    t: "perl",
+    pod: "perl",
+    cgi: "perl",
+    h: "c",
+    m: "objectivec",
+    hpp: "cpp",
+    cc: "cpp",
+    hh: "cpp",
+    hxx: "cpp",
+    cxx: "cpp",
+    rs: "rust"
   };
-  return EXT_MAP[ext] ?? (storedLang?.toLowerCase() || "plaintext");
+
+  // First, try to extract language from words in the filename (excluding extension)
+  const nameWithoutExt = filename.replace(/\.[^/.]+$/, "");
+  const words = nameWithoutExt.split(/ |-/).filter(Boolean);
+  for (const word of words) {
+    const matchedLang = EXT_MAP[word.toLowerCase()];
+    if (matchedLang) return matchedLang;
+  }
+
+  // Fallback to checking the file extension
+  const ext = filename.split(".").pop()?.toLowerCase() ?? "";
+  const extMatch = EXT_MAP[ext];
+  if (extMatch) return extMatch;
+
+  return storedLang?.toLowerCase() || "plaintext";
 }
 
 /** Recursively collect all visible leaf (file) nodes from a tree. */
@@ -484,9 +571,8 @@ function TreeItem({ node, depth, allLeaves, activeLeafId, onSelectLeaf, onDownlo
       tabIndex={0}
       onClick={() => leafIdx >= 0 && onSelectLeaf(leafIdx)}
       onKeyDown={(e) => e.key === "Enter" && leafIdx >= 0 && onSelectLeaf(leafIdx)}
-      className={`group flex items-center gap-2 py-2 text-[13px] cursor-pointer select-none transition-colors ${
-        isActive ? "text-white font-semibold" : "text-gray-400 hover:text-gray-200"
-      }`}
+      className={`group flex items-center gap-2 py-2 text-[13px] cursor-pointer select-none transition-colors ${isActive ? "text-white font-semibold" : "text-gray-400 hover:text-gray-200"
+        }`}
       style={{
         paddingLeft: `${indent}px`,
         paddingRight: "8px",
@@ -510,7 +596,7 @@ function TreeItem({ node, depth, allLeaves, activeLeafId, onSelectLeaf, onDownlo
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export default function WebpackBin({ data }: { data: WebpackBinData }) {
+export default function WebpackBin({ data, fullHeight }: { data: WebpackBinData, fullHeight?: boolean }) {
   const codeContents = normalizeCodeContents(data.codeContents);
 
   // Flatten tree into a stable ordered array of visible leaf nodes
@@ -525,6 +611,7 @@ export default function WebpackBin({ data }: { data: WebpackBinData }) {
   const [activeIdx, setActiveIdx] = useState(defaultIdx);
   const [copied, setCopied] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [isClient, setIsClient] = useState(false);
   const [showHint, setShowHint] = useState(false);
   const [showInfo, setShowInfo] = useState(false);
   const [wordWrap, setWordWrap] = useState(false);
@@ -541,6 +628,10 @@ export default function WebpackBin({ data }: { data: WebpackBinData }) {
 
   const toggleFolder = useCallback((id: number) => {
     setExpandedFolders((prev) => ({ ...prev, [id]: !prev[id] }));
+  }, []);
+
+  useEffect(() => {
+    setIsClient(true);
   }, []);
 
   // Re-apply highlighted-line decorations whenever the active file changes
@@ -614,327 +705,331 @@ export default function WebpackBin({ data }: { data: WebpackBinData }) {
   const BODY_HEIGHT = Number(data.codePanelHeight ?? data.outputHeight ?? 500);
   const isReadOnly = !!(activeFile.readOnly || activeFile.data?.staticFile);
 
-  return (
-    <div className="max-w-5xl mx-auto px-6 py-2">
-      {data.caption && (
-        <p className="text-[11px] text-gray-500 italic mb-2">{data.caption}</p>
-      )}
-
-      <div
-        className={
-          isFullscreen
-            ? "fixed inset-0 z-50 flex flex-col"
+  const content = (
+    <div
+      className={
+        isFullscreen
+          ? "fixed inset-0 z-[99999] flex flex-col"
+          : fullHeight
+            ? "flex-1 flex flex-col min-h-0 w-full"
             : "rounded-xl overflow-hidden shadow-xl border border-[#3a3a4a]"
-        }
-        style={{ background: "#1c1c28" }}
-      >
+      }
+      style={{ background: "#1c1c28" }}
+    >
 
-        {/* ══════════════════════════════════════════
+      {/* ══════════════════════════════════════════
             TOP BAR — "Files" | filename | icons
             ══════════════════════════════════════════ */}
-        <div
-          className="flex items-stretch shrink-0 border-b border-[#3a3a4a]"
-          style={{ background: "#1c1c28" }}
-        >
-          {/* "Files" section label */}
-          <div className="w-48 shrink-0 flex items-center px-4 py-2.5 border-r border-[#3a3a4a]">
-            <span className="text-xs font-semibold text-gray-300 tracking-wide">Files</span>
-          </div>
-
-          {/* Active filename + toolbar */}
-          <div className="flex flex-1 items-center justify-between px-4 py-2">
-            <div className="flex items-center gap-2 text-sm text-gray-200 font-medium min-w-0">
-              <svg className="w-4 h-4 text-blue-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
-              </svg>
-              <span className="truncate">{activeFile.module}</span>
-              {isReadOnly && (
-                <span className="text-[10px] text-gray-500 border border-gray-600 rounded px-1 py-px leading-none shrink-0">
-                  read-only
-                </span>
-              )}
-            </div>
-
-            <div className="flex items-center gap-3 shrink-0 ml-3">
-              {/* Word wrap toggle */}
-              <button
-                onClick={() => setWordWrap((w) => !w)}
-                title={wordWrap ? "Disable word wrap" : "Enable word wrap"}
-                className={`text-[11px] font-mono font-semibold px-1.5 py-0.5 rounded border transition-colors select-none cursor-pointer ${
-                  wordWrap
-                    ? "text-blue-300 border-blue-600 bg-blue-900/30"
-                    : "text-gray-500 border-gray-700 hover:text-gray-200 hover:border-gray-500"
-                }`}
-              >
-                Wrap
-              </button>
-
-              {/* Info panel toggle */}
-              <button
-                onClick={() => setShowInfo((p) => !p)}
-                title="Component info"
-                className={`transition-colors cursor-pointer ${showInfo ? "text-blue-400" : "text-gray-500 hover:text-gray-200"}`}
-              >
-                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <circle cx="12" cy="12" r="10" />
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 16v-4m0-4h.01" />
-                </svg>
-              </button>
-
-              {/* Reset content */}
-              <button
-                title="Reset to original"
-                className="text-gray-500 hover:text-gray-200 transition-colors cursor-pointer"
-                onClick={() => {
-                  editorRef.current?.setValue(activeFile.data?.content ?? "");
-                  editorRef.current?.revealLine(1);
-                }}
-              >
-                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                </svg>
-              </button>
-
-              {/* Fullscreen */}
-              <button
-                onClick={() => setIsFullscreen((f) => !f)}
-                title={isFullscreen ? "Exit fullscreen" : "Fullscreen"}
-                className="text-gray-500 hover:text-gray-200 transition-colors cursor-pointer"
-              >
-                {isFullscreen ? (
-                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M8 3v4a1 1 0 01-1 1H3m18 0h-4a1 1 0 01-1-1V3m0 18v-4a1 1 0 011-1h4M3 16h4a1 1 0 011 1v4" />
-                  </svg>
-                ) : (
-                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M4 8V4h4M16 4h4v4M4 16v4h4M20 16v4h-4" />
-                  </svg>
-                )}
-              </button>
-            </div>
-          </div>
+      <div
+        className="flex items-stretch shrink-0 border-b border-[#3a3a4a]"
+        style={{ background: "#1c1c28" }}
+      >
+        {/* "Files" section label */}
+        <div className="w-48 shrink-0 flex items-center px-4 py-2.5 border-r border-[#3a3a4a]">
+          <span className="text-xs font-semibold text-gray-300 tracking-wide">Files</span>
         </div>
 
-        {/* ══════════════════════════════════
-            INFO PANEL (collapsible)
-            ══════════════════════════════════ */}
-        {showInfo && (
-          <div
-            className="flex flex-wrap gap-6 px-5 py-3 border-b border-[#3a3a4a] text-xs text-gray-400 shrink-0"
-            style={{ background: "#16161f" }}
-          >
-            {docker && (
-              <div className="space-y-0.5">
-                <div className="text-gray-200 font-semibold mb-1">{docker.name}</div>
-                <div>Job type: <span className="text-blue-300">{docker.jobType}</span></div>
-                {docker.ports && <div>Port: <span className="text-gray-300">{docker.ports}</span></div>}
-                {data.appUrl && !data.hideOutputUrl && (
-                  <div>App URL: <span className="font-mono text-gray-300">{data.appUrl}</span></div>
-                )}
-                {docker.https && <div className="text-green-400">HTTPS enabled</div>}
-                {docker.startScript && (
-                  <details className="mt-1">
-                    <summary className="cursor-pointer text-gray-500 hover:text-gray-300">Start script</summary>
-                    <pre className="mt-1 text-green-400 font-mono whitespace-pre-wrap text-[10px]">
-                      {docker.startScript}
-                    </pre>
-                  </details>
-                )}
-              </div>
-            )}
-
-            {activeLoaders.length > 0 && (
-              <div>
-                <div className="text-gray-200 font-semibold mb-1">Loaders</div>
-                <div className="flex flex-wrap gap-1">
-                  {activeLoaders.map((l) => (
-                    <span key={l.title} className="px-1.5 py-0.5 rounded bg-blue-900/40 text-blue-300 border border-blue-800">
-                      {l.title}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {data.npmPackages && Object.keys(data.npmPackages).length > 0 && (
-              <div>
-                <div className="text-gray-200 font-semibold mb-1">npm packages</div>
-                {Object.entries(data.npmPackages).map(([pkg, ver]) => (
-                  <div key={pkg} className="font-mono">
-                    {pkg} <span className="text-gray-500">@{ver}</span>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {data.selectedEnvVars && Object.keys(data.selectedEnvVars).length > 0 && (
-              <div>
-                <div className="text-gray-200 font-semibold mb-1">Env vars</div>
-                {Object.keys(data.selectedEnvVars).map((k) => (
-                  <div key={k} className="font-mono text-green-300">{k}</div>
-                ))}
-              </div>
+        {/* Active filename + toolbar */}
+        <div className="flex flex-1 items-center justify-between px-4 py-2">
+          <div className="flex items-center gap-2 text-sm text-gray-200 font-medium min-w-0">
+            <svg className="w-4 h-4 text-blue-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
+            </svg>
+            <span className="truncate">{activeFile.module}</span>
+            {isReadOnly && (
+              <span className="text-[10px] text-gray-500 border border-gray-600 rounded px-1 py-px leading-none shrink-0">
+                read-only
+              </span>
             )}
           </div>
-        )}
 
-        {/* ══════════════════════════════════════════
-            BODY — sidebar tree + editor
-            ══════════════════════════════════════════ */}
-        <div
-          className={`flex ${isFullscreen ? "flex-1 overflow-hidden" : ""}`}
-          style={!isFullscreen ? { height: BODY_HEIGHT } : undefined}
-        >
-
-          {/* ── Left sidebar (file tree) ── */}
-          {!data.hideCodeView && (
-            <div
-              className="w-48 shrink-0 border-r border-[#3a3a4a] overflow-y-auto"
-              style={{ background: "#1c1c28", height: "100%" }}
+          <div className="flex items-center gap-3 shrink-0 ml-3">
+            {/* Word wrap toggle */}
+            <button
+              onClick={() => setWordWrap((w) => !w)}
+              title={wordWrap ? "Disable word wrap" : "Enable word wrap"}
+              className={`text-[11px] font-mono font-semibold px-1.5 py-0.5 rounded border transition-colors select-none cursor-pointer ${wordWrap
+                ? "text-blue-300 border-blue-600 bg-blue-900/30"
+                : "text-gray-500 border-gray-700 hover:text-gray-200 hover:border-gray-500"
+                }`}
             >
-              {codeContents.children.map((node) => (
-                <TreeItem
-                  key={node.id}
-                  node={node}
-                  depth={0}
-                  allLeaves={allLeaves}
-                  activeLeafId={activeFile.id}
-                  onSelectLeaf={setActiveIdx}
-                  onDownloadLeaf={handleDownloadFile}
-                  expanded={expandedFolders}
-                  onToggle={toggleFolder}
-                />
+              Wrap
+            </button>
+
+            {/* Info panel toggle */}
+            <button
+              onClick={() => setShowInfo((p) => !p)}
+              title="Component info"
+              className={`transition-colors cursor-pointer ${showInfo ? "text-blue-400" : "text-gray-500 hover:text-gray-200"}`}
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <circle cx="12" cy="12" r="10" />
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 16v-4m0-4h.01" />
+              </svg>
+            </button>
+
+            {/* Reset content */}
+            <button
+              title="Reset to original"
+              className="text-gray-500 hover:text-gray-200 transition-colors cursor-pointer"
+              onClick={() => {
+                editorRef.current?.setValue(activeFile.data?.content ?? "");
+                editorRef.current?.revealLine(1);
+              }}
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              </svg>
+            </button>
+
+            {/* Fullscreen */}
+            <button
+              onClick={() => setIsFullscreen((f) => !f)}
+              title={isFullscreen ? "Exit fullscreen" : "Fullscreen"}
+              className="text-gray-500 hover:text-gray-200 transition-colors cursor-pointer"
+            >
+              {isFullscreen ? (
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M8 3v4a1 1 0 01-1 1H3m18 0h-4a1 1 0 01-1-1V3m0 18v-4a1 1 0 011-1h4M3 16h4a1 1 0 011 1v4" />
+                </svg>
+              ) : (
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M4 8V4h4M16 4h4v4M4 16v4h4M20 16v4h-4" />
+                </svg>
+              )}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* ══════════════════════════════════
+            INFO PANEL (collapsible)
+            ══════════════════════════════════ */}
+      {showInfo && (
+        <div
+          className="flex flex-wrap gap-6 px-5 py-3 border-b border-[#3a3a4a] text-xs text-gray-400 shrink-0"
+          style={{ background: "#16161f" }}
+        >
+          {docker && (
+            <div className="space-y-0.5">
+              <div className="text-gray-200 font-semibold mb-1">{docker.name}</div>
+              <div>Job type: <span className="text-blue-300">{docker.jobType}</span></div>
+              {docker.ports && <div>Port: <span className="text-gray-300">{docker.ports}</span></div>}
+              {data.appUrl && !data.hideOutputUrl && (
+                <div>App URL: <span className="font-mono text-gray-300">{data.appUrl}</span></div>
+              )}
+              {docker.https && <div className="text-green-400">HTTPS enabled</div>}
+              {docker.startScript && (
+                <details className="mt-1">
+                  <summary className="cursor-pointer text-gray-500 hover:text-gray-300">Start script</summary>
+                  <pre className="mt-1 text-green-400 font-mono whitespace-pre-wrap text-[10px]">
+                    {docker.startScript}
+                  </pre>
+                </details>
+              )}
+            </div>
+          )}
+
+          {activeLoaders.length > 0 && (
+            <div>
+              <div className="text-gray-200 font-semibold mb-1">Loaders</div>
+              <div className="flex flex-wrap gap-1">
+                {activeLoaders.map((l) => (
+                  <span key={l.title} className="px-1.5 py-0.5 rounded bg-blue-900/40 text-blue-300 border border-blue-800">
+                    {l.title}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {data.npmPackages && Object.keys(data.npmPackages).length > 0 && (
+            <div>
+              <div className="text-gray-200 font-semibold mb-1">npm packages</div>
+              {Object.entries(data.npmPackages).map(([pkg, ver]) => (
+                <div key={pkg} className="font-mono">
+                  {pkg} <span className="text-gray-500">@{ver}</span>
+                </div>
               ))}
             </div>
           )}
 
-          {/* ── Monaco Editor ── */}
-          <div
-            className={`flex-1 ${isFullscreen ? "overflow-hidden" : ""}`}
-            style={{ minWidth: 0, height: "100%" }}
-          >
-            <Editor
-              height="100%"
-              language={resolveMonacoLang(activeFile.module, activeFile.data?.language)}
-              value={activeFile.data?.content ?? ""}
-              theme="vs-dark"
-              onMount={(editor, monaco) => {
-                editorRef.current = editor;
-                monacoRef.current = monaco;
-                if (activeFile.data) {
-                  const lines = parseHighlightedLines(activeFile.data.highlightedLines);
-                  if (lines.length > 0) {
-                    editor.createDecorationsCollection(
-                      lines.map((ln) => ({
-                        range: new monaco.Range(ln, 1, ln, 1),
-                        options: { isWholeLine: true, className: "highlightLine" },
-                      }))
-                    );
-                  }
-                }
-              }}
-              options={{
-                readOnly: isReadOnly,
-                minimap: { enabled: false },
-                scrollBeyondLastLine: false,
-                fontSize: 13,
-                lineNumbers: data.showLineNumbers !== false ? "on" : "off",
-                wordWrap: wordWrap ? "on" : "off",
-                folding: true,
-                renderLineHighlight: "line",
-                scrollbar: { verticalScrollbarSize: 6, horizontalScrollbarSize: 6 },
-                glyphMargin: false,
-                overviewRulerLanes: 0,
-              }}
-            />
-          </div>
-        </div>
-
-        {/* ══════════════════════════════════════════
-            JUDGE / EXERCISE panel
-            ══════════════════════════════════════════ */}
-        {judge?.judgeActive && !judge.judgeDisabled && (
-          <div
-            className="border-t border-[#3a3a4a] px-4 py-3 text-xs text-gray-300 space-y-2 shrink-0"
-            style={{ background: "#16161f" }}
-          >
-            <div className="flex items-center gap-2 font-semibold text-yellow-400">
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
-              </svg>
-              Exercise
+          {data.selectedEnvVars && Object.keys(data.selectedEnvVars).length > 0 && (
+            <div>
+              <div className="text-gray-200 font-semibold mb-1">Env vars</div>
+              {Object.keys(data.selectedEnvVars).map((k) => (
+                <div key={k} className="font-mono text-green-300">{k}</div>
+              ))}
             </div>
-            {judge.hintsContent && judge.hintsContent.length > 0 && (
-              <div>
-                <button
-                  onClick={() => setShowHint((p) => !p)}
-                  className="text-blue-400 hover:underline flex items-center gap-1 cursor-pointer"
-                >
-                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                  {showHint ? "Hide hints" : "Show hints"}
-                </button>
-                {showHint && (
-                  <ul className="mt-2 list-disc list-inside space-y-1 text-gray-400 pl-1">
-                    {judge.hintsContent.map((h, i) => (
-                      <li key={i}>{h}</li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-            )}
+          )}
+        </div>
+      )}
+
+      {/* ══════════════════════════════════════════
+            BODY — sidebar tree + editor
+            ══════════════════════════════════════════ */}
+      <div
+        className={`flex ${isFullscreen || fullHeight ? "flex-1 overflow-hidden" : ""}`}
+        style={!isFullscreen && !fullHeight ? { height: BODY_HEIGHT } : undefined}
+      >
+
+        {/* ── Left sidebar (file tree) ── */}
+        {!data.hideCodeView && (
+          <div
+            className="w-48 shrink-0 border-r border-[#3a3a4a] overflow-y-auto"
+            style={{ background: "#1c1c28", height: "100%" }}
+          >
+            {codeContents.children.map((node) => (
+              <TreeItem
+                key={node.id}
+                node={node}
+                depth={0}
+                allLeaves={allLeaves}
+                activeLeafId={activeFile.id}
+                onSelectLeaf={setActiveIdx}
+                onDownloadLeaf={handleDownloadFile}
+                expanded={expandedFolders}
+                onToggle={toggleFolder}
+              />
+            ))}
           </div>
         )}
 
-        {/* ══════════════════════════════════════════════════
+        {/* ── Monaco Editor ── */}
+        <div
+          className={`flex-1 ${isFullscreen || fullHeight ? "overflow-hidden" : ""}`}
+          style={{ minWidth: 0, height: "100%" }}
+        >
+          <Editor
+            height="100%"
+            language={resolveMonacoLang(activeFile.module, activeFile.data?.language)}
+            value={activeFile.data?.content ?? ""}
+            theme="vs-dark"
+            onMount={(editor, monaco) => {
+              editorRef.current = editor;
+              monacoRef.current = monaco;
+              if (activeFile.data) {
+                const lines = parseHighlightedLines(activeFile.data.highlightedLines);
+                if (lines.length > 0) {
+                  editor.createDecorationsCollection(
+                    lines.map((ln) => ({
+                      range: new monaco.Range(ln, 1, ln, 1),
+                      options: { isWholeLine: true, className: "highlightLine" },
+                    }))
+                  );
+                }
+              }
+            }}
+            options={{
+              readOnly: isReadOnly,
+              minimap: { enabled: false },
+              scrollBeyondLastLine: false,
+              fontSize: 13,
+              lineNumbers: data.showLineNumbers !== false ? "on" : "off",
+              wordWrap: wordWrap ? "on" : "off",
+              folding: true,
+              renderLineHighlight: "line",
+              scrollbar: { verticalScrollbarSize: 6, horizontalScrollbarSize: 6 },
+              glyphMargin: false,
+              overviewRulerLanes: 0,
+            }}
+          />
+        </div>
+      </div>
+
+      {/* ══════════════════════════════════════════
+            JUDGE / EXERCISE panel
+            ══════════════════════════════════════════ */}
+      {judge?.judgeActive && !judge.judgeDisabled && (
+        <div
+          className="border-t border-[#3a3a4a] px-4 py-3 text-xs text-gray-300 space-y-2 shrink-0"
+          style={{ background: "#16161f" }}
+        >
+          <div className="flex items-center gap-2 font-semibold text-yellow-400">
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+            </svg>
+            Exercise
+          </div>
+          {judge.hintsContent && judge.hintsContent.length > 0 && (
+            <div>
+              <button
+                onClick={() => setShowHint((p) => !p)}
+                className="text-blue-400 hover:underline flex items-center gap-1 cursor-pointer"
+              >
+                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                {showHint ? "Hide hints" : "Show hints"}
+              </button>
+              {showHint && (
+                <ul className="mt-2 list-disc list-inside space-y-1 text-gray-400 pl-1">
+                  {judge.hintsContent.map((h, i) => (
+                    <li key={i}>{h}</li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ══════════════════════════════════════════════════
             BOTTOM BAR — copy | download-all zip | "Saved"
             ══════════════════════════════════════════════════ */}
-        <div
-          className="flex items-center justify-between px-4 py-2.5 border-t border-[#3a3a4a] shrink-0"
-          style={{ background: "#1c1c28" }}
-        >
-          <div className="flex items-center gap-3">
-            {/* Copy active file */}
-            <button
-              onClick={handleCopy}
-              title="Copy active file"
-              className="text-gray-500 hover:text-gray-200 transition-colors cursor-pointer"
-            >
-              {copied ? (
-                <svg className="w-4 h-4 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                </svg>
-              ) : (
-                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-4 10h6a2 2 0 002-2v-8a2 2 0 00-2-2h-6a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                </svg>
-              )}
-            </button>
-
-            {/* Download all files as zip */}
-            <button
-              onClick={handleDownloadAll}
-              title="Download all files as ZIP"
-              className="text-gray-500 hover:text-gray-200 transition-colors"
-            >
+      <div
+        className="flex items-center justify-between px-4 py-2.5 border-t border-[#3a3a4a] shrink-0"
+        style={{ background: "#1c1c28" }}
+      >
+        <div className="flex items-center gap-3">
+          {/* Copy active file */}
+          <button
+            onClick={handleCopy}
+            title="Copy active file"
+            className="text-gray-500 hover:text-gray-200 transition-colors cursor-pointer"
+          >
+            {copied ? (
+              <svg className="w-4 h-4 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+              </svg>
+            ) : (
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                <path strokeLinecap="round" strokeLinejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-4 10h6a2 2 0 002-2v-8a2 2 0 00-2-2h-6a2 2 0 00-2 2v8a2 2 0 002 2z" />
               </svg>
-            </button>
+            )}
+          </button>
 
-            {/* "Saved" cloud status */}
-            <div className="flex items-center gap-1 text-xs text-gray-500 select-none">
-              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z" />
-              </svg>
-              Saved
-            </div>
+          {/* Download all files as zip */}
+          <button
+            onClick={handleDownloadAll}
+            title="Download all files as ZIP"
+            className="text-gray-500 hover:text-gray-200 transition-colors"
+          >
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+            </svg>
+          </button>
+
+          {/* "Saved" cloud status */}
+          <div className="flex items-center gap-1 text-xs text-gray-500 select-none">
+            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z" />
+            </svg>
+            Saved
           </div>
-
         </div>
-
       </div>
+    </div>
+
+  );
+
+  return (
+    <div className={fullHeight ? "flex-1 flex flex-col min-h-0 w-full" : "max-w-5xl mx-auto px-6 py-2"}>
+      {data.caption && !fullHeight && (
+        <p className="text-[11px] text-gray-500 italic mb-2">{data.caption}</p>
+      )}
+
+      {isFullscreen && isClient ? createPortal(content, document.body) : content}
     </div>
   );
 }

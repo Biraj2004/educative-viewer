@@ -23,7 +23,7 @@ export default function LegacyWorkspace({ data }: LegacyWorkspaceProps) {
       const content = files[filePath];
       // Normalize slashes
       const parts = filePath.replace(/\\/g, "/").split("/").filter(Boolean);
-      
+
       let parentId = 0;
       let currentPath = "";
 
@@ -80,7 +80,7 @@ export default function LegacyWorkspace({ data }: LegacyWorkspaceProps) {
       }
       return null;
     };
-    
+
     const firstLeaf = findFirstLeaf(rootNodes);
     if (firstLeaf) {
       selectedId = firstLeaf.id;
@@ -102,8 +102,8 @@ export default function LegacyWorkspace({ data }: LegacyWorkspaceProps) {
   }
 
   return (
-    <div className="my-6">
-      <WebpackBin data={webpackBinData} />
+    <div className="flex-1 flex flex-col min-h-0 w-full">
+      <WebpackBin data={webpackBinData} fullHeight />
     </div>
   );
 }

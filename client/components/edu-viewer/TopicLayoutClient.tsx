@@ -308,6 +308,8 @@ export default function TopicLayoutClient({
     return Math.max(340, Math.floor(window.innerWidth * 0.3));
   });
   const [drawingPanelVisible, setDrawingPanelVisible] = useState(false);
+  const [workspaceDrawerOpen, setWorkspaceDrawerOpen] = useState(false);
+  const [workspaceDrawerVisible, setWorkspaceDrawerVisible] = useState(false);
   const [drawingPanelWidth, setDrawingPanelWidth] = useState(() => {
     if (typeof window === "undefined") return 560;
     return Math.max(360, Math.floor(window.innerWidth * 0.5));
@@ -380,6 +382,15 @@ export default function TopicLayoutClient({
   const currentComponents = React.useMemo(
     () => (Array.isArray(currentTopic.components) ? currentTopic.components : []),
     [currentTopic.components]
+  );
+  const workspaceComponentIndex = React.useMemo(
+    () => currentComponents.findIndex(c => c.type === "LegacyWorkspace"),
+    [currentComponents]
+  );
+  const workspaceComponent = workspaceComponentIndex >= 0 ? currentComponents[workspaceComponentIndex] : null;
+  const inlineComponents = React.useMemo(
+    () => workspaceComponentIndex >= 0 ? currentComponents.filter((_, idx) => idx !== workspaceComponentIndex) : currentComponents,
+    [currentComponents, workspaceComponentIndex]
   );
   const isBookmarked = bookmarked.has(currentTopic.topic_index);
   const currentTopicKey = String(currentTopic.topic_index);
@@ -674,7 +685,7 @@ export default function TopicLayoutClient({
       setHighlightHistoryBusy(false);
     }
   }, [applyHistoryEntry, currentTopicKey, highlightHistoryBusy, highlightMutationBusy, highlightRedoStack]);
-  
+
   // Calculate estimated reading time
   const estimatedTime = React.useMemo(() => {
     let wordCount = 0;
@@ -2197,6 +2208,10 @@ export default function TopicLayoutClient({
     setDrawerOpen(false);
     setTocDrawerOpen(false);
     setHighlightDrawerOpen(false);
+    if (workspaceDrawerOpen) {
+      setWorkspaceDrawerVisible(false);
+      window.setTimeout(() => setWorkspaceDrawerOpen(false), DRAWER_ANIM_MS);
+    }
     setDesktopSidebarCollapsed(true);
     setDrawingPadOpen(true);
     writeDrawingDrawerOpen(courseId, true);
@@ -2221,6 +2236,10 @@ export default function TopicLayoutClient({
       window.setTimeout(() => {
         setDrawingPadOpen(false);
       }, DRAWER_ANIM_MS);
+    }
+    if (workspaceDrawerOpen) {
+      setWorkspaceDrawerVisible(false);
+      window.setTimeout(() => setWorkspaceDrawerOpen(false), DRAWER_ANIM_MS);
     }
     if (!highlightDrawerOpen) {
       const max = Math.max(320, window.innerWidth - 24);
@@ -2357,6 +2376,40 @@ export default function TopicLayoutClient({
     return deferEffectState(() => setDrawingPanelVisible(false));
   }, [drawingPadOpen]);
 
+  const handleToggleWorkspaceDrawer = useCallback(() => {
+    setDrawerOpen(false);
+    setTocDrawerOpen(false);
+    setHighlightDrawerOpen(false);
+    setDesktopSidebarCollapsed(true);
+    if (drawingPadOpen) {
+      setDrawingPanelVisible(false);
+      window.setTimeout(() => setDrawingPadOpen(false), DRAWER_ANIM_MS);
+    }
+    if (!workspaceDrawerOpen) {
+      const max = Math.max(320, window.innerWidth - 24);
+      const min = Math.min(360, max);
+      const target = window.innerWidth * 0.5;
+      setDrawingPanelWidth(Math.max(min, Math.min(target, max)));
+    }
+    setWorkspaceDrawerOpen((prev) => !prev);
+  }, [drawingPadOpen, workspaceDrawerOpen]);
+
+  useEffect(() => {
+    let frameCancel: (() => void) | undefined;
+    let timeoutId: number | undefined;
+    if (workspaceDrawerOpen) {
+      frameCancel = deferEffectState(() => {
+        setWorkspaceDrawerVisible(false);
+        timeoutId = window.setTimeout(() => setWorkspaceDrawerVisible(true), 18);
+      });
+      return () => {
+        frameCancel?.();
+        if (timeoutId !== undefined) window.clearTimeout(timeoutId);
+      };
+    }
+    return deferEffectState(() => setWorkspaceDrawerVisible(false));
+  }, [workspaceDrawerOpen]);
+
   const clampDrawingPanelWidth = useCallback((next: number) => {
     if (typeof window === "undefined") return 560;
     const max = Math.max(320, window.innerWidth - 24);
@@ -2446,7 +2499,9 @@ export default function TopicLayoutClient({
 
   const activeRightPanelWidth = drawingPadOpen
     ? drawingPanelWidth
-    : (highlightDrawerOpen ? highlightPanelWidth : 0);
+    : workspaceDrawerOpen
+      ? drawingPanelWidth
+      : (highlightDrawerOpen ? highlightPanelWidth : 0);
   const contentShiftStyle = activeRightPanelWidth > 0
     ? { marginRight: `${activeRightPanelWidth}px` }
     : undefined;
@@ -2511,16 +2566,20 @@ export default function TopicLayoutClient({
   }, [updateScrollProgress, drawingPadOpen, highlightDrawerOpen, desktopSidebarCollapsed, currentTopic.topic_index]);
   // Keep TOC drawer dismissible via keyboard.
   useEffect(() => {
-    if (!tocDrawerOpen && !highlightDrawerOpen) return;
+    if (!tocDrawerOpen && !highlightDrawerOpen && !workspaceDrawerOpen) return;
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         setTocDrawerOpen(false);
         setHighlightDrawerOpen(false);
+        if (workspaceDrawerOpen) {
+          setWorkspaceDrawerVisible(false);
+          window.setTimeout(() => setWorkspaceDrawerOpen(false), DRAWER_ANIM_MS);
+        }
       }
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [highlightDrawerOpen, tocDrawerOpen]);
+  }, [highlightDrawerOpen, tocDrawerOpen, workspaceDrawerOpen]);
 
   return (
     <div className="min-h-screen flex flex-col bg-gray-50 dark:bg-gray-950">
@@ -2658,7 +2717,7 @@ export default function TopicLayoutClient({
           {/* Components */}
           <div ref={contentRef} className="max-w-6xl mx-auto px-6 pb-8 pt-4 space-y-6 topic-content-wrapper">
             <TopicComponentsList
-              currentComponents={currentComponents}
+              currentComponents={inlineComponents}
               topicIndex={currentTopic.topic_index}
             />
 
@@ -2767,9 +2826,8 @@ export default function TopicLayoutClient({
         <>
           <button
             onClick={handleOpenDrawingPad}
-            className={`hidden lg:flex fixed right-0 z-40 flex-col items-center gap-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 border-r-0 rounded-l-xl px-2 py-3 shadow-md text-gray-500 hover:text-sky-600 dark:hover:text-sky-300 transition-colors cursor-pointer ${
-              notesDrawerEnabled ? "top-[calc(50%+8rem)]" : "top-[calc(50%+2.6rem)]"
-            }`}
+            className={`hidden lg:flex fixed right-0 z-40 flex-col items-center gap-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 border-r-0 rounded-l-xl px-2 py-3 shadow-md text-gray-500 hover:text-sky-600 dark:hover:text-sky-300 transition-colors cursor-pointer ${notesDrawerEnabled ? "top-[calc(50%+8rem)]" : "top-[calc(50%+2.6rem)]"
+              }`}
             title="Drawing Notes"
           >
             <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
@@ -2805,6 +2863,23 @@ export default function TopicLayoutClient({
           </svg>
           <span className="text-[9px] font-semibold uppercase tracking-wide [writing-mode:vertical-rl] rotate-180">
             {highlightsEnabled ? "H&N" : "NOTE"}
+          </span>
+        </button>
+      )}
+
+      {workspaceComponent && (
+        <button
+          onClick={handleToggleWorkspaceDrawer}
+          className={`hidden lg:flex fixed right-0 z-40 flex-col items-center gap-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 border-r-0 rounded-l-xl px-2 py-3 shadow-md text-gray-500 hover:text-emerald-600 dark:hover:text-emerald-300 transition-colors cursor-pointer ${notesDrawerEnabled ? (drawingsEnabled ? "top-[calc(50%+13.4rem)]" : "top-[calc(50%+8rem)]") : (drawingsEnabled ? "top-[calc(50%+8rem)]" : "top-[calc(50%+2.6rem)]")
+            }`}
+          title="Workspace"
+        >
+          <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="16 18 22 12 16 6"></polyline>
+            <polyline points="8 6 2 12 8 18"></polyline>
+          </svg>
+          <span className="text-[9px] font-semibold uppercase tracking-wide [writing-mode:vertical-rl] rotate-180">
+            CODE
           </span>
         </button>
       )}
@@ -2868,11 +2943,10 @@ export default function TopicLayoutClient({
                             }
                           });
                         }}
-                        className={`text-left w-full py-0.5 transition-colors hover:text-indigo-600 dark:hover:text-indigo-400 cursor-pointer ${
-                          activeHeadingIdx === h.idx
+                        className={`text-left w-full py-0.5 transition-colors hover:text-indigo-600 dark:hover:text-indigo-400 cursor-pointer ${activeHeadingIdx === h.idx
                             ? "text-indigo-600 dark:text-indigo-400 font-semibold"
                             : "text-gray-600 dark:text-gray-400"
-                        }`}
+                          }`}
                       >
                         {h.text}
                       </button>
@@ -2906,16 +2980,15 @@ export default function TopicLayoutClient({
                 <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
               </svg>
             </button>
-            
+
             {/* Eye/Toggle Highlights visibility button */}
             <button
               type="button"
               onClick={() => setShowHighlightsOnText(prev => !prev)}
-              className={`w-10 h-10 flex items-center justify-center transition-all cursor-pointer ${
-                showHighlightsOnText 
-                  ? "text-indigo-600 dark:text-indigo-400 bg-indigo-50/50 dark:bg-indigo-950/20" 
+              className={`w-10 h-10 flex items-center justify-center transition-all cursor-pointer ${showHighlightsOnText
+                  ? "text-indigo-600 dark:text-indigo-400 bg-indigo-50/50 dark:bg-indigo-950/20"
                   : "text-gray-400 dark:text-gray-400 hover:text-gray-600 dark:hover:text-gray-400 hover:bg-gray-50 dark:hover:bg-white/5"
-              }`}
+                }`}
               title={showHighlightsOnText ? "Hide highlights in text" : "Show highlights in text"}
             >
               {showHighlightsOnText ? (
@@ -2942,7 +3015,7 @@ export default function TopicLayoutClient({
               </svg>
             </div>
           </div>
-          
+
           <div className="flex items-center justify-between px-6 py-5 border-b border-gray-200/50 dark:border-white/5 shrink-0 bg-white/40 dark:bg-[#0c101b]/40 backdrop-blur-xs">
             <div className="flex items-center gap-2.5">
               <span className="w-1.5 h-5 rounded-full bg-indigo-500 dark:bg-indigo-500 shadow-[0_0_8px_rgba(99,102,241,0.6)]" />
@@ -2980,9 +3053,9 @@ export default function TopicLayoutClient({
                 <Trash2 className="w-3.5 h-3.5" />
                 <span>Clear All</span>
               </button>
-              <button 
+              <button
                 type="button"
-                onClick={() => setHighlightDrawerOpen(false)} 
+                onClick={() => setHighlightDrawerOpen(false)}
                 className="p-1.5 text-gray-400 hover:text-gray-700 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-white/5 rounded-xl transition-all cursor-pointer"
                 aria-label="Close notes and highlights panel"
               >
@@ -2990,9 +3063,10 @@ export default function TopicLayoutClient({
               </button>
             </div>
           </div>
-          
+
           <div className="flex-1 overflow-y-auto p-6 space-y-6 scrollbar-thin">
-              <style dangerouslySetInnerHTML={{__html: `
+            <style dangerouslySetInnerHTML={{
+              __html: `
                 ${!showHighlightsOnText ? `
                   mark[data-user-highlight="1"] {
                     background-color: transparent !important;
@@ -3005,397 +3079,440 @@ export default function TopicLayoutClient({
                 ` : ''}
               `}} />
 
-              {highlightsEnabled && selectedText && (
-                <section className="rounded-2xl border border-indigo-200/60 dark:border-indigo-500/20 bg-indigo-50/30 dark:bg-indigo-950/20 p-4 shadow-xs">
-                  <div className="flex items-center gap-2 mb-2.5">
-                    <Sparkles className="w-4 h-4 text-indigo-500" />
-                    <p className="text-xs font-bold uppercase tracking-wider text-indigo-700 dark:text-indigo-400">
-                      {notesEnabled ? "Add Note To Selection" : "Current Selection"}
+            {highlightsEnabled && selectedText && (
+              <section className="rounded-2xl border border-indigo-200/60 dark:border-indigo-500/20 bg-indigo-50/30 dark:bg-indigo-950/20 p-4 shadow-xs">
+                <div className="flex items-center gap-2 mb-2.5">
+                  <Sparkles className="w-4 h-4 text-indigo-500" />
+                  <p className="text-xs font-bold uppercase tracking-wider text-indigo-700 dark:text-indigo-400">
+                    {notesEnabled ? "Add Note To Selection" : "Current Selection"}
+                  </p>
+                </div>
+                <p className="text-xs text-gray-700 dark:text-gray-300 italic bg-white/40 dark:bg-gray-900/40 p-2.5 rounded-xl border border-gray-200/50 dark:border-white/5 line-clamp-3 mb-3 leading-relaxed">
+                  "${selectedText}"
+                </p>
+                {notesEnabled && (
+                  <textarea
+                    value={newHighlightNote}
+                    onChange={(e) => setNewHighlightNote(e.target.value.slice(0, 800))}
+                    rows={2}
+                    placeholder="Add an optional note to attach to this highlight..."
+                    className="w-full rounded-xl border border-gray-200 dark:border-white/10 bg-white/80 dark:bg-gray-900/60 px-3 py-2 text-xs text-gray-700 dark:text-gray-200 outline-none focus:ring-2 focus:ring-indigo-500/35 focus:border-indigo-500/50 transition-all resize-none"
+                  />
+                )}
+                <div className="mt-3 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] uppercase font-bold tracking-wider text-gray-500 dark:text-gray-400">
+                      Color
+                    </span>
+                    <div className="flex items-center gap-1.5">
+                      {HIGHLIGHT_COLORS.map((color) => (
+                        <button
+                          key={`new-${color}`}
+                          type="button"
+                          onClick={() => {
+                            setSelectedColor(color);
+                            persistLastHighlightColor(color);
+                          }}
+                          className={[
+                            "w-5 h-5 rounded-full border-2 transition-all cursor-pointer hover:scale-110 active:scale-90",
+                            HIGHLIGHT_SWATCH_CLASS[color],
+                            normalizeHighlightColor(selectedColor) === color
+                              ? "border-indigo-650 dark:border-indigo-300 ring-2 ring-indigo-500/20"
+                              : "border-white/80 dark:border-gray-900/80 shadow-xs",
+                          ].join(" ")}
+                          title={`Use ${color} highlight`}
+                          aria-label={`Use ${color} highlight`}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </section>
+            )}
+
+            {notesEnabled && (
+              <section className="space-y-4">
+                {/* Notes Control Card */}
+                <div className="rounded-xl border border-gray-200/80 dark:border-white/5 bg-white/40 dark:bg-white/[0.02] p-4 shadow-xs hover:border-indigo-500/25 hover:shadow-md transition-all duration-300 flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-lg bg-indigo-500/10 dark:bg-indigo-500/10 flex items-center justify-center shrink-0 text-indigo-600 dark:text-indigo-400 border border-indigo-500/10">
+                      <StickyNote className="w-4 h-4" />
+                    </div>
+                    <div className="space-y-0.5">
+                      <h3 className="font-bold text-gray-900 dark:text-white text-xs uppercase tracking-wider">
+                        Notes ({currentTopicNotes.length})
+                      </h3>
+                      <p className="text-[11px] text-gray-500 dark:text-gray-400 leading-normal font-normal">
+                        Add and manage your notes for this topic.
+                      </p>
+                    </div>
+                  </div>
+
+                  {!topicNoteComposerOpen && (
+                    <button
+                      type="button"
+                      onClick={() => setTopicNoteComposerOpen(true)}
+                      className="shrink-0 inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-indigo-500/20 dark:border-indigo-500/30 text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 bg-indigo-500/5 hover:bg-indigo-500/10 transition-all font-bold text-[10px] uppercase tracking-wider active:scale-95 cursor-pointer shadow-xs shadow-indigo-500/5"
+                    >
+                      <Plus className="w-3 h-3" />
+                      <span>Add Note</span>
+                    </button>
+                  )}
+                </div>
+
+                {/* Composer for Topic Notes */}
+                {topicNoteComposerOpen && (
+                  <div className="rounded-2xl border border-indigo-200/50 dark:border-indigo-900/30 bg-indigo-50/10 dark:bg-indigo-950/5 p-4 shadow-sm space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] uppercase font-bold tracking-wider text-indigo-600 dark:text-indigo-400">
+                        Create New Note
+                      </span>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={handleAddTopicNote}
+                          disabled={highlightMutationBusy || !newTopicNote.trim()}
+                          className="text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:underline disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                        >
+                          Save Note
+                        </button>
+                        <span className="text-gray-400 dark:text-gray-500">|</span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setNewTopicNote("");
+                            setTopicNoteComposerOpen(false);
+                          }}
+                          className="text-xs font-medium text-gray-500 hover:underline cursor-pointer"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                    <textarea
+                      value={newTopicNote}
+                      onChange={(e) => setNewTopicNote(e.target.value.slice(0, 1200))}
+                      rows={3}
+                      placeholder="Type your notes here..."
+                      className="w-full rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-gray-900 px-3.5 py-2.5 text-xs text-gray-800 dark:text-gray-100 outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-500/50 transition-all resize-none"
+                    />
+                  </div>
+                )}
+
+                {/* List of Topic Notes */}
+                {currentTopicNotes.length > 0 && (
+                  <ul className="space-y-3">
+                    {currentTopicNotes.map((note) => {
+                      const isEditing = Boolean(topicNoteEditOpenById[note.id]);
+                      const draft = topicNoteEditDraftById[note.id] ?? note.text;
+                      return (
+                        <li
+                          key={note.id}
+                          className="rounded-2xl border border-gray-200/60 dark:border-white/5 bg-white/40 dark:bg-white/[0.01] p-4 shadow-xs hover:shadow-sm transition-all"
+                        >
+                          {isEditing ? (
+                            <div className="space-y-3">
+                              <div className="flex items-center justify-between">
+                                <span className="text-[10px] uppercase font-bold tracking-wider text-indigo-600 dark:text-indigo-400">
+                                  Edit Note
+                                </span>
+                                <div className="flex items-center gap-2">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleUpdateTopicNote(note.id)}
+                                    disabled={highlightMutationBusy || !draft.trim()}
+                                    className="text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:underline cursor-pointer disabled:opacity-50"
+                                  >
+                                    Save
+                                  </button>
+                                  <span className="text-gray-400 dark:text-gray-500">|</span>
+                                  <button
+                                    type="button"
+                                    onClick={() => setTopicNoteEditOpenById((prev) => ({ ...prev, [note.id]: false }))}
+                                    className="text-xs font-medium text-gray-500 hover:underline cursor-pointer"
+                                  >
+                                    Cancel
+                                  </button>
+                                </div>
+                              </div>
+                              <textarea
+                                value={draft}
+                                onChange={(e) => setTopicNoteEditDraftById((prev) => ({ ...prev, [note.id]: e.target.value.slice(0, 1200) }))}
+                                rows={3}
+                                className="w-full rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-gray-900 px-3.5 py-2.5 text-xs text-gray-800 dark:text-gray-100 outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-500/50 transition-all resize-none"
+                              />
+                            </div>
+                          ) : (
+                            <div className="space-y-3">
+                              <p className="text-xs text-gray-700 dark:text-gray-200 leading-relaxed whitespace-pre-wrap font-normal">
+                                {note.text}
+                              </p>
+                              <div className="flex items-center justify-between border-t border-gray-100 dark:border-white/5 pt-2.5 text-[10px] text-gray-400 dark:text-gray-500 font-medium">
+                                <span>
+                                  {note.created_at ? new Date(note.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : "General Note"}
+                                </span>
+                                <div className="flex items-center gap-3">
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setTopicNoteEditDraftById((prev) => ({ ...prev, [note.id]: note.text }));
+                                      setTopicNoteEditOpenById((prev) => ({ ...prev, [note.id]: true }));
+                                    }}
+                                    className="inline-flex items-center gap-1 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors cursor-pointer"
+                                  >
+                                    <Edit2 className="w-3 h-3" />
+                                    <span>Edit</span>
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleRemoveTopicNote(note.id)}
+                                    disabled={highlightMutationBusy}
+                                    className="inline-flex items-center gap-1 hover:text-red-500 dark:hover:text-red-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                    <span>Delete</span>
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+              </section>
+            )}
+
+            {/* Dotted line divider with center dot */}
+            <div className="relative flex items-center py-2 shrink-0 select-none">
+              <div className="flex-grow border-t border-dashed border-gray-200/80 dark:border-white/5" />
+              <span className="flex-shrink-0 mx-4 w-2 h-2 rounded-full bg-indigo-500/80 dark:bg-indigo-400/80 animate-pulse" />
+              <div className="flex-grow border-t border-dashed border-gray-200/80 dark:border-white/5" />
+            </div>
+
+            {highlightsEnabled && (
+              <section className="space-y-4">
+                {/* Highlights Control Card */}
+                <div className="rounded-xl border border-gray-200/80 dark:border-white/5 bg-white/40 dark:bg-white/[0.02] p-4 shadow-xs hover:border-indigo-500/25 hover:shadow-md transition-all duration-300">
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-lg bg-indigo-500/10 dark:bg-indigo-500/10 flex items-center justify-center shrink-0 text-indigo-600 dark:text-indigo-400 border border-indigo-500/10">
+                      <Star className="w-4 h-4 fill-indigo-500/10" />
+                    </div>
+                    <div className="space-y-0.5">
+                      <h3 className="font-bold text-gray-900 dark:text-white text-xs uppercase tracking-wider">
+                        Highlights ({currentTopicHighlights.length})
+                      </h3>
+                      <p className="text-[11px] text-gray-500 dark:text-gray-400 leading-normal font-normal">
+                        {currentTopicHighlights.length === 0 ? "No highlights yet for this topic." : "Manage highlighted sections and references for this topic."}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Empty state or highlights list */}
+                {currentTopicHighlights.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-10 px-4 text-center">
+                    <div className="w-28 h-28 rounded-full bg-gradient-to-tr from-indigo-500/5 to-purple-500/10 dark:from-indigo-500/10 dark:to-purple-500/20 flex items-center justify-center border border-indigo-500/20 dark:border-indigo-500/30 mb-6 relative group hover:border-indigo-500/30 transition-all duration-300">
+                      <div className="absolute top-5 right-5 opacity-70">
+                        <Sparkles className="w-4 h-4 text-indigo-400 animate-pulse" />
+                      </div>
+                      <div className="absolute bottom-5 left-5 opacity-70">
+                        <Sparkles className="w-3 h-3 text-indigo-400/80 animate-pulse" style={{ animationDelay: "500ms" }} />
+                      </div>
+                      <div className="relative text-indigo-600 dark:text-indigo-400 group-hover:scale-105 transition-transform duration-300">
+                        <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="stroke-indigo-600 dark:stroke-indigo-400">
+                          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                          <polyline points="14 2 14 8 20 8" />
+                          <line x1="16" y1="13" x2="8" y2="13" />
+                          <line x1="16" y1="17" x2="8" y2="17" />
+                          <line x1="10" y1="9" x2="8" y2="9" />
+                          <path d="M18.5 11.5a1.5 1.5 0 0 1 2 2L12.5 21H9v-3.5l8-8z" className="stroke-indigo-500 fill-indigo-500/10" />
+                        </svg>
+                      </div>
+                    </div>
+                    <h4 className="text-sm font-bold text-gray-900 dark:text-white mb-2 tracking-tight">
+                      Your highlights will appear here
+                    </h4>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 max-w-[260px] leading-relaxed">
+                      Use the highlighter to add important text from this topic.
                     </p>
                   </div>
-                  <p className="text-xs text-gray-700 dark:text-gray-300 italic bg-white/40 dark:bg-gray-900/40 p-2.5 rounded-xl border border-gray-200/50 dark:border-white/5 line-clamp-3 mb-3 leading-relaxed">
-                    "${selectedText}"
-                  </p>
-                  {notesEnabled && (
-                    <textarea
-                      value={newHighlightNote}
-                      onChange={(e) => setNewHighlightNote(e.target.value.slice(0, 800))}
-                      rows={2}
-                      placeholder="Add an optional note to attach to this highlight..."
-                      className="w-full rounded-xl border border-gray-200 dark:border-white/10 bg-white/80 dark:bg-gray-900/60 px-3 py-2 text-xs text-gray-700 dark:text-gray-200 outline-none focus:ring-2 focus:ring-indigo-500/35 focus:border-indigo-500/50 transition-all resize-none"
-                    />
-                  )}
-                  <div className="mt-3 flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <span className="text-[10px] uppercase font-bold tracking-wider text-gray-500 dark:text-gray-400">
-                        Color
-                      </span>
-                      <div className="flex items-center gap-1.5">
-                        {HIGHLIGHT_COLORS.map((color) => (
-                          <button
-                            key={`new-${color}`}
-                            type="button"
-                            onClick={() => {
-                              setSelectedColor(color);
-                              persistLastHighlightColor(color);
-                            }}
-                            className={[
-                              "w-5 h-5 rounded-full border-2 transition-all cursor-pointer hover:scale-110 active:scale-90",
-                              HIGHLIGHT_SWATCH_CLASS[color],
-                              normalizeHighlightColor(selectedColor) === color
-                                ? "border-indigo-650 dark:border-indigo-300 ring-2 ring-indigo-500/20"
-                                : "border-white/80 dark:border-gray-900/80 shadow-xs",
-                            ].join(" ")}
-                            title={`Use ${color} highlight`}
-                            aria-label={`Use ${color} highlight`}
-                          />
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                </section>
-              )}
+                ) : (
+                  <ul className="space-y-4">
+                    {currentTopicHighlights.map((item) => {
+                      const noteValue = noteDraftById[item.id] ?? "";
+                      const saving = Boolean(savingNoteById[item.id]);
+                      const noteEditorOpen = Boolean(highlightNoteEditorOpenById[item.id]);
+                      const itemColor = normalizeHighlightColor(item.color);
+                      return (
+                        <li
+                          key={item.id}
+                          className={`rounded-2xl border p-4 shadow-xs hover:shadow-sm transition-all duration-300 ${HIGHLIGHT_CARD_CLASS[itemColor]}`}
+                        >
+                          <div className="mb-3 flex items-center justify-between gap-2">
+                            <div className="flex items-center gap-1.5">
+                              {HIGHLIGHT_COLORS.map((color) => (
+                                <button
+                                  key={`${item.id}-${color}`}
+                                  type="button"
+                                  onClick={() => handleSaveHighlightColor(item.id, color)}
+                                  className={[
+                                    "w-4 h-4 rounded-full border transition-all cursor-pointer hover:scale-110",
+                                    HIGHLIGHT_SWATCH_CLASS[color],
+                                    itemColor === color
+                                      ? "border-indigo-600 dark:border-indigo-300 ring-2 ring-indigo-500/25"
+                                      : "border-white/80 dark:border-gray-900/80 shadow-xs",
+                                  ].join(" ")}
+                                  title={`Set highlight color to ${color}`}
+                                  aria-label={`Set highlight color to ${color}`}
+                                />
+                              ))}
+                            </div>
+                            <div className="flex items-center gap-3">
+                              <span className={`text-[10px] uppercase font-bold tracking-wider ${HIGHLIGHT_CARD_TEXT_COLOR[itemColor]}`}>
+                                {itemColor}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveHighlight(item.id)}
+                                disabled={highlightMutationBusy}
+                                className="inline-flex items-center gap-1 text-[11px] font-semibold text-red-600 dark:text-red-400 hover:underline disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                                title="Delete highlight"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                                <span>Delete</span>
+                              </button>
+                            </div>
+                          </div>
 
-              {notesEnabled && (
-                <section className="space-y-4">
-                  {/* Notes Control Card */}
-                  <div className="rounded-xl border border-gray-200/80 dark:border-white/5 bg-white/40 dark:bg-white/[0.02] p-4 shadow-xs hover:border-indigo-500/25 hover:shadow-md transition-all duration-300 flex items-center justify-between gap-3">
-                    <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-lg bg-indigo-500/10 dark:bg-indigo-500/10 flex items-center justify-center shrink-0 text-indigo-600 dark:text-indigo-400 border border-indigo-500/10">
-                        <StickyNote className="w-4 h-4" />
-                      </div>
-                      <div className="space-y-0.5">
-                        <h3 className="font-bold text-gray-900 dark:text-white text-xs uppercase tracking-wider">
-                          Notes ({currentTopicNotes.length})
-                        </h3>
-                        <p className="text-[11px] text-gray-500 dark:text-gray-400 leading-normal font-normal">
-                          Add and manage your notes for this topic.
-                        </p>
-                      </div>
-                    </div>
-                    
-                    {!topicNoteComposerOpen && (
-                      <button
-                        type="button"
-                        onClick={() => setTopicNoteComposerOpen(true)}
-                        className="shrink-0 inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-indigo-500/20 dark:border-indigo-500/30 text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 bg-indigo-500/5 hover:bg-indigo-500/10 transition-all font-bold text-[10px] uppercase tracking-wider active:scale-95 cursor-pointer shadow-xs shadow-indigo-500/5"
-                      >
-                        <Plus className="w-3 h-3" />
-                        <span>Add Note</span>
-                      </button>
-                    )}
-                  </div>
-
-                  {/* Composer for Topic Notes */}
-                  {topicNoteComposerOpen && (
-                    <div className="rounded-2xl border border-indigo-200/50 dark:border-indigo-900/30 bg-indigo-50/10 dark:bg-indigo-950/5 p-4 shadow-sm space-y-3">
-                      <div className="flex items-center justify-between">
-                        <span className="text-[10px] uppercase font-bold tracking-wider text-indigo-600 dark:text-indigo-400">
-                          Create New Note
-                        </span>
-                        <div className="flex items-center gap-2">
                           <button
                             type="button"
-                            onClick={handleAddTopicNote}
-                            disabled={highlightMutationBusy || !newTopicNote.trim()}
-                            className="text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:underline disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                            onClick={() => handleJumpToHighlight(item)}
+                            className="block w-full text-left text-xs sm:text-sm text-gray-800 dark:text-gray-200 font-medium leading-relaxed mb-3 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors cursor-pointer group"
+                            title="Jump to highlighted text in the topic"
                           >
-                            Save Note
+                            <span className="inline-flex items-center gap-1 text-[9px] font-bold text-indigo-500 opacity-0 group-hover:opacity-100 transition-opacity mr-1 uppercase">
+                              <Compass className="w-3 h-3 animate-spin-slow" /> Jump
+                            </span>
+                            "${item.text}"
                           </button>
-                          <span className="text-gray-400 dark:text-gray-500">|</span>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setNewTopicNote("");
-                              setTopicNoteComposerOpen(false);
-                            }}
-                            className="text-xs font-medium text-gray-500 hover:underline cursor-pointer"
-                          >
-                            Cancel
-                          </button>
-                        </div>
-                      </div>
-                      <textarea
-                        value={newTopicNote}
-                        onChange={(e) => setNewTopicNote(e.target.value.slice(0, 1200))}
-                        rows={3}
-                        placeholder="Type your notes here..."
-                        className="w-full rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-gray-900 px-3.5 py-2.5 text-xs text-gray-800 dark:text-gray-100 outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-500/50 transition-all resize-none"
-                      />
-                    </div>
-                  )}
 
-                  {/* List of Topic Notes */}
-                  {currentTopicNotes.length > 0 && (
-                    <ul className="space-y-3">
-                      {currentTopicNotes.map((note) => {
-                        const isEditing = Boolean(topicNoteEditOpenById[note.id]);
-                        const draft = topicNoteEditDraftById[note.id] ?? note.text;
-                        return (
-                          <li
-                            key={note.id}
-                            className="rounded-2xl border border-gray-200/60 dark:border-white/5 bg-white/40 dark:bg-white/[0.01] p-4 shadow-xs hover:shadow-sm transition-all"
-                          >
-                            {isEditing ? (
-                              <div className="space-y-3">
-                                <div className="flex items-center justify-between">
-                                  <span className="text-[10px] uppercase font-bold tracking-wider text-indigo-600 dark:text-indigo-400">
-                                    Edit Note
+                          {notesEnabled && (
+                            <div className="border-t border-gray-200/30 dark:border-white/5 pt-3">
+                              {!noteEditorOpen && (
+                                <>
+                                  {(item.note ?? "").trim() ? (
+                                    <div className="rounded-xl border border-gray-200/50 dark:border-white/5 bg-white/70 dark:bg-[#0c101b]/70 px-3.5 py-2.5">
+                                      <p className="mb-1 text-[9px] uppercase font-bold tracking-wider text-indigo-600 dark:text-indigo-400">
+                                        Attached Note
+                                      </p>
+                                      <p className="text-xs text-gray-700 dark:text-gray-300 leading-relaxed whitespace-pre-wrap">
+                                        {item.note}
+                                      </p>
+                                    </div>
+                                  ) : null}
+                                  <div className="mt-2 flex items-center justify-end">
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setNoteDraftById((prev) => ({ ...prev, [item.id]: item.note ?? "" }));
+                                        setHighlightNoteEditorOpenById((prev) => ({ ...prev, [item.id]: true }));
+                                      }}
+                                      className="inline-flex items-center gap-1 text-xs text-indigo-600 dark:text-indigo-400 hover:underline cursor-pointer"
+                                    >
+                                      <Edit2 className="w-3 h-3" />
+                                      <span>{(item.note ?? "").trim() ? "Edit Note" : "Add Note"}</span>
+                                    </button>
+                                  </div>
+                                </>
+                              )}
+                              {noteEditorOpen && (
+                                <div className="space-y-3 bg-white/30 dark:bg-gray-900/10 p-3 rounded-xl border border-gray-200/50 dark:border-white/5">
+                                  <span className="text-[9px] uppercase font-bold tracking-wider text-indigo-600 dark:text-indigo-400">
+                                    Note Editor
                                   </span>
+                                  <textarea
+                                    value={noteValue}
+                                    onChange={(e) => setNoteDraftById((prev) => ({ ...prev, [item.id]: e.target.value.slice(0, 800) }))}
+                                    rows={3}
+                                    placeholder="Add note..."
+                                    className="w-full rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-gray-900 px-3.5 py-2.5 text-xs text-gray-800 dark:text-gray-100 outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-500/50 transition-all resize-none"
+                                  />
                                   <div className="flex items-center gap-2">
                                     <button
                                       type="button"
-                                      onClick={() => handleUpdateTopicNote(note.id)}
-                                      disabled={highlightMutationBusy || !draft.trim()}
-                                      className="text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:underline cursor-pointer disabled:opacity-50"
+                                      onClick={() => handleSaveHighlightNote(item.id)}
+                                      disabled={saving || highlightMutationBusy}
+                                      className="text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:underline disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
                                     >
-                                      Save
+                                      {saving ? "Saving..." : "Save Note"}
                                     </button>
                                     <span className="text-gray-400 dark:text-gray-500">|</span>
                                     <button
                                       type="button"
-                                      onClick={() => setTopicNoteEditOpenById((prev) => ({ ...prev, [note.id]: false }))}
+                                      onClick={() => setHighlightNoteEditorOpenById((prev) => ({ ...prev, [item.id]: false }))}
                                       className="text-xs font-medium text-gray-500 hover:underline cursor-pointer"
                                     >
                                       Cancel
                                     </button>
                                   </div>
                                 </div>
-                                <textarea
-                                  value={draft}
-                                  onChange={(e) => setTopicNoteEditDraftById((prev) => ({ ...prev, [note.id]: e.target.value.slice(0, 1200) }))}
-                                  rows={3}
-                                  className="w-full rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-gray-900 px-3.5 py-2.5 text-xs text-gray-800 dark:text-gray-100 outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-500/50 transition-all resize-none"
-                                />
-                              </div>
-                            ) : (
-                              <div className="space-y-3">
-                                <p className="text-xs text-gray-700 dark:text-gray-200 leading-relaxed whitespace-pre-wrap font-normal">
-                                  {note.text}
-                                </p>
-                                <div className="flex items-center justify-between border-t border-gray-100 dark:border-white/5 pt-2.5 text-[10px] text-gray-400 dark:text-gray-500 font-medium">
-                                  <span>
-                                    {note.created_at ? new Date(note.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : "General Note"}
-                                  </span>
-                                  <div className="flex items-center gap-3">
-                                    <button
-                                      type="button"
-                                      onClick={() => {
-                                        setTopicNoteEditDraftById((prev) => ({ ...prev, [note.id]: note.text }));
-                                        setTopicNoteEditOpenById((prev) => ({ ...prev, [note.id]: true }));
-                                      }}
-                                      className="inline-flex items-center gap-1 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors cursor-pointer"
-                                    >
-                                      <Edit2 className="w-3 h-3" />
-                                      <span>Edit</span>
-                                    </button>
-                                    <button
-                                      type="button"
-                                      onClick={() => handleRemoveTopicNote(note.id)}
-                                      disabled={highlightMutationBusy}
-                                      className="inline-flex items-center gap-1 hover:text-red-500 dark:hover:text-red-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
-                                    >
-                                      <Trash2 className="w-3.5 h-3.5" />
-                                      <span>Delete</span>
-                                    </button>
-                                  </div>
-                                </div>
-                              </div>
-                            )}
-                          </li>
-                        );
-                      })}
-                    </ul>
-                  )}
-                </section>
-              )}
-
-              {/* Dotted line divider with center dot */}
-              <div className="relative flex items-center py-2 shrink-0 select-none">
-                <div className="flex-grow border-t border-dashed border-gray-200/80 dark:border-white/5" />
-                <span className="flex-shrink-0 mx-4 w-2 h-2 rounded-full bg-indigo-500/80 dark:bg-indigo-400/80 animate-pulse" />
-                <div className="flex-grow border-t border-dashed border-gray-200/80 dark:border-white/5" />
-              </div>
-
-              {highlightsEnabled && (
-                <section className="space-y-4">
-                  {/* Highlights Control Card */}
-                  <div className="rounded-xl border border-gray-200/80 dark:border-white/5 bg-white/40 dark:bg-white/[0.02] p-4 shadow-xs hover:border-indigo-500/25 hover:shadow-md transition-all duration-300">
-                    <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-lg bg-indigo-500/10 dark:bg-indigo-500/10 flex items-center justify-center shrink-0 text-indigo-600 dark:text-indigo-400 border border-indigo-500/10">
-                        <Star className="w-4 h-4 fill-indigo-500/10" />
-                      </div>
-                      <div className="space-y-0.5">
-                        <h3 className="font-bold text-gray-900 dark:text-white text-xs uppercase tracking-wider">
-                          Highlights ({currentTopicHighlights.length})
-                        </h3>
-                        <p className="text-[11px] text-gray-500 dark:text-gray-400 leading-normal font-normal">
-                          {currentTopicHighlights.length === 0 ? "No highlights yet for this topic." : "Manage highlighted sections and references for this topic."}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Empty state or highlights list */}
-                  {currentTopicHighlights.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center py-10 px-4 text-center">
-                      <div className="w-28 h-28 rounded-full bg-gradient-to-tr from-indigo-500/5 to-purple-500/10 dark:from-indigo-500/10 dark:to-purple-500/20 flex items-center justify-center border border-indigo-500/20 dark:border-indigo-500/30 mb-6 relative group hover:border-indigo-500/30 transition-all duration-300">
-                        <div className="absolute top-5 right-5 opacity-70">
-                          <Sparkles className="w-4 h-4 text-indigo-400 animate-pulse" />
-                        </div>
-                        <div className="absolute bottom-5 left-5 opacity-70">
-                          <Sparkles className="w-3 h-3 text-indigo-400/80 animate-pulse" style={{ animationDelay: "500ms" }} />
-                        </div>
-                        <div className="relative text-indigo-600 dark:text-indigo-400 group-hover:scale-105 transition-transform duration-300">
-                          <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="stroke-indigo-600 dark:stroke-indigo-400">
-                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-                            <polyline points="14 2 14 8 20 8" />
-                            <line x1="16" y1="13" x2="8" y2="13" />
-                            <line x1="16" y1="17" x2="8" y2="17" />
-                            <line x1="10" y1="9" x2="8" y2="9" />
-                            <path d="M18.5 11.5a1.5 1.5 0 0 1 2 2L12.5 21H9v-3.5l8-8z" className="stroke-indigo-500 fill-indigo-500/10" />
-                          </svg>
-                        </div>
-                      </div>
-                      <h4 className="text-sm font-bold text-gray-900 dark:text-white mb-2 tracking-tight">
-                        Your highlights will appear here
-                      </h4>
-                      <p className="text-xs text-gray-500 dark:text-gray-400 max-w-[260px] leading-relaxed">
-                        Use the highlighter to add important text from this topic.
-                      </p>
-                    </div>
-                  ) : (
-                    <ul className="space-y-4">
-                      {currentTopicHighlights.map((item) => {
-                        const noteValue = noteDraftById[item.id] ?? "";
-                        const saving = Boolean(savingNoteById[item.id]);
-                        const noteEditorOpen = Boolean(highlightNoteEditorOpenById[item.id]);
-                        const itemColor = normalizeHighlightColor(item.color);
-                        return (
-                          <li
-                            key={item.id}
-                            className={`rounded-2xl border p-4 shadow-xs hover:shadow-sm transition-all duration-300 ${HIGHLIGHT_CARD_CLASS[itemColor]}`}
-                          >
-                            <div className="mb-3 flex items-center justify-between gap-2">
-                              <div className="flex items-center gap-1.5">
-                                {HIGHLIGHT_COLORS.map((color) => (
-                                  <button
-                                    key={`${item.id}-${color}`}
-                                    type="button"
-                                    onClick={() => handleSaveHighlightColor(item.id, color)}
-                                    className={[
-                                      "w-4 h-4 rounded-full border transition-all cursor-pointer hover:scale-110",
-                                      HIGHLIGHT_SWATCH_CLASS[color],
-                                      itemColor === color
-                                        ? "border-indigo-600 dark:border-indigo-300 ring-2 ring-indigo-500/25"
-                                        : "border-white/80 dark:border-gray-900/80 shadow-xs",
-                                    ].join(" ")}
-                                    title={`Set highlight color to ${color}`}
-                                    aria-label={`Set highlight color to ${color}`}
-                                  />
-                                ))}
-                              </div>
-                              <div className="flex items-center gap-3">
-                                <span className={`text-[10px] uppercase font-bold tracking-wider ${HIGHLIGHT_CARD_TEXT_COLOR[itemColor]}`}>
-                                  {itemColor}
-                                </span>
-                                <button
-                                  type="button"
-                                  onClick={() => handleRemoveHighlight(item.id)}
-                                  disabled={highlightMutationBusy}
-                                  className="inline-flex items-center gap-1 text-[11px] font-semibold text-red-600 dark:text-red-400 hover:underline disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
-                                  title="Delete highlight"
-                                >
-                                  <Trash2 className="w-3.5 h-3.5" />
-                                  <span>Delete</span>
-                                </button>
-                              </div>
+                              )}
                             </div>
-                            
-                            <button
-                              type="button"
-                              onClick={() => handleJumpToHighlight(item)}
-                              className="block w-full text-left text-xs sm:text-sm text-gray-800 dark:text-gray-200 font-medium leading-relaxed mb-3 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors cursor-pointer group"
-                              title="Jump to highlighted text in the topic"
-                            >
-                              <span className="inline-flex items-center gap-1 text-[9px] font-bold text-indigo-500 opacity-0 group-hover:opacity-100 transition-opacity mr-1 uppercase">
-                                <Compass className="w-3 h-3 animate-spin-slow" /> Jump
-                              </span>
-                              "${item.text}"
-                            </button>
+                          )}
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+              </section>
+            )}
+          </div>
+        </div>
+      )}
 
-                            {notesEnabled && (
-                              <div className="border-t border-gray-200/30 dark:border-white/5 pt-3">
-                                {!noteEditorOpen && (
-                                  <>
-                                    {(item.note ?? "").trim() ? (
-                                      <div className="rounded-xl border border-gray-200/50 dark:border-white/5 bg-white/70 dark:bg-[#0c101b]/70 px-3.5 py-2.5">
-                                        <p className="mb-1 text-[9px] uppercase font-bold tracking-wider text-indigo-600 dark:text-indigo-400">
-                                          Attached Note
-                                        </p>
-                                        <p className="text-xs text-gray-700 dark:text-gray-300 leading-relaxed whitespace-pre-wrap">
-                                          {item.note}
-                                        </p>
-                                      </div>
-                                    ) : null}
-                                    <div className="mt-2 flex items-center justify-end">
-                                      <button
-                                        type="button"
-                                        onClick={() => {
-                                          setNoteDraftById((prev) => ({ ...prev, [item.id]: item.note ?? "" }));
-                                          setHighlightNoteEditorOpenById((prev) => ({ ...prev, [item.id]: true }));
-                                        }}
-                                        className="inline-flex items-center gap-1 text-xs text-indigo-600 dark:text-indigo-400 hover:underline cursor-pointer"
-                                      >
-                                        <Edit2 className="w-3 h-3" />
-                                        <span>{(item.note ?? "").trim() ? "Edit Note" : "Add Note"}</span>
-                                      </button>
-                                    </div>
-                                  </>
-                                )}
-                                {noteEditorOpen && (
-                                  <div className="space-y-3 bg-white/30 dark:bg-gray-900/10 p-3 rounded-xl border border-gray-200/50 dark:border-white/5">
-                                    <span className="text-[9px] uppercase font-bold tracking-wider text-indigo-600 dark:text-indigo-400">
-                                      Note Editor
-                                    </span>
-                                    <textarea
-                                      value={noteValue}
-                                      onChange={(e) => setNoteDraftById((prev) => ({ ...prev, [item.id]: e.target.value.slice(0, 800) }))}
-                                      rows={3}
-                                      placeholder="Add note..."
-                                      className="w-full rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-gray-900 px-3.5 py-2.5 text-xs text-gray-800 dark:text-gray-100 outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-500/50 transition-all resize-none"
-                                    />
-                                    <div className="flex items-center gap-2">
-                                      <button
-                                        type="button"
-                                        onClick={() => handleSaveHighlightNote(item.id)}
-                                        disabled={saving || highlightMutationBusy}
-                                        className="text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:underline disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
-                                      >
-                                        {saving ? "Saving..." : "Save Note"}
-                                      </button>
-                                      <span className="text-gray-400 dark:text-gray-500">|</span>
-                                      <button
-                                        type="button"
-                                        onClick={() => setHighlightNoteEditorOpenById((prev) => ({ ...prev, [item.id]: false }))}
-                                        className="text-xs font-medium text-gray-500 hover:underline cursor-pointer"
-                                      >
-                                        Cancel
-                                      </button>
-                                    </div>
-                                  </div>
-                                )}
-                              </div>
-                            )}
-                          </li>
-                        );
-                      })}
-                    </ul>
-                  )}
-                </section>
-              )}
+      {workspaceComponent && workspaceDrawerOpen && (
+        <div
+          className={`fixed bottom-0 right-0 z-[45] border-l border-gray-200 dark:border-gray-800 bg-white dark:bg-[#0c101b] shadow-2xl will-change-[opacity] transition-opacity duration-220 ease-out flex flex-col ${workspaceDrawerVisible ? "pointer-events-auto opacity-100" : "pointer-events-none opacity-0"}`}
+          style={{
+            top: "var(--ev-navbar-offset, 56px)",
+            width: `${drawingPanelWidth}px`,
+            opacity: workspaceDrawerVisible ? 1 : 0,
+          }}
+        >
+          <div
+            role="separator"
+            aria-orientation="vertical"
+            aria-label="Resize workspace panel"
+            onPointerDown={handleStartDrawingResize}
+            className="absolute left-0 top-0 h-full w-6 -translate-x-1/2 cursor-col-resize bg-transparent z-20 touch-none"
+            title="Drag to resize workspace panel"
+          >
+            <div className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 h-10 w-10 rounded-full border border-gray-300/90 dark:border-gray-700/90 bg-white/95 dark:bg-[#0c101b]/95 shadow-lg flex items-center justify-center">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-gray-600 dark:text-gray-300">
+                <path d="M9 7 5 12l4 5" />
+                <path d="M15 7l4 5-4 5" />
+                <line x1="12" y1="6" x2="12" y2="18" />
+              </svg>
             </div>
           </div>
+          <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-white/5 shrink-0 bg-gray-50/50 dark:bg-[#0c101b]/40 backdrop-blur-xs">
+            <h2 className="text-[13px] font-bold text-gray-900 dark:text-white uppercase tracking-wider">Workspace</h2>
+            <button onClick={() => {
+              setWorkspaceDrawerVisible(false);
+              window.setTimeout(() => setWorkspaceDrawerOpen(false), DRAWER_ANIM_MS);
+            }} className="p-1.5 text-gray-400 hover:text-gray-700 dark:hover:text-white hover:bg-gray-200 dark:hover:bg-white/5 rounded-xl transition-all cursor-pointer">
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+          <div className="flex-1 overflow-hidden relative flex flex-col [&>div]:flex-1 [&>div]:flex [&>div]:flex-col [&>div]:min-h-0 [&>div]:w-full">
+            {(() => {
+              const renderer = getRenderer(workspaceComponent.type);
+              return renderer ? renderer(workspaceComponent.content) : <UnknownRenderer type={workspaceComponent.type} />;
+            })()}
+          </div>
+        </div>
       )}
 
       {drawingsEnabled && drawingPadOpen && (
