@@ -411,6 +411,14 @@ export default function TopicLayoutClient({
     topicNotesByTopicRef.current = topicNotesByTopic;
   }, [topicNotesByTopic]);
 
+  useEffect(() => {
+    if (currentTopic?.topic_name) {
+      document.title = `${currentTopic.topic_name} · Edu-Viewer PRO`;
+    } else {
+      document.title = "Topic · Edu-Viewer PRO";
+    }
+  }, [currentTopic?.topic_name]);
+
   const isSameHighlightAnchor = useCallback((a: ViewerHighlight, b: ViewerHighlight): boolean => {
     const aStart = typeof a.start_offset === "number" ? a.start_offset : null;
     const aEnd = typeof a.end_offset === "number" ? a.end_offset : null;

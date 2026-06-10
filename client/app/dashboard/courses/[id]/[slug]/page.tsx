@@ -226,6 +226,12 @@ export default function CourseDetailPage() {
           inflightFetches.set(fetchKey, coursePromise);
         }
 
+        coursePromise.then((courseData) => {
+          if (courseData?.title) {
+            document.title = `${courseData.title} · Edu-Viewer PRO`;
+          }
+        });
+
         Promise.all([coursePromise, getProgress(), getViewerCourseSettings(courseId)])
           .then(([data, prog, viewerCoursePayload]) => {
             if (cancelled) return;
