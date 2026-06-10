@@ -17,11 +17,14 @@ class CourseDbShard:
     offset: int
 
 
+import zlib
+import os
+
 class SQLiteCourseDatabase:
     """SQLite adapter for course/topic read APIs.
 
-    Supports a multi-DB setup where each DB is assigned a 10000-step offset
-    based on its index in the configured list.
+    Supports a multi-DB setup where each DB is assigned a stable offset
+    based on a CRC32 hash of its filename.
     """
 
     engine = "sqlite"
@@ -33,17 +36,32 @@ class SQLiteCourseDatabase:
             raise ValueError("At least one course DB path must be configured")
 
         self.offset_step = offset_step
-        self.shards = tuple(
-            CourseDbShard(index=index, db_path=path, offset=index * offset_step)
-            for index, path in enumerate(db_paths)
-        )
+        
+        shards_list = []
+        self._offset_to_shard = {}
+        
+        for index, path in enumerate(db_paths):
+            basename = os.path.basename(path)
+            # Generate a deterministic 32-bit integer from the filename
+            crc = zlib.crc32(basename.encode('utf-8')) & 0xffffffff
+            
+            # Handle extremely rare CRC collisions by incrementing
+            while (crc * offset_step) in self._offset_to_shard:
+                crc += 1
+                
+            offset = crc * offset_step
+            shard = CourseDbShard(index=index, db_path=path, offset=offset)
+            shards_list.append(shard)
+            self._offset_to_shard[offset] = shard
+            
+        self.shards = tuple(shards_list)
         self._table_columns_cache: dict[tuple[str, str], set[str]] = {}
 
         if len(self.shards) > 1:
             entries = ", ".join(
-                f"{shard.db_path} (offset {shard.offset})" for shard in self.shards
+                f"{os.path.basename(shard.db_path)} (offset {shard.offset})" for shard in self.shards
             )
-            log.info("Course DB multi-db enabled: %s", entries)
+            log.info("Course DB multi-db enabled with stable CRC32 offsets.")
         else:
             log.info("Course DB single-db mode: %s", self.shards[0].db_path)
 
@@ -54,11 +72,13 @@ class SQLiteCourseDatabase:
         if global_id < 0:
             raise ValueError("Global id must be non-negative")
 
-        shard_index = global_id // self.offset_step
-        if shard_index >= len(self.shards):
-            raise ValueError("Global id does not map to a configured shard")
+        # The offset is the global_id rounded down to the nearest offset_step
+        shard_offset = (global_id // self.offset_step) * self.offset_step
+        shard = self._offset_to_shard.get(shard_offset)
+        
+        if not shard:
+            raise ValueError(f"Global id {global_id} does not map to a configured shard (offset {shard_offset} not found)")
 
-        shard = self.shards[shard_index]
         local_id = global_id - shard.offset
         return shard, local_id
 
