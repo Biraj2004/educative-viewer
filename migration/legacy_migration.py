@@ -7,6 +7,7 @@ import uuid
 from datetime import datetime, timezone
 import hashlib
 import natsort
+import re
 
 _DDL = """
     CREATE TABLE IF NOT EXISTS paths (
@@ -107,6 +108,10 @@ def generate_id():
 def slugify(text):
     return "".join([c if c.isalnum() else "-" for c in text.lower()])
 
+def clean_topic_title(raw_title):
+    """Removes leading numbers like '005-' or '177-' from the topic title."""
+    return re.sub(r'^\d+[-_\s]+', '', raw_title).strip()
+
 def print_progress_bar(iteration, total, prefix='', suffix='', decimals=1, length=50, fill='█', print_end="\r"):
     if total == 0:
         return
@@ -127,7 +132,7 @@ def create_connection(db_file):
     conn.executescript(_DDL)
     return conn
 
-def process_course(course_dir, course_title, args, conn, cursor, now_iso, path_id=None, project_id=None, cloudlab_id=None):
+def process_course(course_dir, course_title, args, conn, cursor, now_iso, course_type="Course", path_id=None, project_id=None, cloudlab_id=None):
     legacy_toc = None
     toc_path = os.path.join(course_dir, "__toc__.json")
     if os.path.isfile(toc_path):
@@ -141,6 +146,7 @@ def process_course(course_dir, course_title, args, conn, cursor, now_iso, path_i
     url = None
     toc_lookup = {}
     categories_layout = []
+    topic_slugs = []
     
     if legacy_toc:
         categories = []
@@ -175,7 +181,8 @@ def process_course(course_dir, course_title, args, conn, cursor, now_iso, path_i
                     t_url = t.get("url", "")
                     t_type = t.get("type", "path_lesson")
                 
-                if not t_slug and t_title:
+                t_title = clean_topic_title(t_title)
+                if t_title:
                     t_slug = slugify(t_title)
                     
                 if t_slug:
@@ -187,11 +194,50 @@ def process_course(course_dir, course_title, args, conn, cursor, now_iso, path_i
                     }
                     cat_topics.append(t_slug)
             categories_layout.append({"category": cat_name, "topic_slugs": cat_topics})
+            topic_slugs.extend(cat_topics)
             
     if not course_title:
         course_title = os.path.basename(course_dir)
         
     course_slug = slugify(course_title)
+    
+    html_files = []
+    for entry in os.listdir(course_dir):
+        full_path = os.path.join(course_dir, entry)
+        if os.path.isdir(full_path):
+            expected_html = os.path.join(full_path, f"{entry}.html")
+            if os.path.isfile(expected_html):
+                html_files.append(expected_html)
+            else:
+                # If exact match not found, find the first HTML file directly inside the folder
+                for f in os.listdir(full_path):
+                    if f.lower().endswith(".html") and os.path.isfile(os.path.join(full_path, f)):
+                        html_files.append(os.path.join(full_path, f))
+                        break
+        elif entry.lower().endswith(".html"):
+            # Flat structure fallback
+            html_files.append(full_path)
+    
+    html_files = natsort.natsorted(html_files)
+    total_files = len(html_files)
+
+    if not topic_slugs:
+        # Fallback to generating slugs from HTML filenames if no TOC
+        for h_file in html_files:
+            t_name = os.path.splitext(os.path.basename(h_file))[0]
+            t_name_cleaned = clean_topic_title(t_name)
+            topic_slugs.append(slugify(t_name_cleaned))
+            
+    structure_hash = hashlib.sha256(
+        json.dumps([str(slug or "") for slug in topic_slugs], ensure_ascii=False).encode("utf-8")
+    ).hexdigest()
+    
+    cursor.execute("SELECT id FROM courses WHERE structure_hash = ?", (structure_hash,))
+    existing_course = cursor.fetchone()
+    if existing_course:
+        logging.info(f"Course '{course_title}' already exists with same structure hash (ID {existing_course['id']}). Skipping HTML processing.")
+        return
+        
     author_id = generate_id()
     collection_id = generate_id()
     
@@ -203,10 +249,8 @@ def process_course(course_dir, course_title, args, conn, cursor, now_iso, path_i
         else:
             url = f"https://educative.io/legacy/{course_slug}/{generate_id()[:8]}"
 
-    structure_hash = hashlib.md5(url.encode()).hexdigest()
     toc_json = None
-
-    db_course_type = args.type
+    db_course_type = course_type
 
     cursor.execute("""
         INSERT INTO courses (type, path_id, url, structure_hash, slug, author_id, collection_id, title, toc_json, cloudlab_id, project_id, is_active, scraped_at)
@@ -217,15 +261,8 @@ def process_course(course_dir, course_title, args, conn, cursor, now_iso, path_i
 
     topic_index = 0
     topics_inserted = {}
-    
-    html_files = []
-    for root, dirs, files in os.walk(course_dir):
-        for file in files:
-            if file.lower().endswith(".html"):
-                html_files.append(os.path.join(root, file))
-    
-    html_files = natsort.natsorted(html_files)
-    total_files = len(html_files)
+    used_lookup_keys_local = set()
+    used_api_urls = set()
 
     for i, html_file in enumerate(html_files):
         print_progress_bar(i, total_files, prefix=f'Migrating HTML ({course_title}):', suffix='Complete', length=50)
@@ -237,23 +274,36 @@ def process_course(course_dir, course_title, args, conn, cursor, now_iso, path_i
             continue
             
         topic_name = os.path.splitext(os.path.basename(html_file))[0]
+        cleaned_topic_name = clean_topic_title(topic_name)
+        
         lookup_key = topic_name
         if lookup_key not in toc_lookup:
             lookup_key = slugify(topic_name)
+        if lookup_key not in toc_lookup:
+            lookup_key = slugify(cleaned_topic_name)
+            
+        if lookup_key in used_lookup_keys_local:
+            continue
             
         if lookup_key in toc_lookup:
             t_data = toc_lookup[lookup_key]
-            final_title = t_data["title"] or topic_name
+            final_title = t_data["title"] or cleaned_topic_name
             final_slug = slugify(final_title)
             final_api = t_data["api_url"] or f"/api/legacy/{final_slug}/{generate_id()}"
             final_url = t_data["url"] or f"{url}/topic/{final_slug}"
             final_type = t_data["type"]
         else:
-            final_title = topic_name
-            final_slug = slugify(topic_name)
+            final_title = cleaned_topic_name
+            final_slug = slugify(cleaned_topic_name)
             final_api = f"/api/legacy/{final_slug}/{generate_id()}"
             final_url = f"{url}/topic/{final_slug}"
             final_type = "path_lesson"
+            
+        if final_api in used_api_urls:
+            continue
+            
+        used_lookup_keys_local.add(lookup_key)
+        used_api_urls.add(final_api)
         
         cursor.execute("""
             INSERT INTO topics (course_id, topic_index, topic_name, topic_slug, topic_url, api_url, page_id, status, scraped_at)
@@ -267,6 +317,39 @@ def process_course(course_dir, course_title, args, conn, cursor, now_iso, path_i
             INSERT INTO components (course_id, topic_index, component_index, type, content_json, scraped_at)
             VALUES (?, ?, ?, ?, ?, ?)
         """, (course_id, topic_index, 0, "LegacyHTML", content_json_str, now_iso))
+        
+        topic_dir = os.path.dirname(html_file)
+        if os.path.abspath(topic_dir) != os.path.abspath(course_dir):
+            legacy_workspace_files = {}
+            for w_root, w_dirs, w_files in os.walk(topic_dir):
+                # Prune massive dependency/build folders to drastically speed up workspace bundling
+                w_dirs[:] = [d for d in w_dirs if d not in (".git", "node_modules", ".node_modules", "venv", ".venv", "__pycache__", ".next", "dist", "build", ".idea", ".vscode", "coverage")]
+                
+                for w_file in w_files:
+                    # Skip HTML files in the immediate topic directory so we don't bundle the main lesson html itself
+                    if w_root == topic_dir and w_file.lower().endswith(".html"):
+                        continue
+                    
+                    full_path = os.path.join(w_root, w_file)
+                    rel_path = os.path.relpath(full_path, topic_dir).replace("\\", "/")
+                    
+                    try:
+                        with open(full_path, "r", encoding="utf-8") as rf:
+                            content = rf.read()
+                        legacy_workspace_files[rel_path] = content
+                    except UnicodeDecodeError as e:
+                        logging.warning(f"Skipping binary/unreadable file in workspace: {rel_path} - {e}")
+                    except Exception as e:
+                        logging.warning(f"Error reading workspace file {rel_path}: {e}")
+                        
+            if legacy_workspace_files:
+                workspace_json_dict = {"files": legacy_workspace_files}
+                workspace_json_str = json.dumps(workspace_json_dict)
+                cursor.execute("""
+                    INSERT INTO components (course_id, topic_index, component_index, type, content_json, scraped_at)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                """, (course_id, topic_index, 1, "LegacyWorkspace", workspace_json_str, now_iso))
+                
         
         topics_inserted[lookup_key] = {
             "api_url": final_api,
@@ -307,12 +390,89 @@ def process_course(course_dir, course_title, args, conn, cursor, now_iso, path_i
         
     final_toc_str = json.dumps(toc_out)
     cursor.execute("UPDATE courses SET toc_json = ? WHERE id = ?", (final_toc_str, course_id))
+    
+    # Commit after each course to prevent RAM exhaustion on massive migrations
+    conn.commit()
+
+def process_content_by_type(base_dir, content_type, content_title, args, conn, cursor, now_iso):
+    if content_type == "Path":
+        path_title = content_title or os.path.basename(base_dir)
+        path_slug = slugify(path_title)
+        
+        cursor.execute("SELECT id FROM paths WHERE path_url_slug = ?", (path_slug,))
+        row = cursor.fetchone()
+        if row:
+            path_id = row["id"]
+            logging.info(f"Path '{path_title}' already exists (ID {path_id}). Checking sub-courses...")
+        else:
+            author_id = generate_id()
+            collection_id = generate_id()
+            cursor.execute("""
+                INSERT INTO paths (path_author_id, path_collection_id, path_url_slug, path_title, is_active, scraped_at)
+                VALUES (?, ?, ?, ?, ?, ?)
+            """, (author_id, collection_id, path_slug, path_title, 1, now_iso))
+            path_id = cursor.lastrowid
+            logging.info(f"Created Path entry '{path_title}' with ID {path_id}")
+
+        # Iterate through subdirectories for courses
+        for entry in os.listdir(base_dir):
+            full_path = os.path.join(base_dir, entry)
+            if os.path.isdir(full_path):
+                process_course(full_path, entry, args, conn, cursor, now_iso, course_type="Course", path_id=path_id)
+
+    elif content_type == "Project":
+        project_title = content_title or os.path.basename(base_dir)
+        project_slug = slugify(project_title)
+        
+        cursor.execute("SELECT id FROM projects WHERE project_url_slug = ?", (project_slug,))
+        row = cursor.fetchone()
+        if row:
+            project_id = row["id"]
+            logging.info(f"Project '{project_title}' already exists (ID {project_id}). Checking content...")
+        else:
+            author_id = generate_id()
+            collection_id = generate_id()
+            work_id = generate_id()
+            cursor.execute("""
+                INSERT INTO projects (project_author_id, project_collection_id, project_work_id, project_title, project_url_slug, is_active, scraped_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            """, (author_id, collection_id, work_id, project_title, project_slug, 1, now_iso))
+            project_id = cursor.lastrowid
+            logging.info(f"Created Project entry '{project_title}' with ID {project_id}")
+        
+        process_course(base_dir, content_title, args, conn, cursor, now_iso, course_type="Project", project_id=project_id)
+        
+    elif content_type == "Cloudlab":
+        cloudlab_title = content_title or os.path.basename(base_dir)
+        cloudlab_slug = slugify(cloudlab_title)
+        
+        cursor.execute("SELECT id FROM cloudlabs WHERE cloudlab_url_slug = ?", (cloudlab_slug,))
+        row = cursor.fetchone()
+        if row:
+            cloudlab_id = row["id"]
+            logging.info(f"Cloudlab '{cloudlab_title}' already exists (ID {cloudlab_id}). Checking content...")
+        else:
+            author_id = generate_id()
+            collection_id = generate_id()
+            work_id = generate_id()
+            cursor.execute("""
+                INSERT INTO cloudlabs (cloudlab_author_id, cloudlab_collection_id, cloudlab_work_id, cloudlab_title, cloudlab_url_slug, is_active, scraped_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            """, (author_id, collection_id, work_id, cloudlab_title, cloudlab_slug, 1, now_iso))
+            cloudlab_id = cursor.lastrowid
+            logging.info(f"Created Cloudlab entry '{cloudlab_title}' with ID {cloudlab_id}")
+        
+        process_course(base_dir, content_title, args, conn, cursor, now_iso, course_type="Cloudlab", cloudlab_id=cloudlab_id)
+
+    else:
+        # Course
+        process_course(base_dir, content_title, args, conn, cursor, now_iso, course_type="Course")
 
 def main():
     parser = argparse.ArgumentParser(description="Migrate legacy HTML courses/paths to SQLite database")
     parser.add_argument("--db", default="educative_scraper_legacy.db", help="Path to the SQLite DB file (default: educative_scraper_legacy.db)")
     parser.add_argument("--dir", required=True, help="Path to the legacy course or path directory")
-    parser.add_argument("--type", required=True, choices=["Course", "Path", "Cloudlab", "Project"], help="Type of legacy content")
+    parser.add_argument("--type", choices=["Course", "Path", "Cloudlab", "Project", "Auto"], default="Auto", help="Type of legacy content (or Auto to scan directories)")
     parser.add_argument("--title", help="Course or Path title (defaults to directory name)")
     args = parser.parse_args()
 
@@ -325,61 +485,30 @@ def main():
     cursor = conn.cursor()
     now_iso = datetime.now(timezone.utc).isoformat()
 
-    if args.type == "Path":
-        path_title = args.title or os.path.basename(base_dir)
-        path_slug = slugify(path_title)
-        author_id = generate_id()
-        collection_id = generate_id()
-        
-        cursor.execute("""
-            INSERT INTO paths (path_author_id, path_collection_id, path_url_slug, path_title, is_active, scraped_at)
-            VALUES (?, ?, ?, ?, ?, ?)
-        """, (author_id, collection_id, path_slug, path_title, 1, now_iso))
-        path_id = cursor.lastrowid
-        logging.info(f"Created Path entry '{path_title}' with ID {path_id}")
-
-        # Iterate through subdirectories for courses
+    if args.type == "Auto":
+        valid_folders = {
+            "paths": "Path",
+            "courses": "Course",
+            "cloudlabs": "Cloudlab",
+            "projects": "Project"
+        }
+        found_any = False
         for entry in os.listdir(base_dir):
             full_path = os.path.join(base_dir, entry)
-            if os.path.isdir(full_path):
-                # We use the subdirectory name as the course title
-                process_course(full_path, entry, args, conn, cursor, now_iso, path_id=path_id)
-
-    elif args.type == "Project":
-        project_title = args.title or os.path.basename(base_dir)
-        project_slug = slugify(project_title)
-        author_id = generate_id()
-        collection_id = generate_id()
-        work_id = generate_id()
-        
-        cursor.execute("""
-            INSERT INTO projects (project_author_id, project_collection_id, project_work_id, project_title, project_url_slug, is_active, scraped_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-        """, (author_id, collection_id, work_id, project_title, project_slug, 1, now_iso))
-        project_id = cursor.lastrowid
-        logging.info(f"Created Project entry '{project_title}' with ID {project_id}")
-        
-        process_course(base_dir, args.title, args, conn, cursor, now_iso, project_id=project_id)
-        
-    elif args.type == "Cloudlab":
-        cloudlab_title = args.title or os.path.basename(base_dir)
-        cloudlab_slug = slugify(cloudlab_title)
-        author_id = generate_id()
-        collection_id = generate_id()
-        work_id = generate_id()
-        
-        cursor.execute("""
-            INSERT INTO cloudlabs (cloudlab_author_id, cloudlab_collection_id, cloudlab_work_id, cloudlab_title, cloudlab_url_slug, is_active, scraped_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-        """, (author_id, collection_id, work_id, cloudlab_title, cloudlab_slug, 1, now_iso))
-        cloudlab_id = cursor.lastrowid
-        logging.info(f"Created Cloudlab entry '{cloudlab_title}' with ID {cloudlab_id}")
-        
-        process_course(base_dir, args.title, args, conn, cursor, now_iso, cloudlab_id=cloudlab_id)
-
+            if os.path.isdir(full_path) and entry.lower() in valid_folders:
+                content_type = valid_folders[entry.lower()]
+                logging.info(f"Auto-detected category folder: '{entry}' (Type: {content_type})")
+                for sub_entry in os.listdir(full_path):
+                    sub_path = os.path.join(full_path, sub_entry)
+                    if os.path.isdir(sub_path):
+                        logging.info(f"Processing {content_type}: '{sub_entry}'...")
+                        process_content_by_type(sub_path, content_type, sub_entry, args, conn, cursor, now_iso)
+                found_any = True
+                
+        if not found_any:
+            logging.error(f"Auto mode: No category folders (Paths, Courses, Cloudlabs, Projects) found in '{base_dir}'")
     else:
-        # Course
-        process_course(base_dir, args.title, args, conn, cursor, now_iso)
+        process_content_by_type(base_dir, args.type, args.title, args, conn, cursor, now_iso)
 
     conn.commit()
     conn.close()
