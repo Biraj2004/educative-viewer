@@ -55,6 +55,7 @@ def register_settings_routes(bp: Blueprint, auth_service: AuthService) -> None:
             "course_db_engine": get_env_variable("COURSE_DB_ENGINE", "sqlite"),
             "course_sqlite_db_paths_json": get_env_variable("COURSE_SQLITE_DB_PATHS_JSON", '[]'),
             "course_sqlite_db_folder": get_env_variable("COURSE_SQLITE_DB_FOLDER", ""),
+            "course_db_connection_mode": get_env_variable("COURSE_DB_CONNECTION_MODE", "ro"),
             "viewer_feature_flags_json": json.dumps(viewer_feature_flags, separators=(",", ":")),
             "viewer_feature_role_overrides_json": json.dumps(
                 viewer_feature_role_overrides, separators=(",", ":")
@@ -75,6 +76,7 @@ def register_settings_routes(bp: Blueprint, auth_service: AuthService) -> None:
             "groq_api_key": "GROQ_API_KEY",
             "judge0_rapidapi_key": "JUDGE0_RAPIDAPI_KEY",
             "course_db_engine": "COURSE_DB_ENGINE",
+            "course_db_connection_mode": "COURSE_DB_CONNECTION_MODE",
             "course_sqlite_db_paths_json": "COURSE_SQLITE_DB_PATHS_JSON",
             "course_sqlite_db_folder": "COURSE_SQLITE_DB_FOLDER",
         }
@@ -111,6 +113,10 @@ def register_settings_routes(bp: Blueprint, auth_service: AuthService) -> None:
         course_db_updated = False
         if "course_db_engine" in data:
             cfg.course_db_engine = str(data["course_db_engine"]).strip().lower()
+            course_db_updated = True
+
+        if "course_db_connection_mode" in data:
+            cfg.course_db_connection_mode = str(data["course_db_connection_mode"]).strip().lower()
             course_db_updated = True
 
         if "course_sqlite_db_paths_json" in data or "course_sqlite_db_folder" in data:

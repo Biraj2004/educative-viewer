@@ -238,6 +238,13 @@ export default function GlobalSettingsPage() {
               </select>
             </div>
             <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Course DB Connection Mode</label>
+              <select name="course_db_connection_mode" value={settings.course_db_connection_mode || 'ro'} onChange={handleChange} className="mt-1 block w-full rounded-md border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 py-2 px-3 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-indigo-500 sm:text-sm dark:text-white">
+                <option value="ro">Read-Only (Immutable/Fast)</option>
+                <option value="rw">Read-Write (Allows UI Edits)</option>
+              </select>
+            </div>
+            <div>
               <div className="flex items-center justify-between">
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Course SQLite DB Paths (JSON Array)</label>
                 <button type="button" onClick={() => handleJsonFormat("course_sqlite_db_paths_json")} className="text-xs text-indigo-600 hover:text-indigo-800 dark:text-indigo-400 dark:hover:text-indigo-300 font-medium">Format JSON</button>
@@ -251,7 +258,7 @@ export default function GlobalSettingsPage() {
             </div>
           </div>
 
-          <div className="mt-8">
+          <div className="mt-8 flex gap-4">
             <button onClick={handleSave} disabled={loading || !!jsonError || !!featureFlagsJsonError || !!roleOverridesJsonError} className="inline-flex justify-center rounded-md border border-transparent bg-indigo-600 py-2 px-4 text-sm font-medium text-white shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed">
               {loading ? "Saving..." : "Save Settings"}
             </button>

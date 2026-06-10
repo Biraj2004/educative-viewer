@@ -29,13 +29,14 @@ class SQLiteCourseDatabase:
 
     engine = "sqlite"
 
-    def __init__(self, db_paths: Sequence[str], offset_step: int = OFFSET_STEP):
+    def __init__(self, db_paths: Sequence[str], connection_mode: str = "ro", offset_step: int = OFFSET_STEP):
         if offset_step <= 0:
             raise ValueError("offset_step must be positive")
         if not db_paths:
             raise ValueError("At least one course DB path must be configured")
 
         self.offset_step = offset_step
+        self.connection_mode = connection_mode
         
         shards_list = []
         self._offset_to_shard = {}
@@ -90,8 +91,11 @@ class SQLiteCourseDatabase:
         
         # Construct a robust cross-platform SQLite URI
         abs_uri = pathlib.Path(shard.db_path).absolute().as_uri()
-        # immutable=1 & nolock=1 completely bypass SQLite file-locking overhead on FUSE/rclone mounts
-        optimized_uri = f"{abs_uri}?mode=ro&nolock=1&immutable=1"
+        if self.connection_mode == "rw":
+            optimized_uri = f"{abs_uri}?mode=rw"
+        else:
+            # immutable=1 & nolock=1 completely bypass SQLite file-locking overhead on FUSE/rclone mounts
+            optimized_uri = f"{abs_uri}?mode=ro&nolock=1&immutable=1"
         
         conn = sqlite3.connect(optimized_uri, uri=True)
         conn.row_factory = sqlite3.Row

@@ -114,6 +114,7 @@ class AppConfig:
 
     course_db_engine: str
     course_sqlite_db_paths: tuple[str, ...]
+    course_db_connection_mode: str
 
     jwt_secret: str
     jwt_expires_days: int
@@ -281,6 +282,7 @@ def load_config() -> AppConfig:
 
         course_db_engine=os.environ.get("COURSE_DB_ENGINE", "sqlite").strip().lower(),
         course_sqlite_db_paths=course_db_paths,
+        course_db_connection_mode=os.environ.get("COURSE_DB_CONNECTION_MODE", "ro").strip().lower(),
 
         jwt_secret=os.environ.get("JWT_SECRET", "changeme-dev-secret"),
         jwt_expires_days=int(os.environ.get("JWT_EXPIRES_DAYS", "7")),

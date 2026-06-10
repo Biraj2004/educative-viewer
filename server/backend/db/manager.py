@@ -49,7 +49,7 @@ class DBManager:
     def _build_course_backend(self):
         engine = self.config.course_db_engine
         if engine == "sqlite":
-            return SQLiteCourseDatabase(self.config.course_sqlite_db_paths)
+            return SQLiteCourseDatabase(self.config.course_sqlite_db_paths, connection_mode=self.config.course_db_connection_mode)
         raise ValueError(f"Unsupported COURSE_DB_ENGINE '{engine}'. Supported: sqlite")
 
     def reload_course_backend(self) -> None:
