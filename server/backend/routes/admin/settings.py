@@ -54,6 +54,7 @@ def register_settings_routes(bp: Blueprint, auth_service: AuthService) -> None:
             "judge0_rapidapi_key": get_env_variable("JUDGE0_RAPIDAPI_KEY"),
             "course_db_engine": get_env_variable("COURSE_DB_ENGINE", "sqlite"),
             "course_sqlite_db_paths_json": get_env_variable("COURSE_SQLITE_DB_PATHS_JSON", '[]'),
+            "course_sqlite_db_folder": get_env_variable("COURSE_SQLITE_DB_FOLDER", ""),
             "viewer_feature_flags_json": json.dumps(viewer_feature_flags, separators=(",", ":")),
             "viewer_feature_role_overrides_json": json.dumps(
                 viewer_feature_role_overrides, separators=(",", ":")
@@ -75,6 +76,7 @@ def register_settings_routes(bp: Blueprint, auth_service: AuthService) -> None:
             "judge0_rapidapi_key": "JUDGE0_RAPIDAPI_KEY",
             "course_db_engine": "COURSE_DB_ENGINE",
             "course_sqlite_db_paths_json": "COURSE_SQLITE_DB_PATHS_JSON",
+            "course_sqlite_db_folder": "COURSE_SQLITE_DB_FOLDER",
         }
 
         for key, var_name in mapping.items():
@@ -111,12 +113,23 @@ def register_settings_routes(bp: Blueprint, auth_service: AuthService) -> None:
             cfg.course_db_engine = str(data["course_db_engine"]).strip().lower()
             course_db_updated = True
 
-        if "course_sqlite_db_paths_json" in data:
+        if "course_sqlite_db_paths_json" in data or "course_sqlite_db_folder" in data:
             try:
-                cfg.course_sqlite_db_paths = _parse_sqlite_db_paths(str(data["course_sqlite_db_paths_json"]))
+                raw_paths = str(data.get("course_sqlite_db_paths_json", get_env_variable("COURSE_SQLITE_DB_PATHS_JSON", '[]')))
+                course_db_paths = list(_parse_sqlite_db_paths(raw_paths))
+                
+                db_folder = str(data.get("course_sqlite_db_folder", get_env_variable("COURSE_SQLITE_DB_FOLDER", ""))).strip()
+                if db_folder:
+                    from backend.config import _scan_folder_for_dbs
+                    scanned_dbs = _scan_folder_for_dbs(db_folder)
+                    for db in scanned_dbs:
+                        if db not in course_db_paths:
+                            course_db_paths.append(db)
+
+                cfg.course_sqlite_db_paths = tuple(course_db_paths)
                 course_db_updated = True
             except Exception as exc:
-                return jsonify({"error": f"Invalid course_sqlite_db_paths_json: {exc}"}), 400
+                return jsonify({"error": f"Invalid course sqlite paths config: {exc}"}), 400
         viewer_flags_updated = False
         if "viewer_feature_flags_json" in data:
             try:

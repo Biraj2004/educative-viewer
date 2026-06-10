@@ -210,10 +210,28 @@ def load_config() -> AppConfig:
     raw_paths = os.environ.get("COURSE_SQLITE_DB_PATHS_JSON", "")
 
     try:
-        course_db_paths = _parse_sqlite_db_paths(raw_paths)
+        course_db_paths = list(_parse_sqlite_db_paths(raw_paths))
     except ValueError as exc:
         log.warning("Invalid course DB paths ignored: %s", exc)
-        course_db_paths = ()
+        course_db_paths = []
+
+    db_folder = os.environ.get("COURSE_SQLITE_DB_FOLDER", "").strip()
+    if db_folder:
+        base_dir = Path(db_folder).resolve()
+        if base_dir.is_dir():
+            found_dbs = []
+            for root, _, files in os.walk(base_dir):
+                for file in files:
+                    if file.lower().endswith((".db", ".sqlite", ".sqlite3")):
+                        found_dbs.append(os.path.join(root, file))
+            found_dbs.sort()
+            for db in found_dbs:
+                if db not in course_db_paths:
+                    course_db_paths.append(db)
+        else:
+            log.warning("COURSE_SQLITE_DB_FOLDER '%s' is not a valid directory", db_folder)
+
+    course_db_paths = tuple(course_db_paths)
 
     oracle_auth = OracleAuthConfig(
         user=os.environ.get("ORACLE_USER", ""),

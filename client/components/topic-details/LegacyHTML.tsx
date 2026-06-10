@@ -33,7 +33,30 @@ export default function LegacyHTML({ data }: { data: any }) {
       header,
       div[class*="cookie"], 
       div[class*="sticky top-0"],
-      div[class*="PALBanner_container"] {
+      div[class*="PALBanner_container"],
+      div[class*="TaskSidebar"],
+      div[class*="styles_sidebar"],
+      div[class*="styles_tasks"],
+      div[class*="floating-buttons"],
+      div[class*="FloatingButtons"],
+      div[style*="position: fixed"][style*="bottom:"],
+      div[style*="position: fixed"][style*="right:"],
+      button[aria-label*="Theme"],
+      button[aria-label*="mode"],
+      button[aria-label*="Help"],
+      /* Modern Tailwind Chrome */
+      /* Modern Tailwind Chrome */
+      div.h-\\[7\\%\\],
+      div.cursor-col-resize {
+        display: none !important;
+      }
+      div.flex.flex-col:has(> div[style*="min-width:64px"]) {
+        display: none !important;
+      }
+      div.h-\\[93\\%\\] > div.border-l {
+        display: none !important;
+      }
+      div.absolute.bottom-0.right-0.z-20 {
         display: none !important;
       }
 
@@ -67,15 +90,32 @@ export default function LegacyHTML({ data }: { data: any }) {
       div[class*='ArticleContent'],
       div[class*='Page'],
       div[class*='Layout'],
+      div[class*='app-container'],
+      div[class*='split-pane'],
+      div[class*='Pane'],
+      div.h-screen,
+      div.h-\\[93\\%\\],
+      div.h-full,
+      div.min-h-full,
+      div.overflow-y-scroll,
+      div.overflow-x-scroll,
+      div.overflow-auto,
       main, article {
         max-width: 100% !important;
         width: 100% !important;
+        height: auto !important;
+        min-height: unset !important;
+        max-height: none !important;
+        overflow: visible !important;
+        overflow-y: visible !important;
+        overflow-x: visible !important;
         box-sizing: border-box !important;
         margin-left: 0 !important;
         margin-right: 0 !important;
-        padding-left: 0 !important;
-        padding-right: 0 !important;
+        padding-left: 1px !important;
+        padding-right: 1px !important;
       }
+      
       pre, code {
         max-width: 100% !important;
         overflow-x: auto !important;
@@ -89,6 +129,47 @@ export default function LegacyHTML({ data }: { data: any }) {
     // Ensure wrapper spans full height to support backgrounds
     wrapper.style.minHeight = "100%";
     wrapper.innerHTML = data.html;
+
+    // --- Dynamic DOM Cleanup ---
+    // User request: Safely find "Previous" or "Next" buttons based on their text and hide their wrapper to prevent false positives.
+    const navButtons = wrapper.querySelectorAll("button");
+    navButtons.forEach((btn) => {
+      const text = btn.textContent?.toLowerCase() || "";
+      const aria = btn.getAttribute("aria-label")?.toLowerCase() || "";
+      const isNav = text.includes("previous") || text.includes("next") || text.includes("back") ||
+                    aria.includes("previous") || aria.includes("next");
+                    
+      if (isNav) {
+        // Do not touch buttons that are part of the actual lesson content!
+        if (btn.closest(".markdown-viewer, .markdownViewer")) {
+          return;
+        }
+
+        let parent = btn.parentElement;
+        let safeContainerToHide: HTMLElement | null = null;
+        
+        // Walk up the DOM tree to find the highest wrapper we can safely hide
+        while (parent && parent !== wrapper) {
+          // If this ancestor contains the main content, we've gone too far. Break!
+          if (parent.querySelector(".markdown-viewer, .markdownViewer")) {
+             break;
+          }
+          safeContainerToHide = parent;
+          parent = parent.parentElement;
+        }
+        
+        if (safeContainerToHide) {
+          safeContainerToHide.style.setProperty("display", "none", "important");
+          
+          // Clean up adjacent floating dividers if they exist
+          const nextSibling = safeContainerToHide.nextElementSibling;
+          if (nextSibling && (nextSibling.className.includes("mt-20") || nextSibling.className.includes("border-t"))) {
+            (nextSibling as HTMLElement).style.setProperty("display", "none", "important");
+          }
+        }
+      }
+    });
+
     shadow.appendChild(wrapper);
 
     // --- Mirror Dark Mode from Host ---
@@ -156,15 +237,15 @@ export default function LegacyHTML({ data }: { data: any }) {
           ) {
             a.setAttribute("href", relativePath); // keep original path for hover
             a.removeAttribute("target"); // Prevent opening in new tabs
-            
+
             a.addEventListener("click", async (e) => {
               e.preventDefault();
               const BACKEND = getBackendApiBase();
               const token = getAuthToken();
-              
+
               a.style.opacity = "0.5";
               a.style.cursor = "wait";
-              
+
               try {
                 const res = await fetch(`${BACKEND}/api/resolve-link?url=${encodeURIComponent(relativePath)}`, {
                   headers: token ? { Authorization: `Bearer ${token}` } : {},
@@ -177,7 +258,7 @@ export default function LegacyHTML({ data }: { data: any }) {
                     return;
                   }
                 }
-                
+
                 // Fallback if not in DB
                 let targetHref = relativePath;
                 if (relativePath.startsWith("/answers/") || relativePath.startsWith("/blog/") || relativePath.startsWith("/newsletter/")) {
@@ -196,7 +277,7 @@ export default function LegacyHTML({ data }: { data: any }) {
                 a.style.cursor = "pointer";
               }
             });
-            
+
           } else if (
             relativePath.startsWith("/assessments/") ||
             relativePath.startsWith("/catalog/")
