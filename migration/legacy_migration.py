@@ -128,6 +128,8 @@ def create_connection(db_file):
     conn.execute("PRAGMA synchronous = OFF;")
     conn.execute("PRAGMA journal_mode = MEMORY;")
     conn.execute("PRAGMA cache_size = 100000;")
+    conn.execute("PRAGMA locking_mode = EXCLUSIVE;")
+    conn.execute("PRAGMA temp_store = MEMORY;")
     conn.row_factory = sqlite3.Row
     conn.executescript(_DDL)
     return conn
@@ -142,65 +144,66 @@ def process_course(course_dir, course_title, args, conn, cursor, now_iso, course
             logging.info(f"Found and loaded {os.path.basename(toc_path)} to migrate from {course_dir}")
         except Exception as e:
             logging.warning(f"Failed to load {os.path.basename(toc_path)} from {course_dir}: {e}")
-
-    url = None
-    toc_lookup = {}
-    categories_layout = []
-    topic_slugs = []
     
-    if legacy_toc:
-        categories = []
-        if isinstance(legacy_toc, dict) and "toc" in legacy_toc:
-            categories = legacy_toc["toc"]
-            if "course" in legacy_toc and legacy_toc["course"]:
-                if not course_title: # Use toc title only if not explicitly provided
-                    course_title = legacy_toc["course"]
-            if "url" in legacy_toc and legacy_toc["url"]:
-                url = legacy_toc["url"]
-        elif isinstance(legacy_toc, list):
-            if len(legacy_toc) > 0 and (isinstance(legacy_toc[0], list) or (isinstance(legacy_toc[0], dict) and "topics" not in legacy_toc[0])):
-                categories = [{"category": "Course Content", "topics": legacy_toc}]
-            else:
-                categories = legacy_toc
-        for cat in categories:
-            if isinstance(cat, list):
-                cat = {"category": "Other Content", "topics": [cat]}
-            elif isinstance(cat, dict) and "topics" not in cat:
-                cat = {"category": "Other Content", "topics": [cat]}
-                
-            cat_name = cat.get("category", "Course Content")
-            cat_topics = []
-            for t in cat.get("topics", []):
-                t_title, t_slug, t_api, t_url, t_type = "", "", "", "", "path_lesson"
-                if isinstance(t, list) and len(t) >= 4:
-                    t_title, t_slug, t_api, t_url = t[0], t[1], t[2], t[3]
-                elif isinstance(t, dict):
-                    t_title = t.get("title", "")
-                    t_slug = t.get("slug", "")
-                    t_api = t.get("api_url", "")
-                    t_url = t.get("url", "")
-                    t_type = t.get("type", "path_lesson")
-                
-                t_title = clean_topic_title(t_title)
-                if t_title:
-                    t_slug = slugify(t_title)
-                    
-                if t_slug:
-                    toc_lookup[t_slug] = {
-                        "title": t_title,
-                        "api_url": t_api,
-                        "url": t_url,
-                        "type": t_type
-                    }
-                    cat_topics.append(t_slug)
-            categories_layout.append({"category": cat_name, "topic_slugs": cat_topics})
-            topic_slugs.extend(cat_topics)
-            
     if not course_title:
         course_title = os.path.basename(course_dir)
-        
     course_slug = slugify(course_title)
+    url = f"https://educative.io/legacy/{course_slug}"
+    author_id = generate_id()
+    collection_id = generate_id()
     
+    cursor.execute("SELECT seq FROM sqlite_sequence WHERE name='courses'")
+    row = cursor.fetchone()
+    course_id = 1
+    if row:
+        course_id = row["seq"] + 1  
+    logging.info(f"Predicting next course ID as {course_id} for '{course_title}'")
+    
+    complete_toc = []
+    topics_inserted = {} 
+    topic_index = 0
+    if legacy_toc:
+        categories = legacy_toc["toc"]
+        course_title = legacy_toc["course"]
+        url = legacy_toc["url"]
+        for cat in categories:
+            if isinstance(cat, list):
+                t_title, t_slug, t_api, t_url = cat[0], cat[1], cat[2], cat[3]
+                topic_dto = {
+                    "api_url": t_api,
+                    "course_id": course_id,
+                    "slug": slugify(clean_topic_title(t_title)),
+                    "title": t_title,
+                    "topic_index": topic_index,
+                    "type": "collection_lesson",
+                    "url": t_url
+                }
+                complete_toc.append(topic_dto)
+                topics_inserted[topic_index] = topic_dto
+                topic_index += 1
+            elif isinstance(cat, dict):
+                cat_name = cat["category"]
+                cat_topics = cat["topics"]
+                new_topics = []
+                for t in cat_topics:
+                    t_title, t_slug, t_api, t_url = t[0], t[1], t[2], t[3]
+                    topic_dto = {
+                        "api_url": t_api,
+                        "course_id": course_id,
+                        "slug": slugify(clean_topic_title(t_title)),
+                        "title": t_title,
+                        "topic_index": topic_index,
+                        "type": "collection_lesson",
+                        "url": t_url
+                    }
+                    new_topics.append(topic_dto)
+                    topics_inserted[topic_index] = topic_dto
+                    topic_index += 1
+                complete_toc.append({
+                    "category": cat_name,
+                    "topics": new_topics
+                })
+
     html_files = []
     for entry in os.listdir(course_dir):
         full_path = os.path.join(course_dir, entry)
@@ -208,111 +211,71 @@ def process_course(course_dir, course_title, args, conn, cursor, now_iso, course
             expected_html = os.path.join(full_path, f"{entry}.html")
             if os.path.isfile(expected_html):
                 html_files.append(expected_html)
-            else:
-                # If exact match not found, find the first HTML file directly inside the folder
-                for f in os.listdir(full_path):
-                    if f.lower().endswith(".html") and os.path.isfile(os.path.join(full_path, f)):
-                        html_files.append(os.path.join(full_path, f))
-                        break
         elif entry.lower().endswith(".html"):
-            # Flat structure fallback
             html_files.append(full_path)
     
     html_files = natsort.natsorted(html_files)
     total_files = len(html_files)
 
-    if not topic_slugs:
-        # Fallback to generating slugs from HTML filenames if no TOC
-        for h_file in html_files:
-            t_name = os.path.splitext(os.path.basename(h_file))[0]
-            t_name_cleaned = clean_topic_title(t_name)
-            topic_slugs.append(slugify(t_name_cleaned))
-            
-    structure_hash = hashlib.sha256(
-        json.dumps([str(slug or "") for slug in topic_slugs], ensure_ascii=False).encode("utf-8")
-    ).hexdigest()
+    if complete_toc == [] and html_files:
+        logging.info(f"No TOC found, using HTML files to generate TOC for course '{course_title}'")
+        for i, html_f in enumerate(html_files):
+            html_title = os.path.splitext(os.path.basename(html_f))[0]
+            api_url = f"http://localhost:5000/courses/{course_id}/topics/{i}/content_for_viewer_using_topic_id/0"
+            t_title = clean_topic_title(html_title)
+            t_slug = slugify(t_title)
+            topic_dto = {
+                "api_url": api_url,
+                "course_id": course_id,
+                "slug": t_slug,
+                "title": t_title,
+                "topic_index": i,
+                "type": "collection_lesson",
+                "url": f"http://localhost:3000/dashboard/courses/{course_id}/{course_slug}/topics/{i}/{t_slug}"
+            }
+            complete_toc.append(topic_dto)
+            topics_inserted[i] = topic_dto
+            topic_index += 1
     
+    structure_hash = hashlib.sha256(
+        json.dumps([str(t.get("slug", "")) for t in topics_inserted.values()], ensure_ascii=False).encode("utf-8")
+    ).hexdigest()
+        
     cursor.execute("SELECT id FROM courses WHERE structure_hash = ?", (structure_hash,))
     existing_course = cursor.fetchone()
     if existing_course:
         logging.info(f"Course '{course_title}' already exists with same structure hash (ID {existing_course['id']}). Skipping HTML processing.")
         return
-        
-    author_id = generate_id()
-    collection_id = generate_id()
-    
-    if not url:
-        url = f"https://educative.io/legacy/{course_slug}/{generate_id()[:8]}"
-    elif "/legacy/" not in url:
-        if "educative.io/" in url:
-            url = url.replace("educative.io/", "educative.io/legacy/", 1)
-        else:
-            url = f"https://educative.io/legacy/{course_slug}/{generate_id()[:8]}"
-
-    toc_json = None
-    db_course_type = course_type
 
     cursor.execute("""
-        INSERT INTO courses (type, path_id, url, structure_hash, slug, author_id, collection_id, title, toc_json, cloudlab_id, project_id, is_active, scraped_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    """, (db_course_type, path_id, url, structure_hash, course_slug, author_id, collection_id, course_title, toc_json, cloudlab_id, project_id, 1, now_iso))
-    course_id = cursor.lastrowid
-    logging.info(f"Created course '{course_title}' with ID {course_id} (Type: {db_course_type})")
+        INSERT INTO courses (id, type, path_id, url, structure_hash, slug, author_id, collection_id, title, toc_json, cloudlab_id, project_id, is_active, scraped_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    """, (course_id, course_type, path_id, url, structure_hash, course_slug, author_id, collection_id, course_title, json.dumps(complete_toc), cloudlab_id, project_id, 1, now_iso))
+    logging.info(f"Created course '{course_title}' with ID {course_id} (Type: {course_type})")
 
-    topic_index = 0
-    topics_inserted = {}
-    used_lookup_keys_local = set()
-    used_api_urls = set()
 
-    for i, html_file in enumerate(html_files):
-        print_progress_bar(i, total_files, prefix=f'Migrating HTML ({course_title}):', suffix='Complete', length=50)
+    for topic_index, html_file in enumerate(html_files):
+        if topic_index == 0 or topic_index == total_files - 1 or topic_index % 5 == 0:
+            print_progress_bar(topic_index, total_files, prefix=f'Migrating HTML ({course_title}):', suffix='Complete', length=50)
         try:
             with open(html_file, "r", encoding="utf-8") as f:
                 html_content = f.read()
         except Exception as e:
             logging.error(f"Failed to read {html_file}: {e}")
-            continue
+            break
             
-        topic_name = os.path.splitext(os.path.basename(html_file))[0]
-        cleaned_topic_name = clean_topic_title(topic_name)
-        
-        lookup_key = topic_name
-        if lookup_key not in toc_lookup:
-            lookup_key = slugify(topic_name)
-        if lookup_key not in toc_lookup:
-            lookup_key = slugify(cleaned_topic_name)
-            
-        if lookup_key in used_lookup_keys_local:
-            continue
-            
-        if lookup_key in toc_lookup:
-            t_data = toc_lookup[lookup_key]
-            final_title = t_data["title"] or cleaned_topic_name
-            final_slug = slugify(final_title)
-            final_api = t_data["api_url"] or f"/api/legacy/{final_slug}/{generate_id()}"
-            final_url = t_data["url"] or f"{url}/topic/{final_slug}"
-            final_type = t_data["type"]
-        else:
-            final_title = cleaned_topic_name
-            final_slug = slugify(cleaned_topic_name)
-            final_api = f"/api/legacy/{final_slug}/{generate_id()}"
-            final_url = f"{url}/topic/{final_slug}"
-            final_type = "path_lesson"
-            
-        if final_api in used_api_urls:
-            continue
-            
-        used_lookup_keys_local.add(lookup_key)
-        used_api_urls.add(final_api)
+        topic_name = topics_inserted[topic_index]["title"]
+        topic_slug = topics_inserted[topic_index]["slug"]
+        api_url = topics_inserted[topic_index]["api_url"]
+        topic_url = topics_inserted[topic_index]["url"]
         
         cursor.execute("""
             INSERT INTO topics (course_id, topic_index, topic_name, topic_slug, topic_url, api_url, page_id, status, scraped_at)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """, (course_id, topic_index, final_title, final_slug, final_url, final_api, generate_id(), "completed", now_iso))
+        """, (course_id, topic_index, topic_name, topic_slug, topic_url, api_url, generate_id(), "completed", now_iso))
         
         content_json_dict = {"html": html_content}
         content_json_str = json.dumps(content_json_dict)
-        
         cursor.execute("""
             INSERT INTO components (course_id, topic_index, component_index, type, content_json, scraped_at)
             VALUES (?, ?, ?, ?, ?, ?)
@@ -321,26 +284,41 @@ def process_course(course_dir, course_title, args, conn, cursor, now_iso, course
         topic_dir = os.path.dirname(html_file)
         if os.path.abspath(topic_dir) != os.path.abspath(course_dir):
             legacy_workspace_files = {}
-            for w_root, w_dirs, w_files in os.walk(topic_dir):
-                # Prune massive dependency/build folders to drastically speed up workspace bundling
-                w_dirs[:] = [d for d in w_dirs if d not in (".git", "node_modules", ".node_modules", "venv", ".venv", "__pycache__", ".next", "dist", "build", ".idea", ".vscode", "coverage")]
-                
-                for w_file in w_files:
-                    # Skip HTML files in the immediate topic directory so we don't bundle the main lesson html itself
-                    if w_root == topic_dir and w_file.lower().endswith(".html"):
-                        continue
+            # Shallow scan topic_dir to verify if there are any other files or directories
+            # If there are no other files, we skip the expensive os.walk entirely
+            has_workspace = False
+            try:
+                for entry in os.scandir(topic_dir):
+                    if entry.is_dir():
+                        has_workspace = True
+                        break
+                    elif entry.is_file() and not entry.name.lower().endswith(".html"):
+                        has_workspace = True
+                        break
+            except OSError:
+                pass
+
+            if has_workspace:
+                for w_root, w_dirs, w_files in os.walk(topic_dir):
+                    # Prune massive dependency/build folders to drastically speed up workspace bundling
+                    w_dirs[:] = [d for d in w_dirs if d not in (".git", "node_modules", ".node_modules", "venv", ".venv", "__pycache__", ".next", "dist", "build", ".idea", ".vscode", "coverage")]
                     
-                    full_path = os.path.join(w_root, w_file)
-                    rel_path = os.path.relpath(full_path, topic_dir).replace("\\", "/")
-                    
-                    try:
-                        with open(full_path, "r", encoding="utf-8") as rf:
-                            content = rf.read()
-                        legacy_workspace_files[rel_path] = content
-                    except UnicodeDecodeError as e:
-                        logging.warning(f"Skipping binary/unreadable file in workspace: {rel_path} - {e}")
-                    except Exception as e:
-                        logging.warning(f"Error reading workspace file {rel_path}: {e}")
+                    for w_file in w_files:
+                        # Skip HTML files in the immediate topic directory so we don't bundle the main lesson html itself
+                        if w_root == topic_dir and w_file.lower().endswith(".html"):
+                            continue
+                        
+                        full_path = os.path.join(w_root, w_file)
+                        rel_path = os.path.relpath(full_path, topic_dir).replace("\\", "/")
+                        
+                        try:
+                            with open(full_path, "r", encoding="utf-8") as rf:
+                                content = rf.read()
+                            legacy_workspace_files[rel_path] = content
+                        except UnicodeDecodeError as e:
+                            logging.warning(f"Skipping binary/unreadable file in workspace: {rel_path} - {e}")
+                        except Exception as e:
+                            logging.warning(f"Error reading workspace file {rel_path}: {e}")
                         
             if legacy_workspace_files:
                 workspace_json_dict = {"files": legacy_workspace_files}
@@ -349,47 +327,9 @@ def process_course(course_dir, course_title, args, conn, cursor, now_iso, course
                     INSERT INTO components (course_id, topic_index, component_index, type, content_json, scraped_at)
                     VALUES (?, ?, ?, ?, ?, ?)
                 """, (course_id, topic_index, 1, "LegacyWorkspace", workspace_json_str, now_iso))
-                
-        
-        topics_inserted[lookup_key] = {
-            "api_url": final_api,
-            "course_id": course_id,
-            "slug": final_slug,
-            "title": final_title,
-            "topic_index": topic_index,
-            "type": final_type,
-            "url": final_url
-        }
-        
-        topic_index += 1
         
     if total_files > 0:
         print_progress_bar(total_files, total_files, prefix=f'Migrating HTML ({course_title}):', suffix='Complete', length=50)
-        
-    # Build the final TOC
-    toc_out = []
-    used_lookup_keys = set()
-    
-    for layout in categories_layout:
-        cat_name = layout["category"]
-        new_cat = {"category": cat_name, "topics": []}
-        for t_slug in layout["topic_slugs"]:
-            if t_slug in topics_inserted:
-                new_cat["topics"].append(topics_inserted[t_slug])
-                used_lookup_keys.add(t_slug)
-        if new_cat["topics"]:
-            toc_out.append(new_cat)
-            
-    # Any remaining inserted topics that weren't in the layout
-    remaining_topics = [t_info for l_key, t_info in topics_inserted.items() if l_key not in used_lookup_keys]
-    if remaining_topics:
-        toc_out.append({
-            "category": "Course Content" if not toc_out else "Other Content",
-            "topics": remaining_topics
-        })
-        
-    final_toc_str = json.dumps(toc_out)
-    cursor.execute("UPDATE courses SET toc_json = ? WHERE id = ?", (final_toc_str, course_id))
     
     # Commit after each course to prevent RAM exhaustion on massive migrations
     conn.commit()
