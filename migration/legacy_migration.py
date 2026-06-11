@@ -148,7 +148,7 @@ def process_course(course_dir, course_title, args, conn, cursor, now_iso, course
     if not course_title:
         course_title = os.path.basename(course_dir)
     course_slug = slugify(course_title)
-    url = f"https://educative.io/legacy/{course_slug}"
+    course_url = f"https://educative.io/legacy/{course_slug}"
     author_id = generate_id()
     collection_id = generate_id()
     
@@ -165,7 +165,7 @@ def process_course(course_dir, course_title, args, conn, cursor, now_iso, course
     if legacy_toc:
         categories = legacy_toc["toc"]
         course_title = legacy_toc["course"]
-        url = legacy_toc["url"]
+        course_url = legacy_toc["url"] + "/legacy/"
         for cat in categories:
             if isinstance(cat, list):
                 t_title, t_slug, t_api, t_url = cat[0], cat[1], cat[2], cat[3]
@@ -221,7 +221,7 @@ def process_course(course_dir, course_title, args, conn, cursor, now_iso, course
         logging.info(f"No TOC found, using HTML files to generate TOC for course '{course_title}'")
         for i, html_f in enumerate(html_files):
             html_title = os.path.splitext(os.path.basename(html_f))[0]
-            api_url = f"http://localhost:5000/courses/{course_id}/topics/{i}/content_for_viewer_using_topic_id/0"
+            api_url = f"https://educative.io/api/courses/{course_id}/topics/{i}/content_for_viewer_using_topic_id/0"
             t_title = clean_topic_title(html_title)
             t_slug = slugify(t_title)
             topic_dto = {
@@ -231,7 +231,7 @@ def process_course(course_dir, course_title, args, conn, cursor, now_iso, course
                 "title": t_title,
                 "topic_index": i,
                 "type": "collection_lesson",
-                "url": f"http://localhost:3000/dashboard/courses/{course_id}/{course_slug}/topics/{i}/{t_slug}"
+                "url": f"https://educative.io/legacy/courses/{course_id}/{course_slug}/topics/{i}/{t_slug}"
             }
             complete_toc.append(topic_dto)
             topics_inserted[i] = topic_dto
@@ -250,7 +250,7 @@ def process_course(course_dir, course_title, args, conn, cursor, now_iso, course
     cursor.execute("""
         INSERT INTO courses (id, type, path_id, url, structure_hash, slug, author_id, collection_id, title, toc_json, cloudlab_id, project_id, is_active, scraped_at)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    """, (course_id, course_type, path_id, url, structure_hash, course_slug, author_id, collection_id, course_title, json.dumps(complete_toc), cloudlab_id, project_id, 1, now_iso))
+    """, (course_id, course_type, path_id, course_url, structure_hash, course_slug, author_id, collection_id, course_title, json.dumps(complete_toc), cloudlab_id, project_id, 1, now_iso))
     logging.info(f"Created course '{course_title}' with ID {course_id} (Type: {course_type})")
 
 
