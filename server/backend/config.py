@@ -205,6 +205,23 @@ def _parse_sqlite_db_paths(raw: str) -> tuple[str, ...]:
     return tuple(paths)
 
 
+def _scan_folder_for_dbs(db_folder: str) -> list[str]:
+    db_folder = db_folder.strip()
+    if not db_folder:
+        return []
+    base_dir = Path(db_folder).resolve()
+    if not base_dir.is_dir():
+        log.warning("COURSE_SQLITE_DB_FOLDER '%s' is not a valid directory", db_folder)
+        return []
+    found_dbs = []
+    for root, _, files in os.walk(base_dir):
+        for file in files:
+            if file.lower().endswith((".db", ".sqlite", ".sqlite3")):
+                found_dbs.append(os.path.join(root, file))
+    found_dbs.sort()
+    return found_dbs
+
+
 def load_config() -> AppConfig:
     load_env_file()
 
@@ -218,19 +235,10 @@ def load_config() -> AppConfig:
 
     db_folder = os.environ.get("COURSE_SQLITE_DB_FOLDER", "").strip()
     if db_folder:
-        base_dir = Path(db_folder).resolve()
-        if base_dir.is_dir():
-            found_dbs = []
-            for root, _, files in os.walk(base_dir):
-                for file in files:
-                    if file.lower().endswith((".db", ".sqlite", ".sqlite3")):
-                        found_dbs.append(os.path.join(root, file))
-            found_dbs.sort()
-            for db in found_dbs:
-                if db not in course_db_paths:
-                    course_db_paths.append(db)
-        else:
-            log.warning("COURSE_SQLITE_DB_FOLDER '%s' is not a valid directory", db_folder)
+        found_dbs = _scan_folder_for_dbs(db_folder)
+        for db in found_dbs:
+            if db not in course_db_paths:
+                course_db_paths.append(db)
 
     course_db_paths = tuple(course_db_paths)
 
