@@ -221,11 +221,36 @@ def load_config() -> AppConfig:
         base_dir = Path(db_folder).resolve()
         if base_dir.is_dir():
             found_dbs = []
-            for root, _, files in os.walk(base_dir):
-                for file in files:
-                    if file.lower().endswith((".db", ".sqlite", ".sqlite3")):
-                        found_dbs.append(os.path.join(root, file))
-            found_dbs.sort()
+            cache_file = Path(__file__).resolve().parents[1] / ".db_list_cache.json"
+            use_cache = False
+            import time
+            
+            # Use cached database list if cache is less than 3600 seconds old
+            if cache_file.is_file():
+                try:
+                    cache_mtime = cache_file.stat().st_mtime
+                    if (time.time() - cache_mtime) < 3600:
+                        with open(cache_file, "r", encoding="utf-8") as f:
+                            found_dbs = json.load(f)
+                        use_cache = True
+                        log.info("Loaded course DB path listing from local cache file")
+                except Exception as exc:
+                    log.warning("Failed to load course DB path listing cache: %s", exc)
+
+            if not use_cache:
+                log.info("Scanning COURSE_SQLITE_DB_FOLDER (rclone mount/folder) for DB files...")
+                for root, _, files in os.walk(base_dir):
+                    for file in files:
+                        if file.lower().endswith((".db", ".sqlite", ".sqlite3")):
+                            found_dbs.append(os.path.join(root, file))
+                found_dbs.sort()
+                try:
+                    with open(cache_file, "w", encoding="utf-8") as f:
+                        json.dump(found_dbs, f, indent=2)
+                    log.info("Successfully updated course DB path listing cache")
+                except Exception as exc:
+                    log.warning("Failed to write course DB path listing cache: %s", exc)
+
             for db in found_dbs:
                 if db not in course_db_paths:
                     course_db_paths.append(db)

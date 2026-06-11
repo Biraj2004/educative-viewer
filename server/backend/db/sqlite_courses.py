@@ -19,12 +19,17 @@ class CourseDbShard:
 
 import zlib
 import os
+import shutil
+import threading
+
+_CACHE_LOCK = threading.Lock()
 
 class SQLiteCourseDatabase:
     """SQLite adapter for course/topic read APIs.
 
     Supports a multi-DB setup where each DB is assigned a stable offset
-    based on a CRC32 hash of its filename.
+    based on a CRC32 hash of its filename. Includes optional dynamic local
+    caching for high-performance reading on network mounts.
     """
 
     engine = "sqlite"
@@ -37,6 +42,30 @@ class SQLiteCourseDatabase:
 
         self.offset_step = offset_step
         self.connection_mode = connection_mode
+        
+        # Configure dynamic local caching if COURSE_DB_CACHE_DIR is set
+        self.cache_dir = os.environ.get("COURSE_DB_CACHE_DIR", "").strip()
+        if self.cache_dir:
+            self.cache_dir = os.path.abspath(self.cache_dir)
+            os.makedirs(self.cache_dir, exist_ok=True)
+            try:
+                raw_size = os.environ.get("COURSE_DB_CACHE_SIZE_GB", "10")
+                self.max_cache_bytes = int(float(raw_size) * 1024 * 1024 * 1024)
+            except ValueError:
+                self.max_cache_bytes = 10 * 1024 * 1024 * 1024
+            log.info(f"Local course DB cache enabled at '{self.cache_dir}' with limit {self.max_cache_bytes / (1024**3):.1f} GB")
+        else:
+            self.cache_dir = None
+            self.max_cache_bytes = 0
+
+        # Configure centralized catalog database if COURSE_DB_METADATA_PATH is set
+        metadata_path = os.environ.get("COURSE_DB_METADATA_PATH", "").strip()
+        if metadata_path:
+            metadata_path = os.path.abspath(metadata_path)
+            self.metadata_shard = CourseDbShard(index=-1, db_path=metadata_path, offset=0)
+            log.info(f"Centralized Course DB catalog enabled using: {metadata_path}")
+        else:
+            self.metadata_shard = None
         
         shards_list = []
         self._offset_to_shard = {}
@@ -66,7 +95,89 @@ class SQLiteCourseDatabase:
         else:
             log.info("Course DB single-db mode: %s", self.shards[0].db_path)
 
+    def _get_local_db_path(self, remote_path: str) -> str:
+        """Downloads/caches the database locally on demand, maintaining an LRU policy."""
+        if not self.cache_dir or not os.path.exists(remote_path):
+            return remote_path
+
+        db_name = os.path.basename(remote_path)
+        local_path = os.path.join(self.cache_dir, db_name)
+
+        with _CACHE_LOCK:
+            try:
+                remote_stat = os.stat(remote_path)
+                remote_size = remote_stat.st_size
+            except OSError as e:
+                log.warning(f"Could not stat remote file {remote_path}: {e}")
+                return remote_path
+
+            copy_needed = True
+            if os.path.exists(local_path):
+                try:
+                    local_stat = os.stat(local_path)
+                    if local_stat.st_size == remote_size:
+                        copy_needed = False
+                        # Update access time to indicate recent access for LRU
+                        os.utime(local_path, None)
+                except OSError:
+                    pass
+
+            if copy_needed:
+                log.info(f"Caching course DB from remote mount: {remote_path} -> {local_path}")
+                self._trim_cache(remote_size)
+                
+                temp_path = local_path + ".tmp"
+                try:
+                    shutil.copy2(remote_path, temp_path)
+                    os.replace(temp_path, local_path)
+                except Exception as e:
+                    log.error(f"Failed to cache database {remote_path} to local: {e}")
+                    if os.path.exists(temp_path):
+                        try:
+                            os.remove(temp_path)
+                        except OSError:
+                            pass
+                    return remote_path
+
+        return local_path
+
+    def _trim_cache(self, incoming_bytes: int) -> None:
+        """Trim the oldest accessed files in the cache to stay below max size."""
+        if not self.cache_dir or self.max_cache_bytes <= 0:
+            return
+
+        cached_files = []
+        total_size = 0
+        try:
+            for entry in os.scandir(self.cache_dir):
+                if entry.is_file() and entry.name.lower().endswith((".db", ".sqlite", ".sqlite3")):
+                    stat = entry.stat()
+                    cached_files.append((entry.path, stat.st_atime, stat.st_size))
+                    total_size += stat.st_size
+        except OSError as e:
+            log.warning(f"Failed to scan cache directory: {e}")
+            return
+
+        # If we exceed max_cache_bytes or if adding the new file will exceed it
+        if total_size + incoming_bytes > self.max_cache_bytes:
+            # Sort by access time (oldest first)
+            cached_files.sort(key=lambda x: x[1])
+            
+            target_size = self.max_cache_bytes * 0.8  # Trim down to 80% capacity
+            for path, atime, size in cached_files:
+                if total_size + incoming_bytes <= target_size:
+                    break
+                try:
+                    os.remove(path)
+                    total_size -= size
+                    log.info(f"Evicted old cached course DB: {path}")
+                except Exception as e:
+                    # File might be in use/locked by active connection on Windows, skip it
+                    log.debug(f"Could not evict cached file {path}: {e}")
+
     def iter_shards(self) -> tuple[CourseDbShard, ...]:
+        if self.metadata_shard:
+            return (self.metadata_shard,)
         return self.shards
 
     def resolve_global_id(self, global_id: int) -> tuple[CourseDbShard, int]:
@@ -89,8 +200,14 @@ class SQLiteCourseDatabase:
     def get_connection(self, shard: CourseDbShard) -> sqlite3.Connection:
         import pathlib
         
+        # Resolve target database path (uses local cache if enabled)
+        if self.metadata_shard and shard.index == -1:
+            target_path = shard.db_path
+        else:
+            target_path = self._get_local_db_path(shard.db_path)
+        
         # Construct a robust cross-platform SQLite URI
-        abs_uri = pathlib.Path(shard.db_path).absolute().as_uri()
+        abs_uri = pathlib.Path(target_path).absolute().as_uri()
         if self.connection_mode == "rw":
             optimized_uri = f"{abs_uri}?mode=rw"
         else:
@@ -107,7 +224,7 @@ class SQLiteCourseDatabase:
             conn.execute("PRAGMA cache_size=-64000;")  # 64MB memory page cache
             conn.execute("PRAGMA journal_mode=OFF;")   # No journals for immutable files
         except sqlite3.OperationalError as e:
-            log.warning("Could not apply some PRAGMAs to %s: %s", shard.db_path, e)
+            log.warning("Could not apply some PRAGMAs to %s: %s", target_path, e)
             
         return conn
 

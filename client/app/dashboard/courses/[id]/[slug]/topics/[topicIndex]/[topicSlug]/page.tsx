@@ -112,6 +112,7 @@ export default function TopicDetailPage() {
   const [drawingsEnabled, setDrawingsEnabled] = useState(true);
   const [loading, setLoading] = useState(true);
   const [missing, setMissing] = useState(false);
+  const [showSlowLoading, setShowSlowLoading] = useState(false);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -121,6 +122,10 @@ export default function TopicDetailPage() {
     const nextPath = fromPath ? `${basePath}?from=${encodeURIComponent(fromPath)}` : basePath;
     const hadToken = Boolean(getAuthToken());
 
+    const slowTimer = setTimeout(() => {
+      if (!cancelled) setShowSlowLoading(true);
+    }, 1000);
+
     getUser()
       .then(() => {
         if (cancelled) return;
@@ -128,6 +133,7 @@ export default function TopicDetailPage() {
         const token = getAuthToken();
         if (!token) {
           router.replace(`/auth?next=${nextPath}`);
+          clearTimeout(slowTimer);
           return;
         }
 
@@ -164,6 +170,7 @@ export default function TopicDetailPage() {
         Promise.all([topicPromise, coursePromise, getProgress(), getViewerCourseSettings(courseId, topicIdx)])
           .then(([topicData, courseData, prog, viewerCoursePayload]) => {
             if (cancelled) return;
+            clearTimeout(slowTimer);
             if (!topicData) { setMissing(true); setLoading(false); return; }
             setTopic(topicData);
             setCourse(courseData);
@@ -199,6 +206,7 @@ export default function TopicDetailPage() {
           })
           .catch((err: unknown) => {
             if (cancelled) return;
+            clearTimeout(slowTimer);
             if (err && (err as { status?: number }).status === 401) {
               clearAuthToken();
               window.location.replace("/auth?reason=session_expired");
@@ -210,6 +218,7 @@ export default function TopicDetailPage() {
       })
       .catch((err: unknown) => {
         if (cancelled) return;
+        clearTimeout(slowTimer);
         const status = (err as { status?: number })?.status;
 
         if (status === 401 && hadToken) {
@@ -222,6 +231,7 @@ export default function TopicDetailPage() {
 
     return () => {
       cancelled = true;
+      clearTimeout(slowTimer);
     };
   }, [courseId, topicIdx, routeId, routeSlug, routeTopicIndex, routeTopicSlug, router, fromPath]);
 
@@ -264,6 +274,15 @@ export default function TopicDetailPage() {
           {/* Content skeleton */}
           <main className="flex-1 overflow-auto">
             <div className="max-w-3xl mx-auto px-8 py-10 space-y-4">
+              {showSlowLoading && (
+                <div className="flex items-center space-x-3 p-4 bg-blue-50 dark:bg-blue-950/40 border border-blue-100 dark:border-blue-900/60 rounded-xl text-blue-800 dark:text-blue-200 animate-pulse mb-6">
+                  <svg className="animate-spin h-5 w-5 text-blue-600 dark:text-blue-400 shrink-0" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  <span className="text-sm font-medium">Preparing course content: copying database from network drive to local cache...</span>
+                </div>
+              )}
               <div className="h-8 bg-gray-200 dark:bg-gray-700 rounded animate-pulse" style={{ width: "65%" }} />
               <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded animate-pulse" style={{ width: "100%" }} />
               <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded animate-pulse" style={{ width: "92%" }} />

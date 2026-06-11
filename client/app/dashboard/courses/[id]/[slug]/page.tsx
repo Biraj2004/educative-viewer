@@ -166,6 +166,7 @@ export default function CourseDetailPage() {
   const [bookmarkDeleteDraft, setBookmarkDeleteDraft] = useState<number[] | null>(null);
   const [loading, setLoading] = useState(true);
   const [missing, setMissing] = useState(false);
+  const [showSlowLoading, setShowSlowLoading] = useState(false);
   const [resetting, setResetting] = useState(false);
   const [showResetDialog, setShowResetDialog] = useState(false);
   const [resetScopeSelection, setResetScopeSelection] = useState<Record<CourseResetScope, boolean>>({
@@ -200,6 +201,10 @@ export default function CourseDetailPage() {
     const nextPath = fromPath ? `${basePath}?from=${encodeURIComponent(fromPath)}` : basePath;
     const hadToken = Boolean(getAuthToken());
 
+    const slowTimer = setTimeout(() => {
+      if (!cancelled) setShowSlowLoading(true);
+    }, 1000);
+
     getUser()
       .then(() => {
         if (cancelled) return;
@@ -207,6 +212,7 @@ export default function CourseDetailPage() {
         const token = getAuthToken();
         if (!token) {
           router.replace(`/auth?next=${nextPath}`);
+          clearTimeout(slowTimer);
           return;
         }
 
@@ -235,6 +241,7 @@ export default function CourseDetailPage() {
         Promise.all([coursePromise, getProgress(), getViewerCourseSettings(courseId)])
           .then(([data, prog, viewerCoursePayload]) => {
             if (cancelled) return;
+            clearTimeout(slowTimer);
             if (!data) { setMissing(true); setLoading(false); return; }
             setCourse(data);
             setProgress(prog);
@@ -259,6 +266,7 @@ export default function CourseDetailPage() {
           })
           .catch((err: unknown) => {
             if (cancelled) return;
+            clearTimeout(slowTimer);
             if (err && (err as { status?: number }).status === 401) {
               clearAuthToken();
               window.location.replace("/auth?reason=session_expired");
@@ -270,6 +278,7 @@ export default function CourseDetailPage() {
       })
       .catch((err: unknown) => {
         if (cancelled) return;
+        clearTimeout(slowTimer);
         const status = (err as { status?: number })?.status;
 
         if (status === 401 && hadToken) {
@@ -282,6 +291,7 @@ export default function CourseDetailPage() {
 
     return () => {
       cancelled = true;
+      clearTimeout(slowTimer);
     };
   }, [courseId, routeId, routeSlug, router, fromPath, isInvalidCourseId]);
 
@@ -368,6 +378,15 @@ export default function CourseDetailPage() {
           </div>
         </div>
         <div className="max-w-5xl mx-auto px-6 py-8 space-y-7">
+          {showSlowLoading && (
+            <div className="flex items-center space-x-3 p-4 bg-blue-50 dark:bg-blue-950/40 border border-blue-100 dark:border-blue-900/60 rounded-xl text-blue-800 dark:text-blue-200 animate-pulse">
+              <svg className="animate-spin h-5 w-5 text-blue-600 dark:text-blue-400 shrink-0" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+              </svg>
+              <span className="text-sm font-medium">Preparing course databases: copying required database from network drive to local cache...</span>
+            </div>
+          )}
           {([3,5,2,4] as const).map((count, i) => (
             <div key={i}>
               <div className="h-4 w-40 bg-gray-200 dark:bg-gray-700 rounded animate-pulse mb-3" />
