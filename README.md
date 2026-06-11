@@ -1,97 +1,103 @@
-﻿# Edu-Viewer PRO
+# Edu-Viewer PRO 🎓
 
-A local viewer for structured educational content. One script starts everything.
+A modern, highly-polished local educational viewer for structured content (courses, paths, cloudlabs, and projects). 
 
-## Updates
+Edu-Viewer PRO is designed to run locally, serve content directly from local SQLite databases, bundle sandboxed workspaces, support dark modes, and provide an extremely premium browser experience.
+
+---
+
+## ✨ Updates
 - v1.0.188+ updates
     ```
     Please rebuild the project using --force-build command as environment variables were updated.
     Auth DB may need to be deleted if you face issues.
     ```
 
-## Requirements
+## ✨ Key Features
 
-Install these before running:
+* **⚡ Single-Command Startup**: Run one command (`node local-start.js`) and everything (Flask API backend, Next.js frontend, and SSL proxy) is automatically configured, built, and started.
+* **🔒 Automatic HTTPS & SSL**: Generates self-signed certificates out-of-the-box so features like browser cryptos and sandboxes work flawlessly.
+* **🚀 Premium UI/UX**: Responsive modern dashboard, HSL tailormade colors, sleek dark mode, and fluid micro-animations.
+* **🗄️ Multi-Database Support**: Load multiple database files simultaneously.
+* **💾 Rich Content Rendering**: Supports complex components including SlateHTML, MarkdownEditor, interactive workspaces, and drawing canvas sketches.
+* **📥 Legacy Content Migration**: Seamlessly import your custom folder structure of downloaded HTML lessons using the built-in migration suite.
 
-- **[Node.js 18+](https://nodejs.org/)** download and install the LTS version
-- **[Python 3.10+](https://www.python.org/downloads/)** make sure it's on your PATH (`python --version` should work)
+---
 
-## Start locally
+## 📋 Requirements
 
-From the repo root:
+Before launching, please ensure you have the following installed:
+
+* **[Node.js 18+](https://nodejs.org/)** (LTS version recommended)
+* **[Python 3.10+](https://www.python.org/downloads/)** (Make sure `python` is added to your system environment variables)
+
+---
+
+## 🚀 Getting Started
+
+Launch the app from the root of this project:
 
 ```powershell
 node local-start.js
 ```
 
-> **Windows/Linux:** Port 443 might require an elevated shell run PowerShell as **Administrator** / use `sudo`, or use `--proxy-port 8443`.
+### What happens on the first run?
+The startup script is fully automated:
+1. **Python Virtual Environment**: Setup in `server/env/` and installs backend dependencies.
+2. **Security Keys**: Generates RSA keys for JWT tokens inside `server/.env`.
+3. **Database Prompt**: Prompts you for your database paths (add as many as you need!).
+4. **Next.js Builder**: Builds the production bundle (takes ~1-2 mins on first run).
+5. **Start Servers**: Spawns Flask, Next.js, and the HTTPS proxy.
 
-### What happens on first run
+Once ready, go to **[https://localhost](https://localhost)** (bypass the self-signed certificate warning) and log in with invite code: **`local`**.
 
-The script is fully automated. It will:
+> **Note**: If port `443` is already in use or requires Administrator privilege, run the terminal as Administrator or specify a custom port: `node local-start.js --proxy-port 8443`.
 
-1. **Create a Python venv** at `server/env/` and install backend dependencies.
-2. **Generate RSA keys** and write them into `server/.env`.
-3. **Ask for your course DB path(s)** paste the full path to each DB file. After each entry you can add another with **Y/N**:
-   ```
-   Course DB path 1: C:\Users\you\Downloads\educative_scraper.db
-   Add another course DB? [y/N]: y
-   Course DB path 2: D:\Courses\extra.db
-   Add another course DB? [y/N]: n
-   ```
-4. **Ask for the static API root** the folder that holds course images. Just press **Enter** to accept the default (parent folder of the DB).
-5. **Build the Next.js bundle** takes ~1â€“2 min the first time.
-6. Start Flask, Next.js, and the embedded proxy.
+---
 
-You will see output similar to:
+## 🔑 Administrator Credentials
+
+On first run, an administrator account is automatically bootstrapped:
+* **Email**: `admin@localhost`
+* **Password**: Stored securely inside `server/.bootstrap_admin_credentials.txt` (you will be prompted to change this on your first login).
+
+---
+
+## 📦 Importing Content (Legacy Migration)
+
+You can import folder structures containing downloaded lessons into SQLite databases using the legacy migrator script.
+
+```bash
+# Move to the migration directory
+cd migration
+
+# Install natsort dependency
+pip install -r requirements.txt
+
+# Run the migrator in Auto mode
+python legacy_migration.py --dir "C:\path\to\your\scraped\courses"
 ```
-[ready] Local environment is starting.
-[ready] Proxy:  https://localhost
-[ready] Proxy:  https://192.168.1.195
-```
 
-Once done, open **https://localhost** (or your machine's LAN IP, e.g., `https://192.168.1.195`) and log in with invite code **`local`**.
+For advanced settings (such as **split database mode** which creates individual database files per course), check out the [Migration Documentation](migration/README.md).
 
-> **Note:** The local server automatically generates self-signed SSL certificates to enable proper cross-device testing and unlock browser features like Sandpack/Web Crypto. Your browser will show a **"Connection is Not Private"** warning. This is expected. Click "Advanced" or "Show Details" and proceed to the site.
+---
 
-On **subsequent runs** all prompts are skipped it starts straight away.
+## 🛠️ Useful Flags
 
-### Bootstrap admin account (auto-created)
-
-During backend setup, if **no admin user exists** in the auth DB, Edu-Viewer creates one bootstrap admin account automatically.
-
-- Email: `admin@localhost`
-- A strong temporary password is generated and written to `server/.bootstrap_admin_credentials.txt`.
-- This setup password does **not expire** before first login.
-- On first login, you must change the password (first-login flow).
-- After password change, the original setup temporary password is revoked.
-
-Keep `server/.bootstrap_admin_credentials.txt` private and delete it after initial setup.
-
-## Useful flags
+Configure startup behavior via command line arguments:
 
 ```powershell
-node local-start.js --force-build      # force a full rebuild
-node local-start.js --skip-build       # skip build, serve existing .next
-node local-start.js --proxy-port 8443  # use a non-privileged port
-node local-start.js --edit-env         # change saved settings (DB path, ports, etc.)
+node local-start.js --force-build      # Force rebuild of the Next.js client
+node local-start.js --skip-build       # Bypass build step, run existing client
+node local-start.js --proxy-port 8443  # Use a custom non-privileged port
+node local-start.js --edit-env         # Re-configure DB paths, static roots, or ports
 ```
 
-## Versioning
+---
 
-The version shown in the navbar (`v1.x.x`) is stored in `client/.env.local.example`:
+## 📖 Sub-module Documentation
 
-```
-NEXT_PUBLIC_VERSION=1.0.63
-```
-
-CI auto-increments the patch on every push to `main`. To bump major or minor, edit this line and commit.
-
-## More docs
-
-| | |
-|---|---|
-| [README_DETAILED.md](README_DETAILED.md) | Full detailed README |
-| [Cloudflare_Vercel.md](Cloudflare_Vercel.md) | Production deployment (Cloudflare + Vercel) |
-| [proxy/README.md](proxy/README.md) | Nginx / Apache proxy configs |
-| [CONTRIBUTING.md](CONTRIBUTING.md) | How to contribute |
+* [Migration Guide](migration/README.md) — How to parse, bundle, and split local HTML courses.
+* [Deployment Guide](Cloudflare_Vercel.md) — Production setup for hosting on Cloudflare and Vercel.
+* [Proxy Configs](proxy/README.md) — Manual Nginx/Apache configuration if not using the automated script.
+* [Detailed Docs](README_DETAILED.md) — Technical deep-dive into internal modules and structure.

@@ -334,38 +334,69 @@ def process_course(course_dir, course_title, args, conn, cursor, now_iso, course
     # Commit after each course to prevent RAM exhaustion on massive migrations
     conn.commit()
 
+def get_db_path(content_type, content_title, args):
+    if not args.split:
+        return args.db
+    
+    db_dir = os.path.dirname(os.path.abspath(args.db))
+    category_map = {
+        "Course": "Courses",
+        "Path": "Paths",
+        "Cloudlab": "CloudLabs",
+        "Project": "Projects"
+    }
+    
+    subfolder = category_map.get(content_type, "")
+    target_dir = os.path.join(db_dir, subfolder)
+    os.makedirs(target_dir, exist_ok=True)
+    
+    slug_title = slugify(content_title)
+    return os.path.join(target_dir, f"{slug_title}.db")
+
 def process_content_by_type(base_dir, content_type, content_title, args, conn, cursor, now_iso):
+    resolved_title = content_title or os.path.basename(base_dir)
+    
+    local_conn = conn
+    local_cursor = cursor
+    is_local_db = False
+    
+    if args.split:
+        db_path = get_db_path(content_type, resolved_title, args)
+        local_conn = create_connection(db_path)
+        local_cursor = local_conn.cursor()
+        is_local_db = True
+
     if content_type == "Path":
-        path_title = content_title or os.path.basename(base_dir)
+        path_title = resolved_title
         path_slug = slugify(path_title)
         
-        cursor.execute("SELECT id FROM paths WHERE path_url_slug = ?", (path_slug,))
-        row = cursor.fetchone()
+        local_cursor.execute("SELECT id FROM paths WHERE path_url_slug = ?", (path_slug,))
+        row = local_cursor.fetchone()
         if row:
             path_id = row["id"]
             logging.info(f"Path '{path_title}' already exists (ID {path_id}). Checking sub-courses...")
         else:
             author_id = generate_id()
             collection_id = generate_id()
-            cursor.execute("""
+            local_cursor.execute("""
                 INSERT INTO paths (path_author_id, path_collection_id, path_url_slug, path_title, is_active, scraped_at)
                 VALUES (?, ?, ?, ?, ?, ?)
             """, (author_id, collection_id, path_slug, path_title, 1, now_iso))
-            path_id = cursor.lastrowid
+            path_id = local_cursor.lastrowid
             logging.info(f"Created Path entry '{path_title}' with ID {path_id}")
 
         # Iterate through subdirectories for courses
         for entry in os.listdir(base_dir):
             full_path = os.path.join(base_dir, entry)
             if os.path.isdir(full_path):
-                process_course(full_path, entry, args, conn, cursor, now_iso, course_type="Path", path_id=path_id)
+                process_course(full_path, entry, args, local_conn, local_cursor, now_iso, course_type="Path", path_id=path_id)
 
     elif content_type == "Project":
-        project_title = content_title or os.path.basename(base_dir)
+        project_title = resolved_title
         project_slug = slugify(project_title)
         
-        cursor.execute("SELECT id FROM projects WHERE project_url_slug = ?", (project_slug,))
-        row = cursor.fetchone()
+        local_cursor.execute("SELECT id FROM projects WHERE project_url_slug = ?", (project_slug,))
+        row = local_cursor.fetchone()
         if row:
             project_id = row["id"]
             logging.info(f"Project '{project_title}' already exists (ID {project_id}). Checking content...")
@@ -373,21 +404,21 @@ def process_content_by_type(base_dir, content_type, content_title, args, conn, c
             author_id = generate_id()
             collection_id = generate_id()
             work_id = generate_id()
-            cursor.execute("""
+            local_cursor.execute("""
                 INSERT INTO projects (project_author_id, project_collection_id, project_work_id, project_title, project_url_slug, is_active, scraped_at)
                 VALUES (?, ?, ?, ?, ?, ?, ?)
             """, (author_id, collection_id, work_id, project_title, project_slug, 1, now_iso))
-            project_id = cursor.lastrowid
+            project_id = local_cursor.lastrowid
             logging.info(f"Created Project entry '{project_title}' with ID {project_id}")
         
-        process_course(base_dir, content_title, args, conn, cursor, now_iso, course_type="Project", project_id=project_id)
+        process_course(base_dir, content_title, args, local_conn, local_cursor, now_iso, course_type="Project", project_id=project_id)
         
     elif content_type == "Cloudlab":
-        cloudlab_title = content_title or os.path.basename(base_dir)
+        cloudlab_title = resolved_title
         cloudlab_slug = slugify(cloudlab_title)
         
-        cursor.execute("SELECT id FROM cloudlabs WHERE cloudlab_url_slug = ?", (cloudlab_slug,))
-        row = cursor.fetchone()
+        local_cursor.execute("SELECT id FROM cloudlabs WHERE cloudlab_url_slug = ?", (cloudlab_slug,))
+        row = local_cursor.fetchone()
         if row:
             cloudlab_id = row["id"]
             logging.info(f"Cloudlab '{cloudlab_title}' already exists (ID {cloudlab_id}). Checking content...")
@@ -395,18 +426,22 @@ def process_content_by_type(base_dir, content_type, content_title, args, conn, c
             author_id = generate_id()
             collection_id = generate_id()
             work_id = generate_id()
-            cursor.execute("""
+            local_cursor.execute("""
                 INSERT INTO cloudlabs (cloudlab_author_id, cloudlab_collection_id, cloudlab_work_id, cloudlab_title, cloudlab_url_slug, is_active, scraped_at)
                 VALUES (?, ?, ?, ?, ?, ?, ?)
             """, (author_id, collection_id, work_id, cloudlab_title, cloudlab_slug, 1, now_iso))
-            cloudlab_id = cursor.lastrowid
+            cloudlab_id = local_cursor.lastrowid
             logging.info(f"Created Cloudlab entry '{cloudlab_title}' with ID {cloudlab_id}")
         
-        process_course(base_dir, content_title, args, conn, cursor, now_iso, course_type="Cloudlab", cloudlab_id=cloudlab_id)
+        process_course(base_dir, content_title, args, local_conn, local_cursor, now_iso, course_type="Cloudlab", cloudlab_id=cloudlab_id)
 
     else:
         # Course
-        process_course(base_dir, content_title, args, conn, cursor, now_iso, course_type="Course")
+        process_course(base_dir, content_title, args, local_conn, local_cursor, now_iso, course_type="Course")
+
+    if is_local_db:
+        local_conn.commit()
+        local_conn.close()
 
 def main():
     parser = argparse.ArgumentParser(description="Migrate legacy HTML courses/paths to SQLite database")
@@ -414,6 +449,7 @@ def main():
     parser.add_argument("--dir", required=True, help="Path to the legacy course or path directory")
     parser.add_argument("--type", choices=["Course", "Path", "Cloudlab", "Project", "Auto"], default="Auto", help="Type of legacy content (or Auto to scan directories)")
     parser.add_argument("--title", help="Course or Path title (defaults to directory name)")
+    parser.add_argument("--split", action="store_true", help="Create individual DB for each Course/Project/Cloudlab and a single DB for all courses inside a Path")
     args = parser.parse_args()
 
     base_dir = os.path.abspath(args.dir)
@@ -421,9 +457,14 @@ def main():
         logging.error(f"Directory not found: {base_dir}")
         return
 
-    conn = create_connection(args.db)
-    cursor = conn.cursor()
     now_iso = datetime.now(timezone.utc).isoformat()
+
+    if not args.split:
+        conn = create_connection(args.db)
+        cursor = conn.cursor()
+    else:
+        conn = None
+        cursor = None
 
     if args.type == "Auto":
         valid_folders = {
@@ -450,8 +491,9 @@ def main():
     else:
         process_content_by_type(base_dir, args.type, args.title, args, conn, cursor, now_iso)
 
-    conn.commit()
-    conn.close()
+    if conn:
+        conn.commit()
+        conn.close()
     logging.info(f"Migration completed successfully.")
 
 if __name__ == "__main__":

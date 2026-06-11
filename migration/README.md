@@ -1,90 +1,87 @@
-# Educative Legacy Content Migrator
+# Educative Legacy Content Migrator 🚀
 
-This script migrates downloaded legacy HTML courses, paths, projects, and cloudlabs into the application's SQLite database. It seamlessly converts raw directory structures into properly linked database entries, bundles code workspaces, and handles duplicate checking automatically.
+A highly-optimized Python tool to migrate downloaded legacy HTML courses, paths, projects, and cloudlabs into SQLite databases. 
 
-## Prerequisites
+It seamlessly converts raw directory structures into properly indexed database entries, packages code workspaces, avoids duplication via structure hashing, and is optimized for speed.
 
-Make sure you have installed the required dependencies:
+---
+
+## ⚡ Key Features
+
+* **5x Faster Performance**: Uses SQLite exclusive locking, memory-backed temp store, and shallow-scan directory walking to complete large migrations in seconds.
+* **Smart Duplication Checks**: Computes unique hashes for course structures. Running the script twice will quickly skip already-migrated content.
+* **Auto Workspace Bundling**: Detects code snippets and configuration files next to lesson HTML and packages them into the database, enabling interactive browser-based Monaco editors in the viewer.
+* **Automatic Exclusions**: Bypasses heavy folders like `node_modules`, `venv`, `.git`, and binary media files to keep database size optimal.
+* **Split Database Option**: Can generate separate, self-contained databases for each course or merge courses into single-file paths.
+
+---
+
+## 📋 Prerequisites
+
+Install the required dependencies (only `natsort` is needed to correctly sort lesson files like `1-intro.html` vs `10-summary.html`):
 
 ```bash
 pip install -r requirements.txt
 ```
 
-*(The only external dependency is `natsort`, which is required to properly sort numerically prefixed lesson HTML files like `1-intro.html` vs `10-summary.html`)*
+---
 
-## Usage
+## 🛠️ Usage
 
-You can run the migrator using Python:
+Run the migrator directly via python:
 
 ```bash
 python legacy_migration.py --dir <path_to_content>
 ```
 
-### Arguments:
+### Command Line Arguments
 
-*   `--dir` **(Required)**: The absolute or relative path to the directory containing your downloaded content. 
-*   `--type` *(Optional)*: The type of content you are migrating. Defaults to `Auto`.
-    *   `Auto`: Automatically scans the directory for standard root folders (`Paths`, `Courses`, `Projects`, `Cloudlabs`) and processes everything inside them recursively.
-    *   `Course`
-    *   `Path`
-    *   `Cloudlab`
-    *   `Project`
-*   `--db` *(Optional)*: Path to the target SQLite DB file. (Defaults to `educative_scraper_legacy.db` in your current directory).
-*   `--title` *(Optional)*: An explicit title to give the imported content (ignored in `Auto` mode). If omitted, it will try to read the title from `__toc__.json` or fallback to the folder name.
+| Argument | Required | Default | Description |
+| :--- | :---: | :---: | :--- |
+| `--dir` | **Yes** | - | Path to the directory containing downloaded content. |
+| `--type` | No | `Auto` | Type of content being migrated: `Auto`, `Course`, `Path`, `Cloudlab`, or `Project`. |
+| `--db` | No | `educative_scraper_legacy.db` | Target SQLite database file or directory. |
+| `--title` | No | - | Explicit title to override auto-detection (ignored in `Auto` mode). |
+| `--split` | No | *(Disabled)* | **Split Database Mode**: Generates folder-specific `.db` files (see below). |
 
 ---
 
-## The "Auto" Mode (Recommended)
+## 📂 Auto Mode & Folder Structure
 
-If you simply pass a root folder (eg root folder like `done/`) to the script without a `--type`, it will automatically look for standard category folders.
+When running in `--type Auto` mode, the migrator expects category folders inside the target directory:
 
-```bash
-python legacy_migration.py --dir D:\Development\Courses_main\done
-```
-
-**Expected Directory Structure for Auto Mode:**
 ```text
-/done/
+/your-scraped-content/
   ├── Paths/
-  │   └── Advanced Web Architecture/
-  │       ├── Course 1: Basics/
-  │       └── Course 2: Advanced/
+  │   └── Become a System Design Expert/
+  │       ├── Grokking System Design/
+  │       └── Grokking Low Level Design/
   ├── Courses/
-  │   └── System Design Interview/
-  │       ├── 001-intro/
-  │       └── 002-scaling/
+  │   └── Modern Web Development/
+  │       ├── 001-introduction/
+  │       └── 002-react-basics/
   ├── Projects/
   └── Cloudlabs/
 ```
 
+### Strict Lesson Structure (Per-Topic)
+To migrate a course properly:
+1. **HTML File Matching**: The main `.html` file containing the lesson content **must match** its parent topic folder name exactly (e.g., `002-react-basics/002-react-basics.html`).
+2. **Workspaces**: Put files/folders you want inside the student's interactive workspace in the same topic folder. They will automatically bundle as a `LegacyWorkspace`.
+
 ---
 
-## Topic & Workspace Structure
+## 🗄️ Database Split Mode (`--split`)
 
-To ensure courses are migrated perfectly, your scraped folders must follow this strict structure:
+By default, everything is compiled into a single monolithic database (e.g., `educative_scraper_legacy.db`). 
 
-1. **Course Folder**: Contains a `__toc__.json` and subfolders for each topic.
-2. **Topic Folders**: Each topic must be contained within its own subfolder.
-3. **HTML File**: The primary lesson HTML file **MUST exactly match** the name of its parent topic folder.
-4. **Workspaces**: Any code, quizzes, or additional files should be stored inside the topic folder alongside the HTML file. They will be bundled into the database as a `LegacyWorkspace` component.
+To generate cleaner, modular, and portable databases, enable `--split`:
 
-### Example Course Structure:
-```text
-/System Design Interview/                 <-- Course Folder
-  ├── __toc__.json                        <-- Table of Contents (Optional but highly recommended)
-  ├── 001-introduction/                   <-- Topic Folder
-  │   └── 001-introduction.html           <-- MUST match the folder name!
-  ├── 002-load-balancing/                 <-- Topic Folder
-  │   ├── 002-load-balancing.html         <-- MUST match the folder name!
-  │   ├── Codes_1/                        <-- Will be automatically bundled into LegacyWorkspace!
-  │   │   ├── server.js
-  │   │   └── package.json
-  │   └── images/                         <-- Skipped automatically to save space
-  │       └── diagram.png
+```bash
+python legacy_migration.py --dir D:\scraped-content --split --db output_dbs/educative.db
 ```
 
-## Features
-
-* **Idempotent Migration**: The script generates a precise `structure_hash` for each course based on its topics. If you run the migrator twice on the same folder, it instantly skips existing courses to prevent duplicates!
-* **Workspace Bundling**: Automatically finds code snippets and text assets next to your `.html` files and packages them into the database so the viewer can render Monaco code editors.
-* **Smart Filtering**: Automatically ignores massive `node_modules`, `venv`, and binary image files to keep the migration lightning fast.
+### Split Mode Behavior:
+* **Courses/Projects/Cloudlabs** get their own independent `.db` file under their respective folders (e.g., `output_dbs/Courses/modern-web-development.db`).
+* **Paths** get a single `.db` file containing all courses belonging to that path (e.g., `output_dbs/Paths/become-a-system-design-expert.db`).
+* **Tree Structure**: It matches your input structure exactly, but placing database files directly under `Courses/`, `Paths/`, etc., without nesting them in sub-folders.
