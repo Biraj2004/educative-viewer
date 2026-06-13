@@ -163,7 +163,7 @@ export default function AppNavbar({
         </button>
       </div>
 
-      <div className="w-full px-8 h-14 flex items-center justify-between gap-5 relative">
+      <div className="w-full px-4 sm:px-8 h-14 flex items-center justify-between gap-3 sm:gap-5 relative">
         <div className="absolute bottom-0 left-0 w-full h-px bg-linear-to-r from-transparent via-gray-300 dark:via-white/12 to-transparent" />
 
         <div className="flex items-center min-w-0 overflow-hidden gap-2">
@@ -195,31 +195,34 @@ export default function AppNavbar({
             </span>
           </Link>
 
-          {crumbs?.map((crumb, i) => (
-            <span key={i} className="flex items-center min-w-0">
-              <span className="mx-2.5 text-gray-300 dark:text-gray-700 select-none text-sm shrink-0">/</span>
-              {crumb.onClick ? (
-                <button
-                  onClick={crumb.onClick}
-                  className="text-sm font-medium text-gray-500 dark:text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors truncate max-w-45 cursor-pointer"
-                >
-                  {crumb.label}
-                </button>
-              ) : crumb.href ? (
-                <Link
-                  href={crumb.href}
-                  prefetch={false}
-                  className="text-sm font-medium text-gray-500 dark:text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors truncate max-w-45"
-                >
-                  {crumb.label}
-                </Link>
-              ) : (
-                <span className="text-sm font-semibold text-gray-900 dark:text-gray-100 truncate max-w-45">
-                  {crumb.label}
-                </span>
-              )}
-            </span>
-          ))}
+          {crumbs?.map((crumb, i) => {
+            const isLast = i === crumbs.length - 1;
+            return (
+              <span key={i} className={`items-center min-w-0 ${isLast ? "flex" : "hidden sm:flex"}`}>
+                <span className="mx-1.5 sm:mx-2.5 text-gray-300 dark:text-gray-700 select-none text-sm shrink-0">/</span>
+                {crumb.onClick ? (
+                  <button
+                    onClick={crumb.onClick}
+                    className="text-sm font-medium text-gray-500 dark:text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors truncate max-w-[7rem] sm:max-w-[15rem] cursor-pointer"
+                  >
+                    {crumb.label}
+                  </button>
+                ) : crumb.href ? (
+                  <Link
+                    href={crumb.href}
+                    prefetch={false}
+                    className="text-sm font-medium text-gray-500 dark:text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors truncate max-w-[7rem] sm:max-w-[15rem]"
+                  >
+                    {crumb.label}
+                  </Link>
+                ) : (
+                  <span className="text-sm font-semibold text-gray-900 dark:text-gray-100 truncate max-w-[7rem] sm:max-w-[15rem]">
+                    {crumb.label}
+                  </span>
+                )}
+              </span>
+            );
+          })}
         </div>
 
         <div className="flex items-center gap-4 shrink-0">

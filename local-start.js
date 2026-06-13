@@ -104,11 +104,6 @@ async function main() {
   ensureNodeVersion();
   ensureNpm();
 
-  console.log(`[setup] Checking and clearing ports ${proxyPort}, ${backendPort}, ${clientPort} if in use...`);
-  killProcessOnPort(proxyPort);
-  killProcessOnPort(backendPort);
-  killProcessOnPort(clientPort);
-
   const python = resolvePythonCommand();
   ensurePythonVersion(python.versionText);
 
@@ -782,6 +777,7 @@ function installPythonDeps(venvPython) {
 }
 
 function startBackend(venvPython) {
+  killProcessOnPort(backendPort);
   console.log('[start] Flask backend');
   const child = spawn(venvPython, ['app.py'], {
     cwd: SERVER_DIR,
@@ -806,6 +802,7 @@ async function startClient({ skipBuild, forceBuild, devOnly, clientPort }) {
   }
 
   if (devOnly) {
+    killProcessOnPort(clientPort);
     console.log('[start] Next.js dev server (auto-reloading)');
     const child = spawn('npx', ['next', 'dev', '-H', '0.0.0.0', '-p', String(clientPort)], {
       cwd: CLIENT_DIR,
@@ -844,6 +841,7 @@ async function startClient({ skipBuild, forceBuild, devOnly, clientPort }) {
     console.log('[build] Skipped (using existing .next)');
   }
 
+  killProcessOnPort(clientPort);
   console.log('[start] Next.js server');
   const child = spawn('npx', ['next', 'start', '-H', '0.0.0.0', '-p', String(clientPort)], {
     cwd: CLIENT_DIR,
@@ -856,6 +854,7 @@ async function startClient({ skipBuild, forceBuild, devOnly, clientPort }) {
 }
 
 function startProxyServer({ proxyPort, backendPort, clientPort, staticRoot, certPath, keyPath }) {
+  killProcessOnPort(proxyPort);
   const backendTarget = { host: '127.0.0.1', port: backendPort };
   const clientTarget = { host: '127.0.0.1', port: clientPort };
 

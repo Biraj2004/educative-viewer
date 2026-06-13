@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, useCallback } from "react";
+import { useEffect, useMemo, useState, useCallback, useRef, Fragment } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import AppNavbar from "@/components/edu-viewer/AppNavbar";
@@ -55,6 +55,28 @@ function parsePositiveInt(value: string | null): number | null {
   return parsed;
 }
 
+function useGridColumns() {
+  const [columns, setColumns] = useState(3);
+
+  useEffect(() => {
+    function updateColumns() {
+      const width = window.innerWidth;
+      if (width >= 1024) {
+        setColumns(3);
+      } else if (width >= 640) {
+        setColumns(2);
+      } else {
+        setColumns(1);
+      }
+    }
+    updateColumns();
+    window.addEventListener("resize", updateColumns);
+    return () => window.removeEventListener("resize", updateColumns);
+  }, []);
+
+  return columns;
+}
+
 export default function PathsPage() {
   const searchParams = useSearchParams();
   const { user, loading } = useAuth();
@@ -70,6 +92,26 @@ export default function PathsPage() {
   const [courses, setCourses] = useState<CourseItem[]>([]);
   const [coursesLoading, setCoursesLoading] = useState(initialSelectedPathId !== null);
   const [coursesError, setCoursesError] = useState<string | null>(null);
+
+  const detailsSectionRef = useRef<HTMLDivElement>(null);
+
+  const [isMounted, setIsMounted] = useState(false);
+  const columns = useGridColumns();
+
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
+
+  const selectedIndex = useMemo(() => {
+    if (selectedPathId == null) return -1;
+    return paths.findIndex((p) => p.id === selectedPathId);
+  }, [paths, selectedPathId]);
+
+  const insertAfterIndex = useMemo(() => {
+    if (selectedIndex === -1) return -1;
+    const rowIndex = Math.floor(selectedIndex / columns);
+    return Math.min((rowIndex + 1) * columns - 1, paths.length - 1);
+  }, [selectedIndex, columns, paths.length]);
 
   useEffect(() => {
     if (!loading && !user) {
@@ -172,7 +214,24 @@ export default function PathsPage() {
     [paths, selectedPathId]
   );
 
+  useEffect(() => {
+    if (selectedPathId != null) {
+      const timer = setTimeout(() => {
+        detailsSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      }, 80);
+      return () => clearTimeout(timer);
+    }
+  }, [selectedPathId]);
+
   function handleSelectPath(pathId: number) {
+    if (pathId === selectedPathId) {
+      setSelectedPathId(null);
+      const params = new URLSearchParams(searchParams.toString());
+      params.delete("path");
+      const paramStr = params.toString();
+      window.history.replaceState(null, "", `/dashboard/paths${paramStr ? `?${paramStr}` : ""}`);
+      return;
+    }
     setSelectedPathId(pathId);
     setCourses([]);
     setCoursesError(null);
@@ -267,72 +326,147 @@ export default function PathsPage() {
           </div>
         ) : (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {paths.map((path) => {
+            {paths.map((path, index) => {
               const active = path.id === selectedPathId;
               const pathActive = path.is_active === undefined ? true : Boolean(path.is_active);
+              const isInsertLocation = isMounted && index === insertAfterIndex;
+
               return (
-                <div
-                  key={path.id}
-                  role="button"
-                  tabIndex={0}
-                  onClick={() => handleSelectPath(path.id)}
-                  onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") handleSelectPath(path.id); }}
-                  className={[
-                    "relative text-left rounded-xl border bg-white dark:bg-gray-900 p-5 transition-colors cursor-pointer",
-                    active
-                      ? "border-indigo-400 dark:border-indigo-700 ring-2 ring-indigo-100 dark:ring-indigo-900/50"
-                      : "border-gray-200 dark:border-gray-800 hover:border-indigo-300 dark:hover:border-indigo-700",
-                    !pathActive && isAdmin ? "opacity-60" : "",
-                  ].join(" ")}
-                >
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="flex gap-2 flex-wrap">
-                      <div className="inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-semibold bg-violet-50 dark:bg-violet-950/50 text-violet-600 dark:text-violet-400">
-                        {Number(path.course_count) || 0} course{Number(path.course_count) === 1 ? "" : "s"}
-                      </div>
-                      {path.is_legacy && (
-                        <div className="inline-flex items-center rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400">
-                          Legacy
+                <Fragment key={path.id}>
+                  <div
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => handleSelectPath(path.id)}
+                    onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") handleSelectPath(path.id); }}
+                    className={[
+                      "relative text-left rounded-xl border bg-white dark:bg-gray-900 p-5 transition-colors cursor-pointer",
+                      active
+                        ? "border-indigo-400 dark:border-indigo-700 ring-2 ring-indigo-100 dark:ring-indigo-900/50"
+                        : "border-gray-200 dark:border-gray-800 hover:border-indigo-300 dark:hover:border-indigo-700",
+                      !pathActive && isAdmin ? "opacity-60" : "",
+                    ].join(" ")}
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex gap-2 flex-wrap">
+                        <div className="inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-semibold bg-violet-50 dark:bg-violet-950/50 text-violet-600 dark:text-violet-400">
+                          {Number(path.course_count) || 0} course{Number(path.course_count) === 1 ? "" : "s"}
                         </div>
+                        {path.is_legacy && (
+                          <div className="inline-flex items-center rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400">
+                            Legacy
+                          </div>
+                        )}
+                      </div>
+                      {isAdmin && (
+                        <ActiveToggle
+                          entity="path"
+                          entityId={path.id}
+                          isActive={pathActive}
+                          authToken={authToken}
+                          onToggle={(v) => handlePathToggle(path.id, v)}
+                        />
                       )}
                     </div>
-                    {isAdmin && (
-                      <ActiveToggle
-                        entity="path"
-                        entityId={path.id}
-                        isActive={pathActive}
-                        authToken={authToken}
-                        onToggle={(v) => handlePathToggle(path.id, v)}
-                      />
-                    )}
+                    <h2 className="mt-3 text-base font-bold text-gray-900 dark:text-gray-100">
+                      {pathDisplayName(path)}
+                    </h2>
+                    <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                      Path ID: {path.id}
+                    </p>
                   </div>
-                  <h2 className="mt-3 text-base font-bold text-gray-900 dark:text-gray-100">
-                    {pathDisplayName(path)}
-                  </h2>
-                  <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                    Path ID: {path.id}
-                  </p>
-                </div>
+
+                  {isInsertLocation && (
+                    <section ref={detailsSectionRef} className="col-span-full mt-2 scroll-mt-20 rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 overflow-hidden">
+                      <div className="px-5 py-4 border-b border-gray-100 dark:border-gray-800">
+                        <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+                          {selectedPath ? pathDisplayName(selectedPath) : `Path ${selectedPathId}`}
+                        </h3>
+                      </div>
+
+                      <div className="p-4">
+                        {coursesLoading ? (
+                          <div className="space-y-2">
+                            {Array.from({ length: selectedPath ? Math.max(1, Math.min(Number(selectedPath.course_count) || 3, 5)) : 3 }).map((_, idx) => (
+                              <div key={idx} className="h-11 rounded-lg border border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-800/40 animate-pulse" />
+                            ))}
+                          </div>
+                        ) : coursesError ? (
+                          <div className="text-sm text-red-600 dark:text-red-400">{coursesError}</div>
+                        ) : courses.length === 0 ? (
+                          <div className="text-sm text-gray-500 dark:text-gray-400">No courses found for this path.</div>
+                        ) : (
+                          <div className="space-y-2">
+                            {courses.map((course) => {
+                              const title = course.title?.trim() || `Course ${course.id}`;
+                              const slug = course.slug?.trim() || String(course.id);
+                              const fromPath = `/dashboard/paths?path=${selectedPathId}`;
+                              const href = `/dashboard/courses/${course.id}/${slug}?from=${encodeURIComponent(fromPath)}`;
+
+                              return (
+                                <Link
+                                  key={course.id}
+                                  href={href}
+                                  prefetch={false}
+                                  className={[
+                                    "flex items-start sm:items-center justify-between gap-3 rounded-lg border border-gray-200 dark:border-gray-800 px-3 py-2.5 hover:border-indigo-300 dark:hover:border-indigo-700 hover:bg-indigo-50/40 dark:hover:bg-indigo-950/20 transition-colors",
+                                    !(course.is_active === undefined ? true : Boolean(course.is_active)) && isAdmin ? "opacity-50" : "",
+                                  ].join(" ")}
+                                >
+                                  <div className="min-w-0">
+                                    <p className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
+                                      {title}
+                                      {course.is_legacy && (
+                                        <span className="ml-2 inline-flex items-center text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400 align-middle">
+                                          Legacy
+                                        </span>
+                                      )}
+                                    </p>
+                                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                                      Course ID: {course.id}
+                                      {course.type ? ` · ${course.type}` : ""}
+                                    </p>
+                                  </div>
+                                  <div className="flex items-center gap-2 shrink-0 self-center sm:self-auto">
+                                    {isAdmin && (
+                                      <ActiveToggle
+                                        entity="course"
+                                        entityId={course.id}
+                                        isActive={course.is_active === undefined ? true : Boolean(course.is_active)}
+                                        authToken={authToken}
+                                        onToggle={(v) => handleCourseToggle(course.id, v)}
+                                      />
+                                    )}
+                                    <svg className="w-4 h-4 shrink-0 text-gray-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                                      <path d="M5 12h14" />
+                                      <path d="m12 5 7 7-7 7" />
+                                    </svg>
+                                  </div>
+                                </Link>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    </section>
+                  )}
+                </Fragment>
               );
             })}
           </div>
         )}
 
-        {selectedPathId != null && (
-          <section className="mt-7 rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 overflow-hidden">
+        {(!isMounted || insertAfterIndex === -1) && selectedPathId != null && (
+          <section ref={detailsSectionRef} className="mt-7 scroll-mt-20 rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 overflow-hidden">
             <div className="px-5 py-4 border-b border-gray-100 dark:border-gray-800">
               <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
                 {selectedPath ? pathDisplayName(selectedPath) : `Path ${selectedPathId}`}
               </h3>
-              {/* <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                Courses linked by courses.path_id = {selectedPathId}
-              </p> */}
             </div>
 
             <div className="p-4">
               {coursesLoading ? (
                 <div className="space-y-2">
-                  {[1, 2, 3, 4].map((idx) => (
+                  {Array.from({ length: selectedPath ? Math.max(1, Math.min(Number(selectedPath.course_count) || 3, 5)) : 3 }).map((_, idx) => (
                     <div key={idx} className="h-11 rounded-lg border border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-800/40 animate-pulse" />
                   ))}
                 </div>
@@ -345,7 +479,7 @@ export default function PathsPage() {
                   {courses.map((course) => {
                     const title = course.title?.trim() || `Course ${course.id}`;
                     const slug = course.slug?.trim() || String(course.id);
-                    const fromPath = selectedPath ? `/dashboard/paths?path=${selectedPath.id}` : "/dashboard/paths";
+                    const fromPath = `/dashboard/paths?path=${selectedPathId}`;
                     const href = `/dashboard/courses/${course.id}/${slug}?from=${encodeURIComponent(fromPath)}`;
 
                     return (
@@ -354,7 +488,7 @@ export default function PathsPage() {
                         href={href}
                         prefetch={false}
                         className={[
-                          "flex items-center justify-between gap-3 rounded-lg border border-gray-200 dark:border-gray-800 px-3 py-2.5 hover:border-indigo-300 dark:hover:border-indigo-700 hover:bg-indigo-50/40 dark:hover:bg-indigo-950/20 transition-colors",
+                          "flex items-start sm:items-center justify-between gap-3 rounded-lg border border-gray-200 dark:border-gray-800 px-3 py-2.5 hover:border-indigo-300 dark:hover:border-indigo-700 hover:bg-indigo-50/40 dark:hover:bg-indigo-950/20 transition-colors",
                           !(course.is_active === undefined ? true : Boolean(course.is_active)) && isAdmin ? "opacity-50" : "",
                         ].join(" ")}
                       >
@@ -372,7 +506,7 @@ export default function PathsPage() {
                             {course.type ? ` · ${course.type}` : ""}
                           </p>
                         </div>
-                        <div className="flex items-center gap-2 shrink-0">
+                        <div className="flex items-center gap-2 shrink-0 self-center sm:self-auto">
                           {isAdmin && (
                             <ActiveToggle
                               entity="course"

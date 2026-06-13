@@ -83,7 +83,7 @@ export default function BackButton({
   }, [pathname]);
 
   const buttonCls =
-    "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 hover:border-indigo-300 dark:hover:border-indigo-700 hover:text-indigo-700 dark:hover:text-indigo-400 text-xs font-medium transition-all";
+    "inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-md border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 hover:border-indigo-300 dark:hover:border-indigo-700 hover:text-indigo-700 dark:hover:text-indigo-400 text-xs font-medium transition-all";
 
   const canUseHistoryTarget = Boolean(previousPath && !isAuthPath(previousPath));
 
@@ -146,9 +146,15 @@ export default function BackButton({
   };
 
   return (
-    <button type="button" onClick={handleBack} className={buttonCls}>
+    <button
+      type="button"
+      onClick={handleBack}
+      className={buttonCls}
+      aria-label={resolvedLabel}
+      title={resolvedLabel}
+    >
       {icon}
-      {resolvedLabel}
+      <span className="hidden sm:inline">{resolvedLabel}</span>
     </button>
   );
 }

@@ -113,7 +113,7 @@ export default function ActiveToggle({
       {/* Label */}
       <span
         className={[
-          "transition-colors duration-300 uppercase tracking-wider",
+          "transition-colors duration-300 uppercase tracking-wider hidden sm:inline",
           active
             ? "text-emerald-600 dark:text-emerald-400"
             : "text-gray-400 dark:text-gray-500",

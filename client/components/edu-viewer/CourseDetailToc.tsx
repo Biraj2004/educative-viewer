@@ -220,7 +220,7 @@ export default function CourseDetailToc({
                             href={buildTopicHref(courseId, slug, topic.topic_index, topic.slug, fromPath)}
                             prefetch={false}
                             className={[
-                              "flex items-center gap-3 px-4 py-2.5 text-sm transition-colors border-l-2 relative",
+                              "flex items-center gap-3 px-4 py-2.5 text-sm transition-colors border-l-2",
                               isDone
                                 ? "border-l-emerald-400 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-900/20"
                                 : "border-l-transparent text-gray-700 dark:text-gray-300 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 hover:text-indigo-700 dark:hover:text-indigo-400",
@@ -229,11 +229,6 @@ export default function CourseDetailToc({
                                 : ""
                             ].join(" ")}
                           >
-                            {isLastVisited && !isDone && (
-                              <span className="absolute right-4 text-[10px] font-medium px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-400">
-                                Last visited
-                              </span>
-                            )}
                             {isDone ? (
                              <div className="flex items-center gap-1 shrink-0 w-10 justify-end text-right select-none">
                                <svg className="w-3.5 h-3.5 text-emerald-500 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
@@ -248,23 +243,30 @@ export default function CourseDetailToc({
                                {topic.topic_index + 1}
                              </span>
                            )}
-                            <span className="leading-snug">
+                            <span className="flex-1 min-w-0 leading-snug">
                               {isFiltered ? (
                                 <HighlightMatch text={topic.title} query={normalised} />
                               ) : (
                                 topic.title
                               )}
                             </span>
-                            {isBookmarked && (
-                              <svg
-                                className="w-3.5 h-3.5 shrink-0 text-amber-500"
-                                fill="currentColor"
-                                viewBox="0 0 20 20"
-                                aria-label="Bookmarked"
-                              >
-                                <path d="M5 2a2 2 0 0 0-2 2v14l7-3 7 3V4a2 2 0 0 0-2-2H5Z" />
-                              </svg>
-                            )}
+                            <div className="flex items-center gap-2 shrink-0">
+                              {isBookmarked && (
+                                <svg
+                                  className="w-3.5 h-3.5 text-amber-500"
+                                  fill="currentColor"
+                                  viewBox="0 0 20 20"
+                                  aria-label="Bookmarked"
+                                >
+                                  <path d="M5 2a2 2 0 0 0-2 2v14l7-3 7 3V4a2 2 0 0 0-2-2H5Z" />
+                                </svg>
+                              )}
+                              {isLastVisited && !isDone && (
+                                <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-400">
+                                  Last visited
+                                </span>
+                              )}
+                            </div>
                           </Link>
                         </li>
                       );
@@ -286,7 +288,7 @@ export default function CourseDetailToc({
                     href={buildTopicHref(courseId, slug, entry.topic_index, entry.slug, fromPath)}
                     prefetch={false}
                     className={[
-                      "flex items-center gap-3 px-4 py-2.5 text-sm transition-colors border-l-2 relative",
+                      "flex items-center gap-3 px-4 py-2.5 text-sm transition-colors border-l-2",
                       isDone
                         ? "border-l-emerald-400 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-900/20"
                         : "border-l-transparent text-gray-700 dark:text-gray-300 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 hover:text-indigo-700 dark:hover:text-indigo-400",
@@ -295,11 +297,6 @@ export default function CourseDetailToc({
                         : ""
                     ].join(" ")}
                   >
-                    {isLastVisited && !isDone && (
-                      <span className="absolute right-4 text-[10px] font-medium px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-400">
-                        Last visited
-                      </span>
-                    )}
                     {isDone ? (
                      <div className="flex items-center gap-1 shrink-0 w-10 justify-end text-right select-none">
                        <svg className="w-3.5 h-3.5 text-emerald-500 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
@@ -314,23 +311,30 @@ export default function CourseDetailToc({
                        {entry.topic_index + 1}
                      </span>
                    )}
-                    <span className="leading-snug">
+                    <span className="flex-1 min-w-0 leading-snug">
                       {isFiltered ? (
                         <HighlightMatch text={entry.title} query={normalised} />
                       ) : (
                         entry.title
                       )}
                     </span>
-                    {isBookmarked && (
-                      <svg
-                        className="w-3.5 h-3.5 shrink-0 text-amber-500"
-                        fill="currentColor"
-                        viewBox="0 0 20 20"
-                        aria-label="Bookmarked"
-                      >
-                        <path d="M5 2a2 2 0 0 0-2 2v14l7-3 7 3V4a2 2 0 0 0-2-2H5Z" />
-                      </svg>
-                    )}
+                    <div className="flex items-center gap-2 shrink-0">
+                      {isBookmarked && (
+                        <svg
+                          className="w-3.5 h-3.5 text-amber-500"
+                          fill="currentColor"
+                          viewBox="0 0 20 20"
+                          aria-label="Bookmarked"
+                        >
+                          <path d="M5 2a2 2 0 0 0-2 2v14l7-3 7 3V4a2 2 0 0 0-2-2H5Z" />
+                        </svg>
+                      )}
+                      {isLastVisited && !isDone && (
+                        <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-400">
+                          Last visited
+                        </span>
+                      )}
+                    </div>
                   </Link>
                 </div>
               );

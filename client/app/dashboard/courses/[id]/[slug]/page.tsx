@@ -141,6 +141,7 @@ export default function CourseDetailPage() {
   const [readerPanelMode, setReaderPanelMode] = useState<ReaderPanelMode>("bookmarks");
   const [readerPanelWidth, setReaderPanelWidth] = useState(() => {
     if (typeof window === "undefined") return 960;
+    if (window.innerWidth < 768) return window.innerWidth;
     const max = Math.max(520, window.innerWidth - 24);
     const min = Math.min(420, max);
     return Math.max(min, Math.min(window.innerWidth * 0.6, max));
@@ -185,6 +186,30 @@ export default function CourseDetailPage() {
   const isMissing = isInvalidCourseId || missing;
 
   useEffect(() => {
+    if (typeof window !== "undefined") {
+      const handleResize = () => {
+        if (window.innerWidth < 768) {
+          setReaderPanelWidth(window.innerWidth);
+        } else {
+          setReaderPanelWidth((prev) => {
+            if (prev >= window.innerWidth) {
+              return Math.max(420, Math.floor(window.innerWidth * 0.6));
+            }
+            const max = Math.max(520, window.innerWidth - 24);
+            const min = Math.min(420, max);
+            return Math.max(min, Math.min(prev, max));
+          });
+        }
+      };
+      window.addEventListener("resize", handleResize);
+      return () => {
+        window.removeEventListener("resize", handleResize);
+        if (panelCloseTimerRef.current) {
+          clearTimeout(panelCloseTimerRef.current);
+          panelCloseTimerRef.current = null;
+        }
+      };
+    }
     return () => {
       if (panelCloseTimerRef.current) {
         clearTimeout(panelCloseTimerRef.current);
@@ -287,6 +312,9 @@ export default function CourseDetailPage() {
 
   const clampReaderPanelWidth = useCallback((next: number) => {
     if (typeof window === "undefined") return 960;
+    if (window.innerWidth < 768) {
+      return window.innerWidth;
+    }
     const max = Math.max(520, window.innerWidth - 24);
     const min = Math.min(420, max);
     return Math.max(min, Math.min(next, max));
@@ -1084,7 +1112,7 @@ export default function CourseDetailPage() {
     (count, option) => count + (resetScopeSelection[option.key] ? 1 : 0),
     0,
   );
-  const readerContentShiftStyle = readerPanelMounted
+  const readerContentShiftStyle = readerPanelMounted && typeof window !== "undefined" && window.innerWidth >= 1024
     ? { marginRight: `${readerPanelWidth}px` }
     : undefined;
 
@@ -1166,11 +1194,11 @@ export default function CourseDetailPage() {
         </div>
       </div>
       {!readerPanelMounted && (
-      <div className="hidden lg:flex fixed right-0 top-1/2 -translate-y-1/2 z-40 flex-col items-end gap-1.5 transition-[margin-right] duration-200" style={readerContentShiftStyle}>
+      <div className="fixed right-0 top-1/2 -translate-y-1/2 z-40 flex flex-col items-end gap-1.5 transition-[margin-right] duration-200 pointer-events-none" style={readerContentShiftStyle}>
         <button
           onClick={() => setShowResetDialog(true)}
           disabled={resetting}
-          className="flex flex-col items-center gap-1 bg-red-50 dark:bg-red-900/20 border border-red-300 dark:border-red-700 border-r-0 rounded-l-xl px-2 py-3 shadow-md text-red-600 dark:text-red-300 hover:bg-red-100 dark:hover:bg-red-900/35 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+          className="pointer-events-auto flex flex-col items-center gap-1 bg-red-50 dark:bg-red-900/20 border border-red-300 dark:border-red-700 border-r-0 rounded-l-xl px-2 py-3 shadow-md text-red-600 dark:text-red-300 hover:bg-red-100 dark:hover:bg-red-900/35 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
           title="Reset Course Data"
         >
           {resetting ? (
@@ -1185,7 +1213,7 @@ export default function CourseDetailPage() {
         {bookmarksEnabled && (
           <button
             onClick={() => openReaderPanel("bookmarks")}
-            className="flex flex-col items-center gap-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 border-r-0 rounded-l-xl px-2 py-3 shadow-md text-gray-500 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors cursor-pointer"
+            className="pointer-events-auto flex flex-col items-center gap-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 border-r-0 rounded-l-xl px-2 py-3 shadow-md text-gray-500 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors cursor-pointer"
             title="Bookmarks"
           >
             <svg className="w-4 h-4" fill="none" viewBox="0 0 20 20" stroke="currentColor" strokeWidth={1.6}>
@@ -1197,7 +1225,7 @@ export default function CourseDetailPage() {
         {notesDrawerEnabled && (
           <button
             onClick={() => openReaderPanel("highlightNotes")}
-            className="flex flex-col items-center gap-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 border-r-0 rounded-l-xl px-2 py-3 shadow-md text-gray-500 hover:text-amber-600 dark:hover:text-amber-300 transition-colors cursor-pointer"
+            className="pointer-events-auto flex flex-col items-center gap-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 border-r-0 rounded-l-xl px-2 py-3 shadow-md text-gray-500 hover:text-amber-600 dark:hover:text-amber-300 transition-colors cursor-pointer"
             title="Highlights+Notes"
           >
             <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
@@ -1209,7 +1237,7 @@ export default function CourseDetailPage() {
         {drawingsEnabled && (
           <button
             onClick={() => openReaderPanel("drawing")}
-            className="flex flex-col items-center gap-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 border-r-0 rounded-l-xl px-2 py-3 shadow-md text-gray-500 hover:text-sky-600 dark:hover:text-sky-300 transition-colors cursor-pointer"
+            className="hidden md:flex pointer-events-auto flex-col items-center gap-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 border-r-0 rounded-l-xl px-2 py-3 shadow-md text-gray-500 hover:text-sky-600 dark:hover:text-sky-300 transition-colors cursor-pointer"
             title="Drawing Board"
           >
             <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
@@ -1220,58 +1248,6 @@ export default function CourseDetailPage() {
           </button>
         )}
       </div>
-      )}
-      {!readerPanelMounted && (
-        <div className="lg:hidden fixed right-3 bottom-4 z-40 flex flex-col items-end gap-2">
-          <button
-            onClick={() => setShowResetDialog(true)}
-            disabled={resetting}
-            className="inline-flex items-center gap-2 px-3 py-2 rounded-full border border-red-300 dark:border-red-700 bg-red-50 dark:bg-red-900/20 shadow-md text-xs font-semibold text-red-700 dark:text-red-300 hover:bg-red-100 dark:hover:bg-red-900/35 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {resetting ? (
-              <div className="w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin" />
-            ) : (
-              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-              </svg>
-            )}
-            <span>Reset Data</span>
-          </button>
-          {bookmarksEnabled && (
-            <button
-              onClick={() => openReaderPanel("bookmarks")}
-              className="inline-flex items-center gap-2 px-3 py-2 rounded-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 shadow-md text-xs font-semibold text-gray-600 dark:text-gray-300 hover:text-indigo-600 dark:hover:text-indigo-300 transition-colors cursor-pointer"
-            >
-              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 20 20" stroke="currentColor" strokeWidth={1.6}>
-                <path d="M5 2a2 2 0 0 0-2 2v14l7-3 7 3V4a2 2 0 0 0-2-2H5Z" />
-              </svg>
-              <span>Bookmarks</span>
-            </button>
-          )}
-          {notesDrawerEnabled && (
-            <button
-              onClick={() => openReaderPanel("highlightNotes")}
-              className="inline-flex items-center gap-2 px-3 py-2 rounded-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 shadow-md text-xs font-semibold text-gray-600 dark:text-gray-300 hover:text-amber-600 dark:hover:text-amber-300 transition-colors cursor-pointer"
-            >
-              <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
-                <path d="M15 4H6a2 2 0 0 0-2 2v14l5-2 5 2V6a2 2 0 0 0-2-2Z" />
-              </svg>
-              <span>H+N</span>
-            </button>
-          )}
-          {drawingsEnabled && (
-            <button
-              onClick={() => openReaderPanel("drawing")}
-              className="inline-flex items-center gap-2 px-3 py-2 rounded-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 shadow-md text-xs font-semibold text-gray-600 dark:text-gray-300 hover:text-sky-700 dark:hover:text-sky-300 transition-colors cursor-pointer"
-            >
-              <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
-                <path d="M12 20h9" />
-                <path d="m16.5 3.5 4 4L7 21H3v-4L16.5 3.5Z" />
-              </svg>
-              <span>Draw</span>
-            </button>
-          )}
-        </div>
       )}
       <div className="max-w-5xl mx-auto px-6 py-8 transition-[margin-right] duration-200" style={readerContentShiftStyle}>
         <CourseDetailToc
@@ -1376,7 +1352,7 @@ export default function CourseDetailPage() {
             onClick={closeReaderPanel}
           />
           <div
-            className="absolute top-0 bottom-0 right-0 bg-white dark:bg-gray-900 border-l border-gray-200 dark:border-gray-800 shadow-2xl flex flex-col will-change-[opacity] transition-opacity duration-220 ease-out pointer-events-auto"
+            className="absolute top-0 bottom-0 right-0 bg-white dark:bg-gray-900 border-l border-gray-200 dark:border-gray-800 shadow-2xl flex flex-col will-change-[opacity] transition-opacity duration-220 ease-out pointer-events-auto max-w-full"
             style={{
               width: `${readerPanelWidth}px`,
               opacity: readerPanelVisible ? 1 : 0,
@@ -1424,7 +1400,7 @@ export default function CourseDetailPage() {
               aria-orientation="vertical"
               aria-label="Resize drawer panel"
               onPointerDown={handleStartReaderResize}
-              className="absolute left-0 top-0 h-full w-6 -translate-x-1/2 cursor-col-resize bg-transparent z-20 touch-none"
+              className="hidden md:block absolute left-0 top-0 h-full w-6 -translate-x-1/2 cursor-col-resize bg-transparent z-20 touch-none"
               title="Drag to resize drawer panel"
             >
               <div className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 h-10 w-10 rounded-full border border-gray-300/90 dark:border-gray-700/90 bg-white/95 dark:bg-gray-900/95 shadow-lg flex items-center justify-center">

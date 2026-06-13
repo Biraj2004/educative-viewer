@@ -77,7 +77,7 @@ function CourseAvatar({ title, index }: { title: string; index: number }) {
     .join("");
   return (
     <div
-      className={`w-11 h-11 rounded-lg flex items-center justify-center shrink-0 font-bold text-sm select-none ${bg} ${text}`}
+      className={`w-9 h-9 sm:w-11 sm:h-11 rounded-lg flex items-center justify-center shrink-0 font-bold text-xs sm:text-sm select-none ${bg} ${text}`}
     >
       {initials}
     </div>
@@ -330,12 +330,12 @@ export default function CoursesListClient({
                   href={href}
                   prefetch={false}
                   className={[
-                    "group flex items-center gap-4 px-5 py-4 hover:bg-gray-50/70 dark:hover:bg-gray-800/50 transition-colors",
+                    "group flex items-start sm:items-center gap-3 sm:gap-4 px-4 sm:px-5 py-3.5 sm:py-4 hover:bg-gray-50/70 dark:hover:bg-gray-800/50 transition-colors",
                     !isActive && isAdmin ? "opacity-50" : "",
                   ].join(" ")}
                 >
                   {/* Index number */}
-                  <span className="w-6 text-right text-xs font-medium text-gray-400 dark:text-gray-600 shrink-0 tabular-nums">
+                  <span className="hidden sm:inline-block w-6 text-right text-xs font-medium text-gray-400 dark:text-gray-600 shrink-0 tabular-nums">
                     {globalIndex + 1}
                   </span>
 
@@ -450,7 +450,7 @@ export default function CoursesListClient({
                   </div>
 
                   {/* Arrow + Admin toggle */}
-                  <div className="flex items-center gap-2 shrink-0">
+                  <div className="flex items-center gap-2 shrink-0 self-center sm:self-auto">
                     {isAdmin && (
                       <ActiveToggle
                         entity="course"

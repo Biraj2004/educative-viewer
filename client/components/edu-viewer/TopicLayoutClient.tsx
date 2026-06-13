@@ -305,6 +305,7 @@ export default function TopicLayoutClient({
   const [highlightDrawerVisible, setHighlightDrawerVisible] = useState(false);
   const [highlightPanelWidth, setHighlightPanelWidth] = useState(() => {
     if (typeof window === "undefined") return 420;
+    if (window.innerWidth < 768) return window.innerWidth;
     return Math.max(340, Math.floor(window.innerWidth * 0.3));
   });
   const [drawingPanelVisible, setDrawingPanelVisible] = useState(false);
@@ -312,6 +313,7 @@ export default function TopicLayoutClient({
   const [workspaceDrawerVisible, setWorkspaceDrawerVisible] = useState(false);
   const [drawingPanelWidth, setDrawingPanelWidth] = useState(() => {
     if (typeof window === "undefined") return 560;
+    if (window.innerWidth < 768) return window.innerWidth;
     return Math.max(360, Math.floor(window.innerWidth * 0.5));
   });
   const [desktopSidebarCollapsed, setDesktopSidebarCollapsed] = useState(false);
@@ -430,6 +432,35 @@ export default function TopicLayoutClient({
       document.title = "Topic · Edu-Viewer PRO";
     }
   }, [currentTopic?.topic_name]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const handleResize = () => {
+      if (window.innerWidth < 768) {
+        setHighlightPanelWidth(window.innerWidth);
+        setDrawingPanelWidth(window.innerWidth);
+      } else {
+        setHighlightPanelWidth((prev) => {
+          if (prev >= window.innerWidth) {
+            return Math.max(340, Math.floor(window.innerWidth * 0.3));
+          }
+          const max = Math.max(520, window.innerWidth - 24);
+          const min = Math.min(340, max);
+          return Math.max(min, Math.min(prev, max));
+        });
+        setDrawingPanelWidth((prev) => {
+          if (prev >= window.innerWidth) {
+            return Math.max(360, Math.floor(window.innerWidth * 0.5));
+          }
+          const max = Math.max(720, window.innerWidth - 24);
+          const min = Math.min(360, max);
+          return Math.max(min, Math.min(prev, max));
+        });
+      }
+    };
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
 
   const isSameHighlightAnchor = useCallback((a: ViewerHighlight, b: ViewerHighlight): boolean => {
     const aStart = typeof a.start_offset === "number" ? a.start_offset : null;
@@ -2502,7 +2533,7 @@ export default function TopicLayoutClient({
     : workspaceDrawerOpen
       ? drawingPanelWidth
       : (highlightDrawerOpen ? highlightPanelWidth : 0);
-  const contentShiftStyle = activeRightPanelWidth > 0
+  const contentShiftStyle = activeRightPanelWidth > 0 && typeof window !== "undefined" && window.innerWidth >= 1024
     ? { marginRight: `${activeRightPanelWidth}px` }
     : undefined;
   const chatRightOffsetPx = Math.max(24, activeRightPanelWidth + 24);
@@ -2759,7 +2790,7 @@ export default function TopicLayoutClient({
             </div>
 
             {/* Prev / Next */}
-            <div className="flex items-center justify-between gap-4">
+            <div className="flex flex-col gap-3 items-center w-full">
               {prev ? (
                 <button
                   onClick={() => {
@@ -2774,14 +2805,14 @@ export default function TopicLayoutClient({
                     }
                     handleTopicNav(buildTopicHref(prev.topic_index, prev.slug), prev.topic_index);
                   }}
-                  className="flex items-center gap-2 px-4 py-2.5 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-sm text-gray-700 dark:text-gray-300 hover:border-indigo-400 dark:hover:border-indigo-600 hover:text-indigo-700 dark:hover:text-indigo-400 transition-colors max-w-xs cursor-pointer"
+                  className="flex items-center justify-center gap-2 px-5 py-3 rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 text-sm text-gray-700 dark:text-gray-300 hover:border-indigo-400 dark:hover:border-indigo-600 hover:text-indigo-700 dark:hover:text-indigo-400 transition-colors w-full max-w-xl cursor-pointer shadow-sm min-w-0"
                 >
                   <svg className="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
                   </svg>
-                  <span className="truncate">{prev.title}</span>
+                  <span className="truncate">Prev: {prev.title}</span>
                 </button>
-              ) : <div />}
+              ) : null}
               {next ? (
                 <button
                   onClick={() => {
@@ -2796,38 +2827,52 @@ export default function TopicLayoutClient({
                     }
                     handleTopicNav(buildTopicHref(next.topic_index, next.slug), next.topic_index);
                   }}
-                  className="flex items-center gap-2 px-4 py-2.5 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-sm text-gray-700 dark:text-gray-300 hover:border-indigo-400 dark:hover:border-indigo-600 hover:text-indigo-700 dark:hover:text-indigo-400 transition-colors max-w-xs cursor-pointer"
+                  className="flex items-center justify-center gap-2 px-5 py-3 rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 text-sm text-gray-700 dark:text-gray-300 hover:border-indigo-400 dark:hover:border-indigo-600 hover:text-indigo-700 dark:hover:text-indigo-400 transition-colors w-full max-w-xl cursor-pointer shadow-sm min-w-0"
                 >
-                  <span className="truncate">{next.title}</span>
+                  <span className="truncate">Next: {next.title}</span>
                   <svg className="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
                   </svg>
                 </button>
-              ) : <div />}
+              ) : null}
             </div>
           </div>
 
         </main>
       </div>
 
-      {/* Floating TOC Toggle Button */}
-      <button
-        onClick={() => setTocDrawerOpen(o => !o)}
-        className="hidden lg:flex fixed right-0 top-1/2 -translate-y-1/2 z-40 flex-col items-center gap-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 border-r-0 rounded-l-xl px-2 py-3 shadow-md text-gray-500 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors cursor-pointer"
-        title="On this page"
-      >
-        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-          <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h7" />
-        </svg>
-        <span className="text-[9px] font-semibold uppercase tracking-wide [writing-mode:vertical-rl] rotate-180">TOC</span>
-      </button>
+      {/* Floating Toolbar on the right side of the screen */}
+      <div className="fixed right-0 top-1/2 -translate-y-1/2 z-40 flex flex-col items-end gap-1.5 pointer-events-none">
+        <button
+          onClick={() => setTocDrawerOpen(o => !o)}
+          className="pointer-events-auto flex flex-col items-center gap-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 border-r-0 rounded-l-xl px-2 py-3 shadow-md text-gray-500 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors cursor-pointer"
+          title="On this page"
+        >
+          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h7" />
+          </svg>
+          <span className="text-[9px] font-semibold uppercase tracking-wide [writing-mode:vertical-rl] rotate-180">TOC</span>
+        </button>
 
-      {drawingsEnabled && (
-        <>
+        {notesDrawerEnabled && (
+          <button
+            onClick={handleToggleHighlightDrawer}
+            className="pointer-events-auto flex flex-col items-center gap-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 border-r-0 rounded-l-xl px-2 py-3 shadow-md text-gray-500 hover:text-amber-600 dark:hover:text-amber-300 transition-colors cursor-pointer"
+            title={highlightsEnabled ? "Highlights & Notes" : "Notes"}
+          >
+            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+              <path d="M15 4H6a2 2 0 0 0-2 2v14l5-2 5 2V6a2 2 0 0 0-2-2Z" />
+            </svg>
+            <span className="text-[9px] font-semibold uppercase tracking-wide [writing-mode:vertical-rl] rotate-180">
+              {highlightsEnabled ? "H&N" : "NOTE"}
+            </span>
+          </button>
+        )}
+
+        {drawingsEnabled && (
           <button
             onClick={handleOpenDrawingPad}
-            className={`hidden lg:flex fixed right-0 z-40 flex-col items-center gap-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 border-r-0 rounded-l-xl px-2 py-3 shadow-md text-gray-500 hover:text-sky-600 dark:hover:text-sky-300 transition-colors cursor-pointer ${notesDrawerEnabled ? "top-[calc(50%+8rem)]" : "top-[calc(50%+2.6rem)]"
-              }`}
+            className="hidden md:flex pointer-events-auto flex-col items-center gap-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 border-r-0 rounded-l-xl px-2 py-3 shadow-md text-gray-500 hover:text-sky-600 dark:hover:text-sky-300 transition-colors cursor-pointer"
             title="Drawing Notes"
           >
             <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
@@ -2838,51 +2883,24 @@ export default function TopicLayoutClient({
               DRAW
             </span>
           </button>
+        )}
+
+        {workspaceComponent && (
           <button
-            onClick={handleOpenDrawingPad}
-            className="lg:hidden fixed bottom-5 right-4 z-40 inline-flex items-center gap-1.5 px-3 py-2 rounded-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 shadow-md text-gray-600 dark:text-gray-300 hover:text-sky-700 dark:hover:text-sky-300 transition-colors cursor-pointer"
-            title="Drawing Notes"
+            onClick={handleToggleWorkspaceDrawer}
+            className="pointer-events-auto flex flex-col items-center gap-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 border-r-0 rounded-l-xl px-2 py-3 shadow-md text-gray-500 hover:text-emerald-600 dark:hover:text-emerald-300 transition-colors cursor-pointer"
+            title="Workspace"
           >
-            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
-              <path d="M12 20h9" />
-              <path d="m16.5 3.5 4 4L7 21H3v-4L16.5 3.5Z" />
+            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="16 18 22 12 16 6"></polyline>
+              <polyline points="8 6 2 12 8 18"></polyline>
             </svg>
-            <span className="text-[11px] font-semibold uppercase tracking-wide">Draw</span>
+            <span className="text-[9px] font-semibold uppercase tracking-wide [writing-mode:vertical-rl] rotate-180">
+              CODE
+            </span>
           </button>
-        </>
-      )}
-
-      {notesDrawerEnabled && (
-        <button
-          onClick={handleToggleHighlightDrawer}
-          className="hidden lg:flex fixed right-0 top-[calc(50%+2.6rem)] z-40 flex-col items-center gap-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 border-r-0 rounded-l-xl px-2 py-3 shadow-md text-gray-500 hover:text-amber-600 dark:hover:text-amber-300 transition-colors cursor-pointer"
-          title={highlightsEnabled ? "Highlights & Notes" : "Notes"}
-        >
-          <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
-            <path d="M15 4H6a2 2 0 0 0-2 2v14l5-2 5 2V6a2 2 0 0 0-2-2Z" />
-          </svg>
-          <span className="text-[9px] font-semibold uppercase tracking-wide [writing-mode:vertical-rl] rotate-180">
-            {highlightsEnabled ? "H&N" : "NOTE"}
-          </span>
-        </button>
-      )}
-
-      {workspaceComponent && (
-        <button
-          onClick={handleToggleWorkspaceDrawer}
-          className={`hidden lg:flex fixed right-0 z-40 flex-col items-center gap-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 border-r-0 rounded-l-xl px-2 py-3 shadow-md text-gray-500 hover:text-emerald-600 dark:hover:text-emerald-300 transition-colors cursor-pointer ${notesDrawerEnabled ? (drawingsEnabled ? "top-[calc(50%+13.4rem)]" : "top-[calc(50%+8rem)]") : (drawingsEnabled ? "top-[calc(50%+8rem)]" : "top-[calc(50%+2.6rem)]")
-            }`}
-          title="Workspace"
-        >
-          <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-            <polyline points="16 18 22 12 16 6"></polyline>
-            <polyline points="8 6 2 12 8 18"></polyline>
-          </svg>
-          <span className="text-[9px] font-semibold uppercase tracking-wide [writing-mode:vertical-rl] rotate-180">
-            CODE
-          </span>
-        </button>
-      )}
+        )}
+      </div>
 
       {/* Slide-out TOC Drawer */}
       {tocDrawerMounted && (
@@ -2894,7 +2912,7 @@ export default function TopicLayoutClient({
             className={`absolute inset-0 bg-black/40 transition-opacity duration-300 ${tocDrawerVisible ? "opacity-100" : "opacity-0"}`}
             onClick={() => setTocDrawerOpen(false)}
           />
-          <div className={`absolute right-0 top-0 bottom-0 w-80 bg-white dark:bg-gray-900 border-l border-gray-200 dark:border-gray-800 shadow-2xl flex flex-col transform-gpu will-change-transform transition-transform duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] ${tocDrawerVisible ? "translate-x-0" : "translate-x-full"}`}>
+          <div className={`absolute right-0 top-0 bottom-0 w-full sm:w-80 bg-white dark:bg-gray-900 border-l border-gray-200 dark:border-gray-800 shadow-2xl flex flex-col transform-gpu will-change-transform transition-transform duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] ${tocDrawerVisible ? "translate-x-0" : "translate-x-full"}`}>
             <div className="flex items-center justify-between px-6 py-5 border-b border-gray-200 dark:border-gray-800 shrink-0">
               <h2 className="text-sm font-bold text-gray-900 dark:text-gray-100 uppercase tracking-wider">On this page</h2>
               <button onClick={() => setTocDrawerOpen(false)} className="p-1 text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 cursor-pointer">
@@ -2961,14 +2979,14 @@ export default function TopicLayoutClient({
 
       {notesDrawerEnabled && highlightDrawerMounted && (
         <div
-          className={`fixed bottom-0 right-0 z-50 border-l border-gray-200/50 dark:border-white/5 bg-white/75 dark:bg-[#0c101b]/75 backdrop-blur-xl shadow-2xl will-change-transform transition-[transform,opacity] duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] flex flex-col ${highlightDrawerVisible ? "pointer-events-auto translate-x-0 opacity-100" : "pointer-events-none translate-x-full opacity-0"}`}
+          className={`fixed bottom-0 right-0 z-50 border-l border-gray-200/50 dark:border-white/5 bg-white/75 dark:bg-[#0c101b]/75 backdrop-blur-xl shadow-2xl will-change-transform transition-[transform,opacity] duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] flex flex-col w-full md:w-auto ${highlightDrawerVisible ? "pointer-events-auto translate-x-0 opacity-100" : "pointer-events-none translate-x-full opacity-0"}`}
           style={{
             top: "var(--ev-navbar-offset, 56px)",
-            width: `${highlightPanelWidth}px`,
+            width: typeof window !== "undefined" && window.innerWidth < 768 ? "100%" : `${highlightPanelWidth}px`,
           }}
         >
           {/* Side Tab Handles protruding to the left */}
-          <div className="absolute left-0 top-20 -translate-x-full flex flex-col border border-r-0 border-gray-200 dark:border-white/10 bg-white/95 dark:bg-[#0c101b]/95 rounded-l-2xl shadow-xl z-30 overflow-hidden divide-y divide-gray-150 dark:divide-white/5">
+          <div className="hidden md:flex absolute left-0 top-20 -translate-x-full flex-col border border-r-0 border-gray-200 dark:border-white/10 bg-white/95 dark:bg-[#0c101b]/95 rounded-l-2xl shadow-xl z-30 overflow-hidden divide-y divide-gray-150 dark:divide-white/5">
             {/* Collapse Tab */}
             <button
               type="button"
@@ -3004,7 +3022,7 @@ export default function TopicLayoutClient({
             aria-orientation="vertical"
             aria-label="Resize notes and highlights panel"
             onPointerDown={handleStartHighlightResize}
-            className="absolute left-0 top-0 h-full w-6 -translate-x-1/2 cursor-col-resize bg-transparent z-20 touch-none"
+            className="hidden md:block absolute left-0 top-0 h-full w-6 -translate-x-1/2 cursor-col-resize bg-transparent z-20 touch-none"
             title="Drag to resize notes and highlights panel"
           >
             <div className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 h-10 w-10 rounded-full border border-gray-300/90 dark:border-gray-700/90 bg-white/95 dark:bg-[#0c101b]/95 shadow-lg flex items-center justify-center">
@@ -3043,6 +3061,23 @@ export default function TopicLayoutClient({
                 aria-label="Redo recent change"
               >
                 <Redo2 className="w-4 h-4" />
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowHighlightsOnText(prev => !prev)}
+                className={`inline-flex items-center justify-center w-8 h-8 rounded-xl border border-gray-200 dark:border-white/10 transition-colors cursor-pointer ${
+                  showHighlightsOnText
+                    ? "text-indigo-650 bg-indigo-50 dark:text-indigo-400 dark:bg-indigo-950/30 border-indigo-300 dark:border-indigo-850"
+                    : "text-gray-500 dark:text-gray-400 hover:text-indigo-650 dark:hover:text-indigo-400 hover:bg-indigo-500/5"
+                }`}
+                title={showHighlightsOnText ? "Hide highlights in text" : "Show highlights in text"}
+                aria-label={showHighlightsOnText ? "Hide highlights in text" : "Show highlights in text"}
+              >
+                {showHighlightsOnText ? (
+                  <Eye className="w-4 h-4" />
+                ) : (
+                  <EyeOff className="w-4 h-4" />
+                )}
               </button>
               <button
                 type="button"
@@ -3474,10 +3509,10 @@ export default function TopicLayoutClient({
 
       {workspaceComponent && workspaceDrawerOpen && (
         <div
-          className={`fixed bottom-0 right-0 z-[45] border-l border-gray-200 dark:border-gray-800 bg-white dark:bg-[#0c101b] shadow-2xl will-change-[opacity] transition-opacity duration-220 ease-out flex flex-col ${workspaceDrawerVisible ? "pointer-events-auto opacity-100" : "pointer-events-none opacity-0"}`}
+          className={`fixed bottom-0 right-0 z-[45] border-l border-gray-200 dark:border-gray-800 bg-white dark:bg-[#0c101b] shadow-2xl will-change-[opacity] transition-opacity duration-220 ease-out flex flex-col w-full md:w-auto ${workspaceDrawerVisible ? "pointer-events-auto opacity-100" : "pointer-events-none opacity-0"}`}
           style={{
             top: "var(--ev-navbar-offset, 56px)",
-            width: `${drawingPanelWidth}px`,
+            width: typeof window !== "undefined" && window.innerWidth < 768 ? "100%" : `${drawingPanelWidth}px`,
             opacity: workspaceDrawerVisible ? 1 : 0,
           }}
         >
@@ -3486,7 +3521,7 @@ export default function TopicLayoutClient({
             aria-orientation="vertical"
             aria-label="Resize workspace panel"
             onPointerDown={handleStartDrawingResize}
-            className="absolute left-0 top-0 h-full w-6 -translate-x-1/2 cursor-col-resize bg-transparent z-20 touch-none"
+            className="hidden md:block absolute left-0 top-0 h-full w-6 -translate-x-1/2 cursor-col-resize bg-transparent z-20 touch-none"
             title="Drag to resize workspace panel"
           >
             <div className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 h-10 w-10 rounded-full border border-gray-300/90 dark:border-gray-700/90 bg-white/95 dark:bg-[#0c101b]/95 shadow-lg flex items-center justify-center">
@@ -3517,10 +3552,10 @@ export default function TopicLayoutClient({
 
       {drawingsEnabled && drawingPadOpen && (
         <div
-          className={`fixed bottom-0 right-0 z-50 border-l border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-950 shadow-2xl will-change-[opacity] transition-opacity duration-220 ease-out ${drawingPanelVisible ? "pointer-events-auto opacity-100" : "pointer-events-none opacity-0"}`}
+          className={`fixed bottom-0 right-0 z-50 border-l border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-950 shadow-2xl will-change-[opacity] transition-opacity duration-220 ease-out flex flex-col w-full md:w-auto ${drawingPanelVisible ? "pointer-events-auto opacity-100" : "pointer-events-none opacity-0"}`}
           style={{
             top: "var(--ev-navbar-offset, 56px)",
-            width: `${drawingPanelWidth}px`,
+            width: typeof window !== "undefined" && window.innerWidth < 768 ? "100%" : `${drawingPanelWidth}px`,
             opacity: drawingPanelVisible ? 1 : 0,
           }}
         >
@@ -3529,7 +3564,7 @@ export default function TopicLayoutClient({
             aria-orientation="vertical"
             aria-label="Resize drawing panel"
             onPointerDown={handleStartDrawingResize}
-            className="absolute left-0 top-0 h-full w-6 -translate-x-1/2 cursor-col-resize bg-transparent z-20 touch-none"
+            className="hidden md:block absolute left-0 top-0 h-full w-6 -translate-x-1/2 cursor-col-resize bg-transparent z-20 touch-none"
             title="Drag to resize drawing panel"
           >
             <div className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 h-10 w-10 rounded-full border border-gray-300/90 dark:border-gray-700/90 bg-white/95 dark:bg-gray-900/95 shadow-lg flex items-center justify-center">

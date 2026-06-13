@@ -615,6 +615,7 @@ export default function WebpackBin({ data, fullHeight }: { data: WebpackBinData,
   const [showHint, setShowHint] = useState(false);
   const [showInfo, setShowInfo] = useState(false);
   const [wordWrap, setWordWrap] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(true);
   const [expandedFolders, setExpandedFolders] = useState<Record<number, boolean>>(
     () => initExpanded(codeContents.children)
   );
@@ -632,6 +633,9 @@ export default function WebpackBin({ data, fullHeight }: { data: WebpackBinData,
 
   useEffect(() => {
     setIsClient(true);
+    if (typeof window !== "undefined" && window.innerWidth < 768) {
+      setSidebarOpen(false);
+    }
   }, []);
 
   // Re-apply highlighted-line decorations whenever the active file changes
@@ -724,10 +728,35 @@ export default function WebpackBin({ data, fullHeight }: { data: WebpackBinData,
         className="flex items-stretch shrink-0 border-b border-[#3a3a4a]"
         style={{ background: "#1c1c28" }}
       >
-        {/* "Files" section label */}
-        <div className="w-48 shrink-0 flex items-center px-4 py-2.5 border-r border-[#3a3a4a]">
-          <span className="text-xs font-semibold text-gray-300 tracking-wide">Files</span>
-        </div>
+        {/* "Files" section label / toggle button */}
+        {!data.hideCodeView && (
+          <div className={`${sidebarOpen ? "w-48" : "w-12"} shrink-0 flex items-center justify-between px-3 py-2.5 border-r border-[#3a3a4a] transition-[width] duration-200`}>
+            {sidebarOpen ? (
+              <>
+                <span className="text-xs font-semibold text-gray-300 tracking-wide">Files</span>
+                <button
+                  onClick={() => setSidebarOpen(false)}
+                  className="p-1 hover:bg-[#2a2a3d] rounded text-gray-400 hover:text-white cursor-pointer"
+                  title="Hide file tree"
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+                  </svg>
+                </button>
+              </>
+            ) : (
+              <button
+                onClick={() => setSidebarOpen(true)}
+                className="w-full h-full flex items-center justify-center p-1 hover:bg-[#2a2a3d] rounded text-gray-400 hover:text-white cursor-pointer"
+                title="Show file tree"
+              >
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
+                </svg>
+              </button>
+            )}
+          </div>
+        )}
 
         {/* Active filename + toolbar */}
         <div className="flex flex-1 items-center justify-between px-4 py-2">
@@ -874,7 +903,7 @@ export default function WebpackBin({ data, fullHeight }: { data: WebpackBinData,
       >
 
         {/* ── Left sidebar (file tree) ── */}
-        {!data.hideCodeView && (
+        {!data.hideCodeView && sidebarOpen && (
           <div
             className="w-48 shrink-0 border-r border-[#3a3a4a] overflow-y-auto"
             style={{ background: "#1c1c28", height: "100%" }}
@@ -886,7 +915,12 @@ export default function WebpackBin({ data, fullHeight }: { data: WebpackBinData,
                 depth={0}
                 allLeaves={allLeaves}
                 activeLeafId={activeFile.id}
-                onSelectLeaf={setActiveIdx}
+                onSelectLeaf={(idx) => {
+                  setActiveIdx(idx);
+                  if (typeof window !== "undefined" && window.innerWidth < 768) {
+                    setSidebarOpen(false);
+                  }
+                }}
                 onDownloadLeaf={handleDownloadFile}
                 expanded={expandedFolders}
                 onToggle={toggleFolder}
@@ -932,6 +966,7 @@ export default function WebpackBin({ data, fullHeight }: { data: WebpackBinData,
               scrollbar: { verticalScrollbarSize: 6, horizontalScrollbarSize: 6 },
               glyphMargin: false,
               overviewRulerLanes: 0,
+              automaticLayout: true,
             }}
           />
         </div>
