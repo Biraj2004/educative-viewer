@@ -19,12 +19,8 @@ export function readSavedTheme(): "dark" | "light" | null {
 }
 
 export default function DarkModeToggle() {
-  const [isDark, setIsDark] = useState(() => {
-    if (typeof document !== "undefined") {
-      return document.documentElement.classList.contains("dark");
-    }
-    return false;
-  });
+  const [isDark, setIsDark] = useState(false);
+  const [mounted, setMounted] = useState(false);
   const [ready, setReady] = useState(false);
 
   const syncFromDom = () => {
@@ -39,7 +35,8 @@ export default function DarkModeToggle() {
     document.documentElement.classList.toggle("dark", useDark);
     if (!saved) saveTheme("light");
     syncFromDom();
-    requestAnimationFrame(() => setReady(true));
+    setMounted(true);
+    setTimeout(() => setReady(true), 50);
   }, []);
 
   // Keep toggle UI in sync even if some other part of app toggles the root class.
@@ -68,6 +65,12 @@ export default function DarkModeToggle() {
     // Persist to database (fire-and-forget — don't block the toggle)
     syncThemeToBackend(theme).catch(() => {});
   };
+
+  if (!mounted) {
+    return (
+      <div className="w-11 h-6 rounded-full bg-gray-200 dark:bg-gray-700/50 animate-pulse shrink-0" />
+    );
+  }
 
   return (
     <button

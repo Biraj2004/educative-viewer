@@ -26,7 +26,7 @@ interface AuthContextValue {
 
 const AuthContext = createContext<AuthContextValue>({
   user: null,
-  loading: true,
+  loading: false,
   logout: async () => {},
   refresh: async () => {},
   authToken: null,
