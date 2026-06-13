@@ -19,7 +19,12 @@ export function readSavedTheme(): "dark" | "light" | null {
 }
 
 export default function DarkModeToggle() {
-  const [isDark, setIsDark] = useState(false);
+  const [isDark, setIsDark] = useState(() => {
+    if (typeof document !== "undefined") {
+      return document.documentElement.classList.contains("dark");
+    }
+    return false;
+  });
   const [ready, setReady] = useState(false);
 
   const syncFromDom = () => {

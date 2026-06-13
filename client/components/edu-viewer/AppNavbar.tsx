@@ -96,7 +96,7 @@ export default function AppNavbar({
   onLogoClick,
   onBackClick,
 }: AppNavbarProps) {
-  const { user } = useAuth();
+  const { user, loading } = useAuth();
   const [navbarCollapsed, setNavbarCollapsed] = useState(false);
   const [navbarPrefReady, setNavbarPrefReady] = useState(false);
 
@@ -230,7 +230,7 @@ export default function AppNavbar({
           {backHref && (
             <BackButton href={backHref} label={backLabel} icon={<ChevronLeft />} onClick={onBackClick} />
           )}
-          {!user && (
+          {(!user && !loading) && (
             <span className="ml-2">
               <DarkModeToggle />
             </span>
