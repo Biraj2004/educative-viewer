@@ -257,7 +257,7 @@ export default function LegacyHTML({ data }: { data: any }) {
       const rect = range.getBoundingClientRect();
       host.dispatchEvent(new CustomEvent("ev-shadow-selection", {
         bubbles: true, composed: true,
-        detail: { text, rect: { top: rect.top, left: rect.left, right: rect.right, bottom: rect.bottom } },
+        detail: { text, rect: { top: rect.top, left: rect.left, right: rect.right, bottom: rect.bottom }, range },
       }));
     };
 

@@ -365,8 +365,6 @@ export default function TopicLayoutClient({
   const selectedTextRef = useRef("");
   const selectedOffsetsRef = useRef<{ start: number; end: number; componentIndex: number } | null>(null);
   const selectedQuoteContextRef = useRef<{ prefix: string; suffix: string } | null>(null);
-  // true when the active selection is inside a Shadow DOM (LegacyHTML)
-  const isShadowSelectionRef = useRef(false);
   const inFlightHighlightKeyRef = useRef<string | null>(null);
   const highlightMutationQueueRef = useRef<Promise<unknown>>(Promise.resolve());
   const pendingHighlightMutationsRef = useRef(0);
@@ -1351,90 +1349,7 @@ export default function TopicLayoutClient({
       return;
     }
 
-    const isShadowContent = isShadowSelectionRef.current;
-
-    // ── Shadow DOM path: no valid byte offsets — save text-only highlight ─────
-    if (isShadowContent) {
-      const note = notesEnabled ? newHighlightNote.trim().slice(0, 800) : "";
-      const color = normalizeHighlightColor(overrideColor ?? selectedColor);
-      const normalizedText = normalizeHighlightTextKey(text);
-      const hashText = (str: string) => {
-        let hash = 0;
-        for (let i = 0; i < str.length; i++) {
-          hash = (Math.imul(31, hash) + str.charCodeAt(i)) | 0;
-        }
-        return Math.abs(hash) * 10000;
-      };
-      const fakeStart = hashText(text);
-      const fakeEnd = fakeStart + text.length;
-      const inFlightKey = [
-        String(currentTopic.topic_index),
-        "-2",
-        normalizedText,
-        color,
-      ].join("|");
-      if (inFlightHighlightKeyRef.current === inFlightKey) return;
-      inFlightHighlightKeyRef.current = inFlightKey;
-
-      const optimisticId = `shadow-${Date.now()}`;
-      const optimistic: ViewerHighlight = {
-        id: optimisticId,
-        text,
-        note,
-        color,
-        start_offset: fakeStart,
-        end_offset: fakeEnd,
-        component_index: -1,
-        quote_prefix: undefined,
-        quote_suffix: undefined,
-      };
-      const beforeSnapshot = cloneHighlights(currentTopicHighlights);
-      const nextHighlights = [...currentTopicHighlights, optimistic];
-
-      setHighlightsByTopic((prev) => ({ ...prev, [topicKey]: nextHighlights }));
-      isShadowSelectionRef.current = false;
-      setSelectedText("");
-      setNewHighlightNote("");
-      selectedOffsetsRef.current = null;
-      selectedQuoteContextRef.current = null;
-      setSelectionColorPaletteOpen(false);
-      setSelectionAction((prev) => ({ ...prev, visible: false }));
-
-      enqueueHighlightMutation(() => updateViewerCourseSettings({
-        course_id: courseId,
-        last_highlight_color: color,
-        add_highlight: {
-          topic_index: currentTopic.topic_index,
-          text,
-          color,
-          start_offset: fakeStart,
-          end_offset: fakeEnd,
-          component_index: -1,
-          ...(note ? { note } : {}),
-        },
-      })).then((courseState) => {
-        applyViewerCourseState(courseState);
-        const serverRows = ((courseState?.highlights?.[topicKey] ?? cloneHighlights(nextHighlights)) as ViewerHighlight[]);
-        const beforeIds = new Set(beforeSnapshot.map((row) => row.id));
-        const addedRows = serverRows.filter((row) => !beforeIds.has(row.id));
-        if (addedRows.length === 1) {
-          const added = { ...addedRows[0] };
-          pushHighlightHistory({
-            topicKey,
-            topicIndex: currentTopic.topic_index,
-            undo: [{ type: "remove", highlightId: added.id, row: { ...added } }],
-            redo: [{ type: "add", row: added }],
-          });
-        }
-      }).catch(() => {
-        setHighlightsByTopic((prev) => ({ ...prev, [topicKey]: beforeSnapshot }));
-      }).finally(() => {
-        inFlightHighlightKeyRef.current = null;
-      });
-      return;
-    }
-
-    // ── Normal DOM path ───────────────────────────────────────────────────────
+    // ── Unified highlight path with byte offsets ──────────────────────────────
     const note = notesEnabled ? newHighlightNote.trim().slice(0, 800) : "";
     const color = normalizeHighlightColor(overrideColor ?? selectedColor);
     const existing = currentTopicHighlights;
@@ -2138,11 +2053,10 @@ export default function TopicLayoutClient({
     if (!container) return;
 
     const onShadowSelection = (event: Event) => {
-      const e = event as CustomEvent<{ text: string; rect: { top: number; left: number; right: number; bottom: number } | null }>;
-      const { text, rect } = e.detail;
+      const e = event as CustomEvent<{ text: string; rect: { top: number; left: number; right: number; bottom: number } | null; range?: Range }>;
+      const { text, rect, range } = e.detail;
 
-      if (!text || !rect) {
-        isShadowSelectionRef.current = false;
+      if (!text || !rect || !range) {
         setSelectedText("");
         selectedOffsetsRef.current = null;
         selectedQuoteContextRef.current = null;
@@ -2151,13 +2065,27 @@ export default function TopicLayoutClient({
         return;
       }
 
-      // For shadow DOM content we cannot compute real byte offsets since nodes
-      // live in a separate tree. We use component_index -1 (whole-topic scope)
-      // and set isShadowSelectionRef so handleAddHighlight knows to skip the
-      // offset-based overlap check and use text-based saving instead.
-      isShadowSelectionRef.current = true;
-      selectedOffsetsRef.current = { start: 0, end: text.length, componentIndex: -1 };
-      selectedQuoteContextRef.current = null;
+      const host = event.target as HTMLElement;
+      const shadowRoot = host.shadowRoot;
+      if (!shadowRoot) return;
+
+      const rootContainer = shadowRoot as unknown as HTMLElement;
+      const globalOffsets = getRangeOffsetsWithinContainer(rootContainer, range);
+      if (globalOffsets) {
+        selectedOffsetsRef.current = { ...globalOffsets, componentIndex: -1 };
+        selectedQuoteContextRef.current = getQuoteContextByOffsets(rootContainer, globalOffsets.start, globalOffsets.end);
+      } else {
+        selectedOffsetsRef.current = null;
+        selectedQuoteContextRef.current = null;
+      }
+
+      if (!selectedOffsetsRef.current) {
+        setSelectedText("");
+        setSelectionAction((prev) => ({ ...prev, visible: false }));
+        setSelectionColorPaletteOpen(false);
+        return;
+      }
+
       selectedTextRef.current = text;
       setSelectedText(text);
       setSelectionColorPaletteOpen(false);
