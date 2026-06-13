@@ -44,6 +44,7 @@ class OracleAuthDatabase:
             "min": self.config.pool_min,
             "max": self.config.pool_max,
             "increment": 1,
+            "ping_interval": 60,
         }
 
         if self.config.wallet_dir:
