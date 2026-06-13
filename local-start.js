@@ -6,7 +6,7 @@ const fs = require('fs');
 const http = require('http');
 const path = require('path');
 const readline = require('readline');
-const { spawn, spawnSync } = require('child_process');
+const { spawn, spawnSync, execSync } = require('child_process');
 const os = require('os');
 const https = require('https');
 
@@ -50,11 +50,64 @@ const devOnly = !!args['dev-only'] || process.env.EV_DEV_ONLY === '1';
 const children = [];
 let proxyServer = null;
 
+function killProcessOnPort(port) {
+  if (!port) return;
+  try {
+    if (process.platform === 'win32') {
+      const output = execSync('netstat -ano', { encoding: 'utf8', stdio: ['pipe', 'pipe', 'ignore'] });
+      const lines = output.split('\n');
+      const pids = new Set();
+      for (const line of lines) {
+        if (line.includes('LISTENING') && line.includes(`:${port}`)) {
+          const parts = line.trim().split(/\s+/);
+          const localAddress = parts[1];
+          if (localAddress && (localAddress.endsWith(`:${port}`) || localAddress.endsWith(`]:${port}`))) {
+            const pid = parts[parts.length - 1];
+            if (pid && !isNaN(Number(pid)) && Number(pid) > 0) {
+              pids.add(pid);
+            }
+          }
+        }
+      }
+      for (const pid of pids) {
+        console.log(`[setup] Port ${port} in use by PID ${pid}. Killing it...`);
+        try {
+          execSync(`taskkill /F /PID ${pid}`, { stdio: 'ignore' });
+        } catch (err) {
+          console.warn(`[warn] Failed to kill PID ${pid} on port ${port}: ${err.message}`);
+        }
+      }
+    } else {
+      try {
+        const output = execSync(`lsof -t -i :${port}`, { encoding: 'utf8', stdio: ['pipe', 'pipe', 'ignore'] });
+        const pids = output.split('\n').map(p => p.trim()).filter(Boolean);
+        for (const pid of pids) {
+          console.log(`[setup] Port ${port} in use by PID ${pid}. Killing it...`);
+          try {
+            execSync(`kill -9 ${pid}`, { stdio: 'ignore' });
+          } catch (err) {
+            console.warn(`[warn] Failed to kill PID ${pid} on port ${port}: ${err.message}`);
+          }
+        }
+      } catch {
+        // lsof returns non-zero when no processes are found
+      }
+    }
+  } catch (error) {
+    console.warn(`[warn] Failed to check/kill process on port ${port}: ${error.message}`);
+  }
+}
+
 async function main() {
   const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
 
   ensureNodeVersion();
   ensureNpm();
+
+  console.log(`[setup] Checking and clearing ports ${proxyPort}, ${backendPort}, ${clientPort} if in use...`);
+  killProcessOnPort(proxyPort);
+  killProcessOnPort(backendPort);
+  killProcessOnPort(clientPort);
 
   const python = resolvePythonCommand();
   ensurePythonVersion(python.versionText);
