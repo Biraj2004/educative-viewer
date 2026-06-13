@@ -170,6 +170,21 @@ export default function LegacyHTML({ data }: { data: any }) {
       }
     });
 
+    const styleNode = document.createElement("style");
+    styleNode.textContent = `
+      mark[data-highlight-color="yellow"] { background-color: rgba(254, 240, 138, 0.8) !important; color: inherit; }
+      .dark mark[data-highlight-color="yellow"] { background-color: rgba(234, 179, 8, 0.35) !important; }
+      mark[data-highlight-color="blue"] { background-color: rgba(191, 219, 254, 0.75) !important; color: inherit; }
+      .dark mark[data-highlight-color="blue"] { background-color: rgba(59, 130, 246, 0.35) !important; }
+      mark[data-highlight-color="green"] { background-color: rgba(167, 243, 208, 0.75) !important; color: inherit; }
+      .dark mark[data-highlight-color="green"] { background-color: rgba(16, 185, 129, 0.35) !important; }
+      mark[data-highlight-color="pink"] { background-color: rgba(251, 207, 232, 0.75) !important; color: inherit; }
+      .dark mark[data-highlight-color="pink"] { background-color: rgba(236, 72, 153, 0.35) !important; }
+      mark[data-highlight-color="orange"] { background-color: rgba(254, 215, 170, 0.8) !important; color: inherit; }
+      .dark mark[data-highlight-color="orange"] { background-color: rgba(249, 115, 22, 0.35) !important; }
+    `;
+    wrapper.appendChild(styleNode);
+
     shadow.appendChild(wrapper);
 
     // --- Mirror Dark Mode from Host ---
@@ -200,6 +215,70 @@ export default function LegacyHTML({ data }: { data: any }) {
       newScript.textContent = oldScript.textContent;
       oldScript.replaceWith(newScript);
     });
+
+    // --- Bridge Shadow DOM selection to highlight toolbar ---
+    // window.getSelection() cannot see text selected inside a shadow root.
+    // We listen on the shadow root for selectionchange events, read the
+    // selection from the shadow internals, and dispatch a custom event on
+    // the host element so TopicLayoutClient can show the highlight toolbar.
+    let shadowSelRafId: number | null = null;
+    const dispatchShadowSelection = () => {
+      // Try shadow-root-scoped getSelection (Chrome 90+, Firefox 128+)
+      const shadowSel =
+        typeof (shadow as any).getSelection === "function"
+          ? (shadow as any).getSelection()
+          : null;
+
+      // Fallback: the selection may have been "cloned" into the document selection
+      // with collapsed ranges — so also check window.getSelection() which sometimes
+      // surfaces shadow selections on certain browser versions.
+      const winSel = window.getSelection();
+
+      const sel = (shadowSel && !shadowSel.isCollapsed) ? shadowSel : winSel;
+      if (!sel || sel.isCollapsed || sel.rangeCount === 0) {
+        // Dispatch a cleared selection so the toolbar hides
+        host.dispatchEvent(new CustomEvent("ev-shadow-selection", {
+          bubbles: true, composed: true,
+          detail: { text: "", rect: null },
+        }));
+        return;
+      }
+
+      const text = sel.toString().trim().slice(0, 280);
+      if (!text) {
+        host.dispatchEvent(new CustomEvent("ev-shadow-selection", {
+          bubbles: true, composed: true,
+          detail: { text: "", rect: null },
+        }));
+        return;
+      }
+
+      const range = sel.getRangeAt(0);
+      const rect = range.getBoundingClientRect();
+      host.dispatchEvent(new CustomEvent("ev-shadow-selection", {
+        bubbles: true, composed: true,
+        detail: { text, rect: { top: rect.top, left: rect.left, right: rect.right, bottom: rect.bottom } },
+      }));
+    };
+
+    const onShadowSelectionChange = () => {
+      if (shadowSelRafId !== null) return;
+      shadowSelRafId = window.requestAnimationFrame(() => {
+        shadowSelRafId = null;
+        dispatchShadowSelection();
+      });
+    };
+
+    // Listen on the shadow root itself (Chrome/Firefox both support this)
+    shadow.addEventListener("selectionchange", onShadowSelectionChange);
+
+    // Also listen on mouseup/touchend on the wrapper because some browsers
+    // fire selectionchange on document, not shadow root
+    const onShadowMouseUp = () => {
+      window.setTimeout(dispatchShadowSelection, 10);
+    };
+    wrapper.addEventListener("mouseup", onShadowMouseUp);
+    wrapper.addEventListener("touchend", onShadowMouseUp);
 
     // --- Rewrite Internal Links ---
     // Match the exact behavior of link-resolver.tsx for legacy DOM
@@ -293,6 +372,10 @@ export default function LegacyHTML({ data }: { data: any }) {
 
     return () => {
       observer.disconnect();
+      shadow.removeEventListener("selectionchange", onShadowSelectionChange);
+      wrapper.removeEventListener("mouseup", onShadowMouseUp);
+      wrapper.removeEventListener("touchend", onShadowMouseUp);
+      if (shadowSelRafId !== null) window.cancelAnimationFrame(shadowSelRafId);
     };
   }, [data]);
 

@@ -170,7 +170,8 @@ type ViewerHistoryCommand =
   | { type: "add"; row: ViewerHighlight }
   | { type: "remove"; highlightId?: string; row?: ViewerHighlight }
   | { type: "add_note"; row: ViewerTopicNote }
-  | { type: "remove_note"; noteId?: string; row?: ViewerTopicNote };
+  | { type: "remove_note"; noteId?: string; row?: ViewerTopicNote }
+  | { type: "update_color"; highlightId: string; targetColor: HighlightColor };
 
 type ViewerHistoryEntry = {
   topicKey: string;
@@ -297,6 +298,7 @@ export default function TopicLayoutClient({
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [tocDrawerOpen, setTocDrawerOpen] = useState(false);
   const [highlightDrawerOpen, setHighlightDrawerOpen] = useState(false);
+  const [clearTopicConfirmVisible, setClearTopicConfirmVisible] = useState(false);
   const [showHighlightsOnText, setShowHighlightsOnText] = useState(true);
   const [drawingPadOpen, setDrawingPadOpen] = useState(false);
   const [tocDrawerMounted, setTocDrawerMounted] = useState(false);
@@ -363,6 +365,8 @@ export default function TopicLayoutClient({
   const selectedTextRef = useRef("");
   const selectedOffsetsRef = useRef<{ start: number; end: number; componentIndex: number } | null>(null);
   const selectedQuoteContextRef = useRef<{ prefix: string; suffix: string } | null>(null);
+  // true when the active selection is inside a Shadow DOM (LegacyHTML)
+  const isShadowSelectionRef = useRef(false);
   const inFlightHighlightKeyRef = useRef<string | null>(null);
   const highlightMutationQueueRef = useRef<Promise<unknown>>(Promise.resolve());
   const pendingHighlightMutationsRef = useRef(0);
@@ -580,6 +584,16 @@ export default function TopicLayoutClient({
         },
       }));
     }
+    if (command.type === "update_color") {
+      return enqueueHighlightMutation(() => updateViewerCourseSettings({
+        course_id: courseId,
+        update_highlight_color: {
+          topic_index: topicIndex,
+          highlight_id: command.highlightId,
+          color: command.targetColor,
+        },
+      }));
+    }
     const row = command.row;
     const startOffset = row.start_offset;
     const endOffset = row.end_offset;
@@ -641,17 +655,23 @@ export default function TopicLayoutClient({
         if (!resolvedId) continue;
         if (direction === "undo") {
           nextEntry.redo = nextEntry.redo.map((cmd) => {
-            if (cmd.type !== "remove" || !cmd.row) return cmd;
-            return isSameHighlightAnchor(cmd.row, command.row)
-              ? { ...cmd, highlightId: resolvedId }
-              : cmd;
+            if (cmd.type === "remove" && cmd.row && isSameHighlightAnchor(cmd.row, command.row)) {
+              return { ...cmd, highlightId: resolvedId };
+            }
+            if (cmd.type === "update_color" && cmd.highlightId === command.row.id) {
+              return { ...cmd, highlightId: resolvedId };
+            }
+            return cmd;
           });
         } else {
           nextEntry.undo = nextEntry.undo.map((cmd) => {
-            if (cmd.type !== "remove" || !cmd.row) return cmd;
-            return isSameHighlightAnchor(cmd.row, command.row)
-              ? { ...cmd, highlightId: resolvedId }
-              : cmd;
+            if (cmd.type === "remove" && cmd.row && isSameHighlightAnchor(cmd.row, command.row)) {
+              return { ...cmd, highlightId: resolvedId };
+            }
+            if (cmd.type === "update_color" && cmd.highlightId === command.row.id) {
+              return { ...cmd, highlightId: resolvedId };
+            }
+            return cmd;
           });
         }
       }
@@ -881,9 +901,13 @@ export default function TopicLayoutClient({
   }, [bookmarked, bookmarksEnabled, courseId, currentTopic.topic_index]);
 
   const unwrapUserHighlights = useCallback((container: HTMLElement) => {
-    const highlights = Array.from(
+    let highlights = Array.from(
       container.querySelectorAll(`mark[${USER_HIGHLIGHT_ATTR}="1"]`)
     ) as HTMLElement[];
+    const shadowHost = container.querySelector('.legacy-html-shadow-host');
+    if (shadowHost?.shadowRoot) {
+      highlights = highlights.concat(Array.from(shadowHost.shadowRoot.querySelectorAll(`mark[${USER_HIGHLIGHT_ATTR}="1"]`)) as HTMLElement[]);
+    }
     highlights.forEach((mark) => {
       const parent = mark.parentNode;
       if (!parent) return;
@@ -1007,6 +1031,13 @@ export default function TopicLayoutClient({
   const getComponentScopeByIndex = useCallback((componentIndex: number): HTMLElement | null => {
     const container = contentRef.current;
     if (!container) return null;
+    if (componentIndex === -1) {
+      const shadowHost = container.querySelector('.legacy-html-shadow-host');
+      if (shadowHost?.shadowRoot) {
+        return shadowHost.shadowRoot as unknown as HTMLElement;
+      }
+      return container;
+    }
     const host = container.querySelector(`[data-topic-component-index='${componentIndex}']`) as HTMLElement | null;
     if (!host) return null;
     return (host.querySelector("[data-highlight-scope='1']") as HTMLElement | null) ?? host;
@@ -1319,6 +1350,91 @@ export default function TopicLayoutClient({
       setSelectionColorPaletteOpen(false);
       return;
     }
+
+    const isShadowContent = isShadowSelectionRef.current;
+
+    // ── Shadow DOM path: no valid byte offsets — save text-only highlight ─────
+    if (isShadowContent) {
+      const note = notesEnabled ? newHighlightNote.trim().slice(0, 800) : "";
+      const color = normalizeHighlightColor(overrideColor ?? selectedColor);
+      const normalizedText = normalizeHighlightTextKey(text);
+      const hashText = (str: string) => {
+        let hash = 0;
+        for (let i = 0; i < str.length; i++) {
+          hash = (Math.imul(31, hash) + str.charCodeAt(i)) | 0;
+        }
+        return Math.abs(hash) * 10000;
+      };
+      const fakeStart = hashText(text);
+      const fakeEnd = fakeStart + text.length;
+      const inFlightKey = [
+        String(currentTopic.topic_index),
+        "-2",
+        normalizedText,
+        color,
+      ].join("|");
+      if (inFlightHighlightKeyRef.current === inFlightKey) return;
+      inFlightHighlightKeyRef.current = inFlightKey;
+
+      const optimisticId = `shadow-${Date.now()}`;
+      const optimistic: ViewerHighlight = {
+        id: optimisticId,
+        text,
+        note,
+        color,
+        start_offset: fakeStart,
+        end_offset: fakeEnd,
+        component_index: -1,
+        quote_prefix: undefined,
+        quote_suffix: undefined,
+      };
+      const beforeSnapshot = cloneHighlights(currentTopicHighlights);
+      const nextHighlights = [...currentTopicHighlights, optimistic];
+
+      setHighlightsByTopic((prev) => ({ ...prev, [topicKey]: nextHighlights }));
+      isShadowSelectionRef.current = false;
+      setSelectedText("");
+      setNewHighlightNote("");
+      selectedOffsetsRef.current = null;
+      selectedQuoteContextRef.current = null;
+      setSelectionColorPaletteOpen(false);
+      setSelectionAction((prev) => ({ ...prev, visible: false }));
+
+      enqueueHighlightMutation(() => updateViewerCourseSettings({
+        course_id: courseId,
+        last_highlight_color: color,
+        add_highlight: {
+          topic_index: currentTopic.topic_index,
+          text,
+          color,
+          start_offset: fakeStart,
+          end_offset: fakeEnd,
+          component_index: -1,
+          ...(note ? { note } : {}),
+        },
+      })).then((courseState) => {
+        applyViewerCourseState(courseState);
+        const serverRows = ((courseState?.highlights?.[topicKey] ?? cloneHighlights(nextHighlights)) as ViewerHighlight[]);
+        const beforeIds = new Set(beforeSnapshot.map((row) => row.id));
+        const addedRows = serverRows.filter((row) => !beforeIds.has(row.id));
+        if (addedRows.length === 1) {
+          const added = { ...addedRows[0] };
+          pushHighlightHistory({
+            topicKey,
+            topicIndex: currentTopic.topic_index,
+            undo: [{ type: "remove", highlightId: added.id, row: { ...added } }],
+            redo: [{ type: "add", row: added }],
+          });
+        }
+      }).catch(() => {
+        setHighlightsByTopic((prev) => ({ ...prev, [topicKey]: beforeSnapshot }));
+      }).finally(() => {
+        inFlightHighlightKeyRef.current = null;
+      });
+      return;
+    }
+
+    // ── Normal DOM path ───────────────────────────────────────────────────────
     const note = notesEnabled ? newHighlightNote.trim().slice(0, 800) : "";
     const color = normalizeHighlightColor(overrideColor ?? selectedColor);
     const existing = currentTopicHighlights;
@@ -1532,9 +1648,6 @@ export default function TopicLayoutClient({
 
   const handleRemoveHighlight = useCallback((highlightId: string) => {
     if (highlightMutationBusy) return;
-    if (!window.confirm("Are you sure you want to delete this highlight?")) {
-      return;
-    }
     const topicKey = String(currentTopic.topic_index);
     const beforeRows = cloneHighlights(highlightsByTopic[topicKey] ?? []);
     setHighlightsByTopic((prev) => {
@@ -1593,6 +1706,12 @@ export default function TopicLayoutClient({
     if (highlightMutationBusy) return;
     const topicKey = String(currentTopic.topic_index);
     const normalizedColor = normalizeHighlightColor(color);
+    
+    const oldRow = (highlightsByTopic[topicKey] ?? []).find(item => item.id === highlightId);
+    if (!oldRow) return;
+    const oldColor = oldRow.color ?? "yellow";
+    if (oldColor === normalizedColor) return;
+
     setSelectedColor(normalizedColor);
     setHighlightsByTopic((prev) => {
       const rows = prev[topicKey] ?? [];
@@ -1613,27 +1732,44 @@ export default function TopicLayoutClient({
       },
     })).then((courseState) => {
       applyViewerCourseState(courseState);
-    }).catch(() => { });
-  }, [courseId, currentTopic.topic_index, enqueueHighlightMutation, highlightMutationBusy, applyViewerCourseState]);
+      pushHighlightHistory({
+        topicKey,
+        topicIndex: currentTopic.topic_index,
+        undo: [{ type: "update_color", highlightId, targetColor: oldColor }],
+        redo: [{ type: "update_color", highlightId, targetColor: normalizedColor }],
+      });
+    }).catch(() => {
+      setHighlightsByTopic((prev) => {
+        const rows = prev[topicKey] ?? [];
+        return {
+          ...prev,
+          [topicKey]: rows.map((item) => (
+            item.id === highlightId ? { ...item, color: oldColor } : item
+          )),
+        };
+      });
+    });
+  }, [courseId, currentTopic.topic_index, enqueueHighlightMutation, highlightMutationBusy, applyViewerCourseState, highlightsByTopic, pushHighlightHistory]);
 
   const handleSelectionColorPick = useCallback((color: HighlightColor) => {
     const normalizedColor = normalizeHighlightColor(color);
     setSelectedColor(normalizedColor);
     setSelectionColorPaletteOpen(false);
-    persistLastHighlightColor(normalizedColor);
     handleAddHighlight(normalizedColor);
-  }, [handleAddHighlight, persistLastHighlightColor]);
+  }, [handleAddHighlight]);
 
-  const handleClearTopicData = useCallback(() => {
+  const handleClearTopicData = useCallback((confirmed: boolean | React.MouseEvent = false) => {
     if (highlightMutationBusy || highlightHistoryBusy) return;
     const topicKey = String(currentTopic.topic_index);
     const beforeRows = cloneHighlights(highlightsByTopic[topicKey] ?? []);
     const beforeNotes = cloneTopicNotes(topicNotesByTopic[topicKey] ?? []);
     const noteIds = beforeNotes.map((row) => row.id).filter(Boolean);
     if (beforeRows.length === 0 && noteIds.length === 0) return;
-    if (!window.confirm("Are you sure you want to clear all highlights and notes for this topic?")) {
+    if (typeof confirmed !== "boolean" || !confirmed) {
+      setClearTopicConfirmVisible(true);
       return;
     }
+    setClearTopicConfirmVisible(false);
     const prevUndo = [...highlightUndoStack];
     const prevRedo = [...highlightRedoStack];
     setHighlightsByTopic((prev) => {
@@ -1991,6 +2127,57 @@ export default function TopicLayoutClient({
     };
   }, [captureSelectionFromTopicContent, currentTopic.topic_index]);
 
+  // ── Shadow DOM selection bridge ──────────────────────────────────────────────
+  // LegacyHTML renders content inside a shadowRoot. window.getSelection() cannot
+  // read selections inside a shadow root, so LegacyHTML dispatches a custom
+  // 'ev-shadow-selection' event on the host element (composed: true) which bubbles
+  // up to our contentRef container. We handle it here to show the highlight toolbar.
+  useEffect(() => {
+    if (!highlightsEnabled) return;
+    const container = contentRef.current;
+    if (!container) return;
+
+    const onShadowSelection = (event: Event) => {
+      const e = event as CustomEvent<{ text: string; rect: { top: number; left: number; right: number; bottom: number } | null }>;
+      const { text, rect } = e.detail;
+
+      if (!text || !rect) {
+        isShadowSelectionRef.current = false;
+        setSelectedText("");
+        selectedOffsetsRef.current = null;
+        selectedQuoteContextRef.current = null;
+        setSelectionAction((prev) => ({ ...prev, visible: false }));
+        setSelectionColorPaletteOpen(false);
+        return;
+      }
+
+      // For shadow DOM content we cannot compute real byte offsets since nodes
+      // live in a separate tree. We use component_index -1 (whole-topic scope)
+      // and set isShadowSelectionRef so handleAddHighlight knows to skip the
+      // offset-based overlap check and use text-based saving instead.
+      isShadowSelectionRef.current = true;
+      selectedOffsetsRef.current = { start: 0, end: text.length, componentIndex: -1 };
+      selectedQuoteContextRef.current = null;
+      selectedTextRef.current = text;
+      setSelectedText(text);
+      setSelectionColorPaletteOpen(false);
+
+      const nextX = Math.min(window.innerWidth - 20, Math.max(20, rect.left + (rect.right - rect.left) / 2));
+      const nextY = Math.max(72, rect.top - 12);
+      setSelectionAction({
+        visible: true,
+        x: nextX,
+        y: nextY,
+        placement: "above",
+      });
+    };
+
+    container.addEventListener("ev-shadow-selection", onShadowSelection);
+    return () => {
+      container.removeEventListener("ev-shadow-selection", onShadowSelection);
+    };
+  }, [highlightsEnabled, currentTopic.topic_index]);
+
   useEffect(() => {
     const onOutsidePointerDown = (event: MouseEvent) => {
       const target = event.target as Node | null;
@@ -2144,9 +2331,13 @@ export default function TopicLayoutClient({
       applyHighlightByText(highlightContainer, item.text, id, color);
     };
     const removeStaleMarks = () => {
-      const marks = Array.from(
+      let marks = Array.from(
         container.querySelectorAll(`mark[${USER_HIGHLIGHT_ATTR}="1"]`)
       ) as HTMLElement[];
+      const shadowHost = container.querySelector('.legacy-html-shadow-host');
+      if (shadowHost?.shadowRoot) {
+        marks = marks.concat(Array.from(shadowHost.shadowRoot.querySelectorAll(`mark[${USER_HIGHLIGHT_ATTR}="1"]`)) as HTMLElement[]);
+      }
       marks.forEach((mark) => {
         const id = String(mark.getAttribute("data-highlight-id") || "").trim();
         if (!id || highlightIds.has(id)) return;
@@ -2164,7 +2355,20 @@ export default function TopicLayoutClient({
       removeStaleMarks();
       highlights.forEach((item, idx) => {
         const id = (item.id && item.id.trim()) ? item.id : `generated-${idx}`;
-        if (container.querySelector(`mark[${USER_HIGHLIGHT_ATTR}="1"][data-highlight-id="${id}"]`)) {
+        let marks = Array.from(container.querySelectorAll(`mark[${USER_HIGHLIGHT_ATTR}="1"][data-highlight-id="${id}"]`));
+        const shadowHost = container.querySelector('.legacy-html-shadow-host');
+        if (shadowHost?.shadowRoot) {
+          marks = marks.concat(Array.from(shadowHost.shadowRoot.querySelectorAll(`mark[${USER_HIGHLIGHT_ATTR}="1"][data-highlight-id="${id}"]`)));
+        }
+        
+        if (marks.length > 0) {
+          const expectedColor = normalizeHighlightColor(item.color);
+          marks.forEach(mark => {
+            if (mark.getAttribute("data-highlight-color") !== expectedColor) {
+              mark.setAttribute("data-highlight-color", expectedColor);
+              mark.className = `${HIGHLIGHT_MARK_CLASS[expectedColor as HighlightColor]} text-inherit rounded px-0.5`;
+            }
+          });
           return;
         }
         applyOne(item, idx);
@@ -3099,6 +3303,36 @@ export default function TopicLayoutClient({
             </div>
           </div>
 
+          {clearTopicConfirmVisible && (
+            <div className="absolute inset-0 z-50 bg-white/80 dark:bg-[#0c101b]/80 backdrop-blur-sm flex items-center justify-center p-6 animate-in fade-in duration-200">
+              <div className="bg-white dark:bg-gray-900 border border-red-200 dark:border-red-900/50 rounded-2xl p-5 shadow-2xl max-w-[280px] w-full transform animate-in zoom-in-95 duration-200">
+                <div className="flex items-center gap-3 mb-3 text-red-600 dark:text-red-400">
+                  <div className="w-10 h-10 rounded-full bg-red-100 dark:bg-red-900/30 flex flex-shrink-0 items-center justify-center">
+                    <Trash2 className="w-5 h-5" />
+                  </div>
+                  <h3 className="font-bold text-base leading-tight text-gray-900 dark:text-gray-100">Clear all data?</h3>
+                </div>
+                <p className="text-sm text-gray-600 dark:text-gray-400 mb-5 leading-relaxed">
+                  This will permanently delete all highlights and notes in this topic. This action cannot be undone.
+                </p>
+                <div className="flex gap-2 w-full">
+                  <button
+                    onClick={() => setClearTopicConfirmVisible(false)}
+                    className="flex-1 py-2 px-3 rounded-xl border border-gray-200 dark:border-gray-800 text-sm font-semibold text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={() => handleClearTopicData(true)}
+                    className="flex-1 py-2 px-3 rounded-xl bg-red-600 hover:bg-red-700 text-white text-sm font-semibold shadow-lg shadow-red-600/20 transition-colors"
+                  >
+                    Delete All
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
           <div className="flex-1 overflow-y-auto p-6 space-y-6 scrollbar-thin">
             <style dangerouslySetInnerHTML={{
               __html: `
@@ -3123,7 +3357,7 @@ export default function TopicLayoutClient({
                   </p>
                 </div>
                 <p className="text-xs text-gray-700 dark:text-gray-300 italic bg-white/40 dark:bg-gray-900/40 p-2.5 rounded-xl border border-gray-200/50 dark:border-white/5 line-clamp-3 mb-3 leading-relaxed">
-                  "${selectedText}"
+                  "{selectedText}"
                 </p>
                 {notesEnabled && (
                   <textarea
@@ -3430,7 +3664,7 @@ export default function TopicLayoutClient({
                             <span className="inline-flex items-center gap-1 text-[9px] font-bold text-indigo-500 opacity-0 group-hover:opacity-100 transition-opacity mr-1 uppercase">
                               <Compass className="w-3 h-3 animate-spin-slow" /> Jump
                             </span>
-                            "${item.text}"
+                            {item.text}
                           </button>
 
                           {notesEnabled && (
@@ -3627,7 +3861,6 @@ export default function TopicLayoutClient({
             onClick={() => {
               if (!selectionColorPaletteOpen) {
                 setSelectionColorPaletteOpen(true);
-                persistLastHighlightColor(selectedColor);
                 return;
               }
               handleAddHighlight();
