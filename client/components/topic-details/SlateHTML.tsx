@@ -5,7 +5,7 @@ import parse, { DOMNode, Element, attributesToProps, domToReact, HTMLReactParser
 import Callout from "./Callout";
 import InternalLink from "./InternalLink";
 import { replaceEducativeLink } from "@/utils/link-resolver";
-import { interceptLightBackgrounds } from "@/utils/html-interceptor";
+import { interceptLightBackgrounds, interceptKeyword } from "@/utils/html-interceptor";
 
 export interface SlateHtmlData {
   comp_id: string;
@@ -35,6 +35,11 @@ export default function SlateHTML({ data }: { data: SlateHtmlData }) {
         const bgResult = interceptLightBackgrounds(domNode, options);
         if (bgResult) {
           return bgResult;
+        }
+
+        const keywordResult = interceptKeyword(domNode, options);
+        if (keywordResult) {
+          return keywordResult;
         }
       }
     }

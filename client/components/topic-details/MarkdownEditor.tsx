@@ -1,10 +1,10 @@
 "use client";
-import { useMemo } from "react";
+
 import parse, { DOMNode, Element, attributesToProps, domToReact, HTMLReactParserOptions } from 'html-react-parser';
 import Callout from "./Callout";
 import InternalLink from "./InternalLink";
 import { replaceEducativeLink } from "@/utils/link-resolver";
-import { interceptLightBackgrounds } from "@/utils/html-interceptor";
+import { interceptLightBackgrounds, interceptKeyword } from "@/utils/html-interceptor";
 
 export interface MarkdownEditorData {
   comp_id?: string;
@@ -13,19 +13,7 @@ export interface MarkdownEditorData {
   version: string;
 }
 
-function processHtml(html: string): string {
-  return html.replace(
-    /<keyword><word>([\s\S]*?)<\/word><meaning>([\s\S]*?)<\/meaning><\/keyword>/g,
-    (_match, word, meaning) =>
-      `<span class="relative inline-block group cursor-help" tabindex="0">` +
-      `<span class="bg-yellow-100 text-yellow-900 font-medium px-0.5 rounded border-b border-yellow-400">${word}</span>` +
-      `<span class="absolute bottom-full left-0 z-10 hidden group-hover:block group-focus-within:block bg-gray-900 text-white text-xs rounded p-2 w-52 shadow-lg leading-relaxed">${meaning}</span>` +
-      `</span>`
-  );
-}
-
 export default function MarkdownEditor({ data }: { data: MarkdownEditorData }) {
-  const processedHtml = useMemo(() => processHtml(data.mdHtml), [data.mdHtml]);
 
   const options: HTMLReactParserOptions = {
     replace(domNode) {
@@ -49,6 +37,11 @@ export default function MarkdownEditor({ data }: { data: MarkdownEditorData }) {
         const bgResult = interceptLightBackgrounds(domNode, options);
         if (bgResult) {
           return bgResult;
+        }
+
+        const keywordResult = interceptKeyword(domNode, options);
+        if (keywordResult) {
+          return keywordResult;
         }
       }
     }
@@ -97,7 +90,7 @@ export default function MarkdownEditor({ data }: { data: MarkdownEditorData }) {
           dark:[&_a]:text-blue-400 dark:[&_a:hover]:text-blue-300
         "
       >
-        {parse(processedHtml, options)}
+        {parse(data.mdHtml, options)}
       </div>
     </div>
   );

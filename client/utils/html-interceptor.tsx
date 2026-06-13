@@ -49,3 +49,27 @@ export function interceptLightBackgrounds(domNode: Element, options: HTMLReactPa
   }
   return undefined;
 }
+
+export function interceptKeyword(domNode: Element, options: HTMLReactParserOptions) {
+  if (domNode.name === 'keyword') {
+    const wordNode = domNode.children.find((c): c is Element => c instanceof Element && c.name === 'word');
+    const meaningNode = domNode.children.find((c): c is Element => c instanceof Element && c.name === 'meaning');
+
+    if (wordNode && meaningNode) {
+      return (
+        <span className="relative inline-block group cursor-help" tabIndex={0}>
+          <span className="bg-yellow-100 dark:bg-yellow-900/30 text-yellow-900 dark:text-yellow-200 font-medium px-0.5 rounded border-b border-yellow-400 dark:border-yellow-700">
+            {domToReact(wordNode.children as DOMNode[], options)}
+          </span>
+          <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 z-10 hidden group-hover:block group-focus-within:block text-xs leading-relaxed pointer-events-none">
+            <span className="relative block bg-gray-900 dark:bg-gray-800 text-white rounded p-2 w-max max-w-xs break-words shadow-xl">
+              {domToReact(meaningNode.children as DOMNode[], options)}
+              <span className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-gray-900 dark:border-t-gray-800"></span>
+            </span>
+          </span>
+        </span>
+      );
+    }
+  }
+  return undefined;
+}
