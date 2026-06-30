@@ -45,6 +45,7 @@ class OracleAuthDatabase:
             "max": self.config.pool_max,
             "increment": 1,
             "ping_interval": 60,
+            "expire_time": self.config.expire_time,
         }
 
         if self.config.wallet_dir:
@@ -65,16 +66,44 @@ class OracleAuthDatabase:
         if not self.is_configured:
             return
 
-        conn = self.get_connection()
+        pool = self._get_pool()
+        opened = getattr(pool, "opened", 0)
+        busy = getattr(pool, "busy", 0)
+        idle_count = max(0, opened - busy)
+
+        # If there are no open connections yet, or all are busy, at least ping one
+        if idle_count == 0:
+            if opened == 0:
+                idle_count = 1
+            else:
+                return
+
+        connections = []
         try:
-            cursor = conn.cursor()
-            try:
-                cursor.execute("SELECT 1 FROM DUAL")
-                cursor.fetchone()
-            finally:
-                cursor.close()
+            for _ in range(idle_count):
+                try:
+                    conn = pool.acquire()
+                    connections.append(conn)
+                except Exception as exc:
+                    log.warning("Failed to acquire connection during keep-alive: %s", exc)
+                    break
+
+            for idx, conn in enumerate(connections):
+                try:
+                    cursor = conn.cursor()
+                    try:
+                        cursor.execute("SELECT 1 FROM DUAL")
+                        cursor.fetchone()
+                    finally:
+                        cursor.close()
+                except Exception as exc:
+                    log.warning("Keep-alive ping failed on connection %d: %s", idx, exc)
         finally:
-            conn.close()
+            for conn in connections:
+                try:
+                    conn.close()
+                except Exception:
+                    pass
 
     def _exec_ddl(self, cursor, sql: str) -> None:
         try:

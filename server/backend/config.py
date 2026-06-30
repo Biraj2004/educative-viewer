@@ -94,6 +94,7 @@ class OracleAuthConfig:
     pool_max: int
     thick_mode: bool
     lib_dir: str
+    expire_time: int
 
     @property
     def is_configured(self) -> bool:
@@ -252,6 +253,7 @@ def load_config() -> AppConfig:
         pool_max=int(os.environ.get("ORACLE_POOL_MAX", "5")),
         thick_mode=os.environ.get("ORACLE_THICK_MODE", "0") == "1",
         lib_dir=os.environ.get("ORACLE_LIB_DIR", "").strip(),
+        expire_time=int(os.environ.get("ORACLE_EXPIRE_TIME", "2")),
     )
 
     raw_highlights_enabled = _env_truthy(os.environ.get("HIGHLIGHTS_ENABLED", "1"))
