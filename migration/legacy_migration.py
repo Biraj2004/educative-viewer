@@ -36,7 +36,7 @@ _DDL = """
         project_id      INTEGER REFERENCES projects(id),
         is_active       INTEGER NOT NULL DEFAULT 1,
         scraped_at      TEXT    NOT NULL,
-        UNIQUE(url, structure_hash)
+        UNIQUE(type, structure_hash)
     );
 
     CREATE TABLE IF NOT EXISTS projects (
@@ -91,6 +91,17 @@ _DDL = """
             REFERENCES topics(course_id, topic_index) ON DELETE CASCADE
     );
 
+    -- One row per (course_id, topic_index).
+    -- assets_json: { "component_index": ["url1", "url2", ...], ... }
+    CREATE TABLE IF NOT EXISTS static_assets (
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        course_id   INTEGER NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
+        topic_index INTEGER NOT NULL,
+        assets_json TEXT    NOT NULL DEFAULT '{}',
+        created_at  TEXT    NOT NULL,
+        UNIQUE(course_id, topic_index)
+    );
+
     CREATE INDEX IF NOT EXISTS idx_courses_path       ON courses(path_id);
     CREATE INDEX IF NOT EXISTS idx_paths_author_collection ON paths(path_author_id, path_collection_id);
     CREATE INDEX IF NOT EXISTS idx_projects_triplet   ON projects(project_author_id, project_collection_id, project_work_id);
@@ -98,6 +109,8 @@ _DDL = """
     CREATE INDEX IF NOT EXISTS idx_topics_course      ON topics(course_id);
     CREATE INDEX IF NOT EXISTS idx_components_topic   ON components(course_id, topic_index);
     CREATE INDEX IF NOT EXISTS idx_components_type    ON components(type);
+    CREATE INDEX IF NOT EXISTS idx_static_assets_course ON static_assets(course_id);
+
 """
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
