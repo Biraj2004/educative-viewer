@@ -378,11 +378,27 @@ if (typeof window !== "undefined") {
       try {
         const fingerprint = await getEncryptedDeviceFingerprint();
         if (fingerprint) {
-          const headers = new Headers(init?.headers || {});
+          const headers = new Headers(
+            input instanceof Request ? input.headers : init?.headers || {}
+          );
+          if (input instanceof Request && init?.headers) {
+            const initHeaders = new Headers(init.headers);
+            initHeaders.forEach((value, key) => {
+              headers.set(key, value);
+            });
+          }
           if (!headers.has("X-Device-Fingerprint")) {
             headers.set("X-Device-Fingerprint", fingerprint);
           }
-          init = { ...init, headers };
+          if (input instanceof Request) {
+            input = new Request(input, { headers });
+            if (init) {
+              const { headers: _, ...rest } = init;
+              init = rest;
+            }
+          } else {
+            init = { ...init, headers };
+          }
         }
       } catch (err) {
         console.error("Failed to automatically attach X-Device-Fingerprint:", err);
@@ -391,6 +407,7 @@ if (typeof window !== "undefined") {
     return originalFetch.call(this, input, init);
   };
 }
+
 
 async function apiPost<T>(
   path: string,

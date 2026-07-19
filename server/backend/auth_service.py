@@ -197,8 +197,15 @@ class AuthService:
                 return hashlib.sha256(decrypted_fp.encode("utf-8")).hexdigest()
             except Exception as exc:
                 log.warning("Failed to decrypt X-Device-Fingerprint header: %s", exc)
-                # Fallback: if it's plaintext (not encrypted yet), hash it directly
-                return hashlib.sha256(custom_fp.encode("utf-8")).hexdigest()
+                # Fallback: if it's a short string, it's likely plaintext. Hash it directly.
+                # An RSA-2048 ciphertext base64 string is 344 characters long.
+                if len(custom_fp) < 128:
+                    return hashlib.sha256(custom_fp.encode("utf-8")).hexdigest()
+                # If it's long, it's likely an encrypted fingerprint that failed to decrypt.
+                # Hashing the random OAEP ciphertext directly would change every request and cause
+                # immediate session termination. Fall back to User-Agent for stability.
+                ua = request.headers.get("User-Agent", "").strip()
+                return hashlib.sha256(ua.encode("utf-8")).hexdigest()
         
         # Fallback to User-Agent
         ua = request.headers.get("User-Agent", "").strip()
