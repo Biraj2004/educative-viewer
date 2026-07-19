@@ -326,6 +326,38 @@ export interface TwoFASetup {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
+function getRawFingerprint(): string {
+  if (typeof window === "undefined") return "";
+  try {
+    const components = [
+      window.screen.width,
+      window.screen.height,
+      Intl.DateTimeFormat().resolvedOptions().timeZone,
+      navigator.language,
+      navigator.hardwareConcurrency || 0,
+      navigator.userAgent,
+    ];
+    return components.join("|");
+  } catch {
+    return "";
+  }
+}
+
+let _cachedEncryptedFingerprint: string | null = null;
+
+async function getEncryptedDeviceFingerprint(): Promise<string> {
+  if (_cachedEncryptedFingerprint) return _cachedEncryptedFingerprint;
+  const raw = getRawFingerprint();
+  if (!raw) return "";
+  try {
+    _cachedEncryptedFingerprint = await _encryptPassword(raw);
+    return _cachedEncryptedFingerprint;
+  } catch (err) {
+    console.error("Failed to encrypt device fingerprint:", err);
+    return raw; // Fallback to raw if encryption fails
+  }
+}
+
 async function apiPost<T>(
   path: string,
   body: Record<string, unknown>,
@@ -333,6 +365,7 @@ async function apiPost<T>(
   const token = getAuthToken();
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
+    "X-Device-Fingerprint": await getEncryptedDeviceFingerprint(),
   };
   if (token) headers["Authorization"] = `Bearer ${token}`;
   const res = await fetch(path, {
@@ -369,7 +402,9 @@ async function apiGet<T>(path: string): Promise<T> {
   }
 
   const token = getAuthToken();
-  const headers: Record<string, string> = {};
+  const headers: Record<string, string> = {
+    "X-Device-Fingerprint": await getEncryptedDeviceFingerprint(),
+  };
   if (token) headers["Authorization"] = `Bearer ${token}`;
 
   const fetchPromise = fetch(path, { headers })
@@ -732,6 +767,7 @@ export async function updateViewerCourseSettings(
       headers: {
         "Content-Type": "application/json",
         Authorization: `Bearer ${token}`,
+        "X-Device-Fingerprint": await getEncryptedDeviceFingerprint(),
       },
       body: JSON.stringify(payload),
     },
@@ -759,6 +795,7 @@ async function apiFetch(path: string, init: RequestInit): Promise<void> {
     : {};
   const headers = {
     "Content-Type": "application/json",
+    "X-Device-Fingerprint": await getEncryptedDeviceFingerprint(),
     ...authHeaders,
     ...(init.headers as Record<string, string> | undefined),
   };
@@ -822,6 +859,7 @@ export interface AdminUserSession {
   session_key: string;
   issued_at: string;
   ip: string | null;
+  ip_updates?: number;
   token_hint: string;
   is_most_recent: boolean;
 }
@@ -876,7 +914,10 @@ async function adminApiCall<T>(
     }
   }
 
-  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    "X-Device-Fingerprint": await getEncryptedDeviceFingerprint(),
+  };
   if (token) headers["Authorization"] = `Bearer ${token}`;
 
   const requestPromise = (async () => {

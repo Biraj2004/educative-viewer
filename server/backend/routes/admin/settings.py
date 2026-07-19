@@ -60,6 +60,7 @@ def register_settings_routes(bp: Blueprint, auth_service: AuthService) -> None:
             "viewer_feature_role_overrides_json": json.dumps(
                 viewer_feature_role_overrides, separators=(",", ":")
             ),
+            "security_token_sharing_mode": get_env_variable("SECURITY_TOKEN_SHARING_MODE", "fingerprint"),
         })
 
     @bp.route("/settings", methods=["POST"])
@@ -79,6 +80,7 @@ def register_settings_routes(bp: Blueprint, auth_service: AuthService) -> None:
             "course_db_connection_mode": "COURSE_DB_CONNECTION_MODE",
             "course_sqlite_db_paths_json": "COURSE_SQLITE_DB_PATHS_JSON",
             "course_sqlite_db_folder": "COURSE_SQLITE_DB_FOLDER",
+            "security_token_sharing_mode": "SECURITY_TOKEN_SHARING_MODE",
         }
 
         for key, var_name in mapping.items():
@@ -109,6 +111,9 @@ def register_settings_routes(bp: Blueprint, auth_service: AuthService) -> None:
             cfg.groq_api_key = str(data["groq_api_key"])
         if "judge0_rapidapi_key" in data:
             cfg.judge0_rapidapi_key = str(data["judge0_rapidapi_key"])
+            
+        if "security_token_sharing_mode" in data:
+            cfg.security_token_sharing_mode = str(data["security_token_sharing_mode"]).strip().lower()
             
         course_db_updated = False
         if "course_db_engine" in data:

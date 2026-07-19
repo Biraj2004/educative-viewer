@@ -175,6 +175,35 @@ class AuthService:
             return MAX_IP_ADDRESSES_LIMIT
         return parsed
 
+    def get_client_fingerprint(self) -> str:
+        """
+        Generate a stable, unique hash representing the user's browser/device.
+        """
+        import hashlib
+        # Check custom device fingerprint header first
+        custom_fp = request.headers.get("X-Device-Fingerprint", "").strip()
+        if custom_fp:
+            try:
+                ciphertext = base64.b64decode(custom_fp)
+                plaintext = self._rsa_private_key.decrypt(
+                    ciphertext,
+                    padding.OAEP(
+                        mgf=padding.MGF1(algorithm=hashes.SHA256()),
+                        algorithm=hashes.SHA256(),
+                        label=None,
+                    ),
+                )
+                decrypted_fp = plaintext.decode("utf-8")
+                return hashlib.sha256(decrypted_fp.encode("utf-8")).hexdigest()
+            except Exception as exc:
+                log.warning("Failed to decrypt X-Device-Fingerprint header: %s", exc)
+                # Fallback: if it's plaintext (not encrypted yet), hash it directly
+                return hashlib.sha256(custom_fp.encode("utf-8")).hexdigest()
+        
+        # Fallback to User-Agent
+        ua = request.headers.get("User-Agent", "").strip()
+        return hashlib.sha256(ua.encode("utf-8")).hexdigest()
+
     @staticmethod
     def parse_session_queue(raw: Any) -> list[dict[str, Any]]:
         if not raw:
@@ -197,19 +226,13 @@ class AuthService:
             if not token or token in seen_tokens:
                 continue
             seen_tokens.add(token)
-            raw_ip_updates = item.get("ip_updates")
-            try:
-                ip_updates = int(raw_ip_updates)
-            except (TypeError, ValueError):
-                ip_updates = 0
-            if ip_updates < 0:
-                ip_updates = 0
             cleaned.append(
                 {
                     "token": token,
                     "issued_at": str(item.get("issued_at", "") or ""),
                     "ip": str(item.get("ip", "") or ""),
-                    "ip_updates": ip_updates,
+                    "ip_updates": 0,
+                    "fingerprint": str(item.get("fingerprint", "") or "").strip(),
                 }
             )
         return cleaned
@@ -229,12 +252,15 @@ class AuthService:
         queue = self.parse_session_queue(existing_raw)
         queue = [row for row in queue if row.get("token") != token]
         normalized_ip = str(client_ip or "").strip()
+        fingerprint = self.get_client_fingerprint()
+
         queue.append(
             {
                 "token": token,
                 "issued_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
                 "ip": normalized_ip,
                 "ip_updates": 0,
+                "fingerprint": fingerprint,
             }
         )
         limit = self.clamp_max_active_sessions(max_active_sessions)
@@ -301,56 +327,65 @@ class AuthService:
     ) -> tuple[bool, str, bool, bool]:
         """
         Return (found, serialized_queue, changed, blocked).
-        For non-admin users, allow up to (max_ip_addresses - 1) IP changes per token.
+        Validates token based on config security mode (off, ip_rollover, fingerprint).
+        All users (including admins) are validated according to the configured mode.
         """
         queue = self.parse_session_queue(queue_raw)
         normalized_ip = str(client_ip or "").strip()
         touched_at = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
-        max_ips = self.clamp_max_ip_addresses(max_ip_addresses)
-        max_ip_updates = max(0, max_ips - 1)
+        current_fingerprint = self.get_client_fingerprint()
+        
         found = False
         changed = False
         blocked = False
+        mode = self.config.security_token_sharing_mode
 
         for idx, row in enumerate(queue):
             if row.get("token") != token:
                 continue
             found = True
-            existing_ip = str(row.get("ip", "") or "").strip()
-            if normalized_ip and existing_ip != normalized_ip:
-                if is_admin:
-                    row["ip"] = normalized_ip
-                    changed = True
-                elif not existing_ip:
-                    row["ip"] = normalized_ip
-                    changed = True
-                else:
-                    raw_ip_updates = row.get("ip_updates")
-                    try:
-                        ip_updates = int(raw_ip_updates)
-                    except (TypeError, ValueError):
-                        ip_updates = 0
-                    if ip_updates < 0:
-                        ip_updates = 0
-
-                    if ip_updates >= max_ip_updates:
+            
+            # Perform validation checks for all users (including admins) when enabled
+            if mode != "off":
+                if mode == "fingerprint":
+                    bound_fingerprint = str(row.get("fingerprint", "") or "").strip()
+                    if not bound_fingerprint:
+                        row["fingerprint"] = current_fingerprint
+                        changed = True
+                    elif bound_fingerprint != current_fingerprint:
                         blocked = True
-                    else:
+                        break
+                elif mode == "ip_rollover":
+                    existing_ip = str(row.get("ip", "") or "").strip()
+                    if normalized_ip and existing_ip and existing_ip != normalized_ip:
+                        current_updates = int(row.get("ip_updates") or 0)
+                        max_allowed = self.clamp_max_ip_addresses(max_ip_addresses)
+                        if current_updates >= max_allowed:
+                            blocked = True
+                            break
+                        else:
+                            row["ip_updates"] = current_updates + 1
+                            row["ip"] = normalized_ip
+                            changed = True
+                    elif normalized_ip and not existing_ip:
                         row["ip"] = normalized_ip
-                        row["ip_updates"] = ip_updates + 1
+                        row["ip_updates"] = 0
                         changed = True
 
-            if not blocked:
-                # Touch every in-use token so "current active session" reflects
-                # the latest API call even when IP is unchanged.
-                row["issued_at"] = touched_at
-                changed = True
+            # If not blocked, update display fields and timestamp
+            # If IP changed and not in ip_rollover mode, we still update it for visual admin tracking
+            if mode != "ip_rollover":
+                existing_ip = str(row.get("ip", "") or "").strip()
+                if normalized_ip and existing_ip != normalized_ip:
+                    row["ip"] = normalized_ip
+                    changed = True
 
-                # Keep most recently used session at the tail to preserve the
-                # existing reverse(queue) ordering in admin session views.
-                if idx != len(queue) - 1:
-                    queue.pop(idx)
-                    queue.append(row)
+            row["issued_at"] = touched_at
+            changed = True
+
+            if idx != len(queue) - 1:
+                queue.pop(idx)
+                queue.append(row)
             break
 
         return found, self.serialize_session_queue(queue), changed, blocked

@@ -131,6 +131,7 @@ class AppConfig:
     highlights_enabled: bool
     viewer_feature_flags: dict[str, bool]
     viewer_feature_role_overrides: dict[str, dict[str, bool]]
+    security_token_sharing_mode: str
 
 
 def load_env_file(env_path: Path | None = None) -> None:
@@ -308,4 +309,5 @@ def load_config() -> AppConfig:
         highlights_enabled=viewer_feature_flags.get("highlights_enabled", True),
         viewer_feature_flags=viewer_feature_flags,
         viewer_feature_role_overrides=viewer_feature_role_overrides,
+        security_token_sharing_mode=os.environ.get("SECURITY_TOKEN_SHARING_MODE", "fingerprint").strip().lower(),
     )

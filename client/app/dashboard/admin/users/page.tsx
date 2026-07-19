@@ -16,6 +16,7 @@ import {
   adminClearUserSessions,
   adminCleanupUserReaderState,
   adminCleanupAllReaderState,
+  adminGetSettings,
   type AdminUser,
   type AdminUserSession,
   type UserDataCleanupScope,
@@ -160,7 +161,7 @@ function Modal({
 
 // ─── Create User Modal ────────────────────────────────────────────────────────
 
-function CreateUserModal({ onClose, onCreated }: { onClose: () => void; onCreated: (result: { password: string; expiresAt: string }) => void }) {
+function CreateUserModal({ securityMode, onClose, onCreated }: { securityMode: string; onClose: () => void; onCreated: (result: { password: string; expiresAt: string }) => void }) {
   const [email, setEmail] = useState("");
   const [name, setName] = useState("");
   const [roleId, setRoleId] = useState(1);
@@ -230,20 +231,22 @@ function CreateUserModal({ onClose, onCreated }: { onClose: () => void; onCreate
             className={numberInputCls}
           />
         </div>
-        <div>
-          <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1.5">Max IP Addresses Per Token</label>
-          <input
-            type="text"
-            inputMode="numeric"
-            pattern="[0-9]*"
-            value={maxIpAddresses}
-            onChange={(e) => {
-              setMaxIpAddresses(normalizeLimitInput(e.target.value));
-              setError("");
-            }}
-            className={numberInputCls}
-          />
-        </div>
+        {securityMode === "ip_rollover" && (
+          <div>
+            <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1.5">Max IP Addresses Per Token</label>
+            <input
+              type="text"
+              inputMode="numeric"
+              pattern="[0-9]*"
+              value={maxIpAddresses}
+              onChange={(e) => {
+                setMaxIpAddresses(normalizeLimitInput(e.target.value));
+                setError("");
+              }}
+              className={numberInputCls}
+            />
+          </div>
+        )}
         {error && <p className="text-xs text-red-600 dark:text-red-400">{error}</p>}
         <div className="flex gap-2 justify-end pt-1">
           <button type="button" onClick={onClose} className={btnGhost}>Cancel</button>
@@ -257,11 +260,13 @@ function CreateUserModal({ onClose, onCreated }: { onClose: () => void; onCreate
 // ─── Edit User Modal ──────────────────────────────────────────────────────────
 
 function EditUserModal({
+  securityMode,
   user,
   currentUser,
   onClose,
   onSaved,
 }: {
+  securityMode: string;
   user: AdminUser;
   currentUser: { id?: number } | null | undefined;
   onClose: () => void;
@@ -346,20 +351,22 @@ function EditUserModal({
             className={numberInputCls}
           />
         </div>
-        <div>
-          <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1.5">Max IP Addresses Per Token</label>
-          <input
-            type="text"
-            inputMode="numeric"
-            pattern="[0-9]*"
-            value={maxIpAddresses}
-            onChange={(e) => {
-              setMaxIpAddresses(normalizeLimitInput(e.target.value));
-              setError("");
-            }}
-            className={numberInputCls}
-          />
-        </div>
+        {securityMode === "ip_rollover" && (
+          <div>
+            <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1.5">Max IP Addresses Per Token</label>
+            <input
+              type="text"
+              inputMode="numeric"
+              pattern="[0-9]*"
+              value={maxIpAddresses}
+              onChange={(e) => {
+                setMaxIpAddresses(normalizeLimitInput(e.target.value));
+                setError("");
+              }}
+              className={numberInputCls}
+            />
+          </div>
+        )}
         {error && <p className="text-xs text-red-600 dark:text-red-400">{error}</p>}
         <div className="flex justify-end pt-1">
           <button type="submit" disabled={loading} className={btnPrimary}>{loading ? "Saving…" : "Save Changes"}</button>
@@ -432,7 +439,7 @@ function ResetPasswordModal({ user, onClose, onReset }: { user: AdminUser; onClo
   );
 }
 
-function UserSessionsModal({ user, onClose, onDone }: { user: AdminUser; onClose: () => void; onDone: () => void }) {
+function UserSessionsModal({ securityMode, user, onClose, onDone }: { securityMode: string; user: AdminUser; onClose: () => void; onDone: () => void }) {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -568,6 +575,11 @@ function UserSessionsModal({ user, onClose, onDone }: { user: AdminUser; onClose
                   <p className="text-[11px] text-gray-500 dark:text-gray-400">
                     IP: {session.ip || "Unknown"}
                   </p>
+                  {securityMode === "ip_rollover" && (
+                    <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5">
+                      IP Changes: <span className="font-semibold text-amber-600 dark:text-amber-400">{session.ip_updates ?? 0}</span>
+                    </p>
+                  )}
                 </div>
               </div>
             );
@@ -843,6 +855,7 @@ export default function AdminUsersPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [search, setSearch] = useState("");
+  const [securityMode, setSecurityMode] = useState<string>("fingerprint");
 
   // Modal state
   const [showCreate, setShowCreate] = useState(false);
@@ -853,6 +866,16 @@ export default function AdminUsersPage() {
   const [sessionUser, setSessionUser] = useState<AdminUser | null>(null);
   const [showGlobalCleanup, setShowGlobalCleanup] = useState(false);
   const [tempPwResult, setTempPwResult] = useState<{ password: string; expiresAt: string } | null>(null);
+
+  useEffect(() => {
+    adminGetSettings()
+      .then((data) => {
+        if (data && data.security_token_sharing_mode) {
+          setSecurityMode(data.security_token_sharing_mode);
+        }
+      })
+      .catch(console.error);
+  }, []);
 
   const fetchUsers = useCallback(async () => {
     setLoading(true);
@@ -1135,6 +1158,7 @@ export default function AdminUsersPage() {
       {/* Modals */}
       {showCreate && (
         <CreateUserModal
+          securityMode={securityMode}
           onClose={() => setShowCreate(false)}
           onCreated={(result) => {
             setShowCreate(false);
@@ -1145,6 +1169,7 @@ export default function AdminUsersPage() {
       )}
       {editUser && (
         <EditUserModal
+          securityMode={securityMode}
           user={editUser}
           currentUser={currentUser}
           onClose={() => setEditUser(null)}
@@ -1174,6 +1199,7 @@ export default function AdminUsersPage() {
       )}
       {sessionUser && (
         <UserSessionsModal
+          securityMode={securityMode}
           user={sessionUser}
           onClose={() => setSessionUser(null)}
           onDone={() => { fetchUsers(); }}

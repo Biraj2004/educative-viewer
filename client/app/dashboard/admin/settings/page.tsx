@@ -179,6 +179,16 @@ export default function GlobalSettingsPage() {
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">TOTP Issuer</label>
               <input type="text" name="totp_issuer" value={settings.totp_issuer || ''} onChange={handleChange} className="mt-1 block w-full rounded-md border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 py-2 px-3 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-indigo-500 sm:text-sm dark:text-white" />
             </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Token Sharing Security Mode</label>
+              <select name="security_token_sharing_mode" value={settings.security_token_sharing_mode || 'fingerprint'} onChange={handleChange} className="mt-1 block w-full rounded-md border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 py-2 px-3 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-indigo-500 sm:text-sm dark:text-white">
+                <option value="off">Off (Disable sharing prevention)</option>
+                <option value="ip_rollover">IP Address Rollover Allowance</option>
+                <option value="fingerprint">Device Fingerprint Binding</option>
+              </select>
+            </div>
+            <div className="hidden">
+            </div>
           </div>
 
           <hr className="border-gray-200 dark:border-gray-800 my-6" />

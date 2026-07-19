@@ -147,6 +147,7 @@ def register_user_routes(bp: Blueprint, auth_service: AuthService, db_manager: D
                     "session_key": _session_key_from_token(token),
                     "issued_at": str(item.get("issued_at", "") or ""),
                     "ip": session_ip or None,
+                    "ip_updates": int(item.get("ip_updates") or 0),
                     "token_hint": token[-8:],
                     "is_most_recent": idx == 0,
                 }
