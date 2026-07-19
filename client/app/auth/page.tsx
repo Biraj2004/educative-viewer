@@ -808,9 +808,11 @@ function AuthPageInner() {
               </svg>
               {authReason === "ip_change_exceeded"
                 ? "Max IP change exceeded for this token. Please sign in again."
-                : authReason === "login_limit_exceeded"
-                  ? "Maximum login limit reached for today. Please try again tomorrow."
-                  : "Your session was ended by a login from another device. Please sign in again."}
+                : authReason === "fingerprint_mismatch"
+                  ? "Device fingerprint mismatch. Your session was accessed from another device or browser."
+                  : authReason === "login_limit_exceeded"
+                    ? "Maximum login limit reached for today. Please try again tomorrow."
+                    : "Your session was ended by a login from another device. Please sign in again."}
             </div>
           )}
 

@@ -324,9 +324,9 @@ class AuthService:
         client_ip: str | None,
         is_admin: bool,
         max_ip_addresses: Any,
-    ) -> tuple[bool, str, bool, bool]:
+    ) -> tuple[bool, str, bool, str | None]:
         """
-        Return (found, serialized_queue, changed, blocked).
+        Return (found, serialized_queue, changed, block_reason).
         Validates token based on config security mode (off, ip_rollover, fingerprint).
         All users (including admins) are validated according to the configured mode.
         """
@@ -337,7 +337,7 @@ class AuthService:
         
         found = False
         changed = False
-        blocked = False
+        block_reason = None
         mode = self.config.security_token_sharing_mode
 
         for idx, row in enumerate(queue):
@@ -353,7 +353,7 @@ class AuthService:
                         row["fingerprint"] = current_fingerprint
                         changed = True
                     elif bound_fingerprint != current_fingerprint:
-                        blocked = True
+                        block_reason = "fingerprint_mismatch"
                         break
                 elif mode == "ip_rollover":
                     existing_ip = str(row.get("ip", "") or "").strip()
@@ -361,7 +361,7 @@ class AuthService:
                         current_updates = int(row.get("ip_updates") or 0)
                         max_allowed = self.clamp_max_ip_addresses(max_ip_addresses)
                         if current_updates >= max_allowed:
-                            blocked = True
+                            block_reason = "ip_limit_exceeded"
                             break
                         else:
                             row["ip_updates"] = current_updates + 1
@@ -388,7 +388,7 @@ class AuthService:
                 queue.append(row)
             break
 
-        return found, self.serialize_session_queue(queue), changed, blocked
+        return found, self.serialize_session_queue(queue), changed, block_reason
 
     @staticmethod
     def bearer_token() -> str | None:
@@ -451,7 +451,7 @@ class AuthService:
 
             if not payload.get("partial"):
                 client_ip = self.get_client_ip()
-                found, next_queue_raw, changed, blocked = self.refresh_session_token_ip(
+                found, next_queue_raw, changed, block_reason = self.refresh_session_token_ip(
                     user.get("current_token"),
                     token=token,
                     client_ip=client_ip,
@@ -460,7 +460,7 @@ class AuthService:
                 )
                 if not found:
                     abort(401, description="Session superseded by a newer login. Please sign in again.")
-                if blocked:
+                if block_reason:
                     queue = self.parse_session_queue(user.get("current_token"))
                     next_queue = [row for row in queue if str(row.get("token", "") or "") != token]
                     execute(
@@ -469,7 +469,10 @@ class AuthService:
                         {"current_token": self.serialize_session_queue(next_queue), "user_id": user["id"]},
                     )
                     conn.commit()
-                    abort(401, description="Max IP change exceeded for this token. Please sign in again.")
+                    if block_reason == "fingerprint_mismatch":
+                        abort(401, description="Device fingerprint mismatch. Please sign in again.")
+                    else:
+                        abort(401, description="Max IP change exceeded for this token. Please sign in again.")
 
                 if changed:
                     execute(

@@ -106,6 +106,7 @@ export function setForbiddenHandler(fn: ForbiddenHandler | null): void {
 
 function _mapUnauthorizedReason(message?: string): string {
   const raw = String(message || "").toLowerCase();
+  if (raw.includes("device fingerprint mismatch")) return "fingerprint_mismatch";
   if (raw.includes("max ip change exceeded")) return "ip_change_exceeded";
   if (raw.includes("maximum login limit reached")) return "login_limit_exceeded";
   return "session_expired";
