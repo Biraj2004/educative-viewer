@@ -358,6 +358,39 @@ async function getEncryptedDeviceFingerprint(): Promise<string> {
   }
 }
 
+if (typeof window !== "undefined") {
+  const originalFetch = window.fetch;
+  window.fetch = async function (input, init) {
+    const urlStr =
+      typeof input === "string"
+        ? input
+        : input instanceof URL
+          ? input.toString()
+          : input.url;
+    const backend = getBackendApiBase();
+    const isRelative = !urlStr.includes("://");
+    const isBackend = urlStr.startsWith(backend);
+    if (
+      isBackend ||
+      (isRelative && (urlStr.startsWith("/api/") || urlStr.startsWith("api/")))
+    ) {
+      try {
+        const fingerprint = await getEncryptedDeviceFingerprint();
+        if (fingerprint) {
+          const headers = new Headers(init?.headers || {});
+          if (!headers.has("X-Device-Fingerprint")) {
+            headers.set("X-Device-Fingerprint", fingerprint);
+          }
+          init = { ...init, headers };
+        }
+      } catch (err) {
+        console.error("Failed to automatically attach X-Device-Fingerprint:", err);
+      }
+    }
+    return originalFetch.call(this, input, init);
+  };
+}
+
 async function apiPost<T>(
   path: string,
   body: Record<string, unknown>,
