@@ -238,7 +238,7 @@ class AuthService:
                     "token": token,
                     "issued_at": str(item.get("issued_at", "") or ""),
                     "ip": str(item.get("ip", "") or ""),
-                    "ip_updates": 0,
+                    "ip_updates": int(item.get("ip_updates") or 0),
                     "fingerprint": str(item.get("fingerprint", "") or "").strip(),
                 }
             )
