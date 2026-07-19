@@ -380,13 +380,6 @@ class AuthService:
                         changed = True
 
             # If not blocked, update display fields and timestamp
-            # If IP changed and not in ip_rollover mode, we still update it for visual admin tracking
-            if mode != "ip_rollover":
-                existing_ip = str(row.get("ip", "") or "").strip()
-                if normalized_ip and existing_ip != normalized_ip:
-                    row["ip"] = normalized_ip
-                    changed = True
-
             row["issued_at"] = touched_at
             changed = True
 
