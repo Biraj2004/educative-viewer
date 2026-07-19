@@ -359,54 +359,11 @@ async function getEncryptedDeviceFingerprint(): Promise<string> {
   }
 }
 
-if (typeof window !== "undefined") {
-  const originalFetch = window.fetch;
-  window.fetch = async function (input, init) {
-    const urlStr =
-      typeof input === "string"
-        ? input
-        : input instanceof URL
-          ? input.toString()
-          : input.url;
-    const backend = getBackendApiBase();
-    const isRelative = !urlStr.includes("://");
-    const isBackend = urlStr.startsWith(backend);
-    if (
-      isBackend ||
-      (isRelative && (urlStr.startsWith("/api/") || urlStr.startsWith("api/")))
-    ) {
-      try {
-        const fingerprint = await getEncryptedDeviceFingerprint();
-        if (fingerprint) {
-          const headers = new Headers(
-            input instanceof Request ? input.headers : init?.headers || {}
-          );
-          if (input instanceof Request && init?.headers) {
-            const initHeaders = new Headers(init.headers);
-            initHeaders.forEach((value, key) => {
-              headers.set(key, value);
-            });
-          }
-          if (!headers.has("X-Device-Fingerprint")) {
-            headers.set("X-Device-Fingerprint", fingerprint);
-          }
-          if (input instanceof Request) {
-            input = new Request(input, { headers });
-            if (init) {
-              const { headers: _, ...rest } = init;
-              init = rest;
-            }
-          } else {
-            init = { ...init, headers };
-          }
-        }
-      } catch (err) {
-        console.error("Failed to automatically attach X-Device-Fingerprint:", err);
-      }
-    }
-    return originalFetch.call(this, input, init);
-  };
-}
+// NOTE: No global window.fetch interceptor.
+// X-Device-Fingerprint is set explicitly in each API helper (adminApiCall,
+// apiFetch, saveReaderState, apiPost). A global async interceptor wrapping
+// window.fetch caused PATCH requests to fail due to async ordering issues
+// that confused the browser's CORS preflight/request pairing.
 
 
 async function apiPost<T>(
