@@ -95,12 +95,12 @@ const builders = [
       "from-violet-500 to-fuchsia-500 dark:from-violet-400 dark:to-fuchsia-400",
     projects: [
       {
-        name: "Data Scraper Module",
-        type: "Data Extraction Tool",
+        name: "educative.io_scraper",
+        type: "GitHub Repository",
         icon: Code2,
         iconColor:
           "text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/25 border border-blue-200/50 dark:border-blue-500/20",
-        href: "https://github.com/anilabhadatta",
+        href: "https://github.com/anilabhadatta/educative.io_scraper",
         isCurrent: false,
       },
     ],
