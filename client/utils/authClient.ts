@@ -346,7 +346,7 @@ function getRawFingerprint(): string {
 
 let _cachedEncryptedFingerprint: string | null = null;
 
-async function getEncryptedDeviceFingerprint(): Promise<string> {
+export async function getEncryptedDeviceFingerprint(): Promise<string> {
   if (_cachedEncryptedFingerprint) return _cachedEncryptedFingerprint;
   const raw = getRawFingerprint();
   if (!raw) return "";
@@ -359,9 +359,33 @@ async function getEncryptedDeviceFingerprint(): Promise<string> {
   }
 }
 
+export async function getAuthHeaders(
+  customHeaders?: Record<string, string>,
+): Promise<Record<string, string>> {
+  const token = getAuthToken();
+  const fingerprint = await getEncryptedDeviceFingerprint();
+  const headers: Record<string, string> = {
+    "X-Device-Fingerprint": fingerprint,
+    ...customHeaders,
+  };
+  if (token) {
+    headers["Authorization"] = `Bearer ${token}`;
+  }
+  return headers;
+}
+
+export async function authenticatedFetch(
+  input: RequestInfo | URL,
+  init?: RequestInit,
+): Promise<Response> {
+  const customHeaders = (init?.headers as Record<string, string> | undefined) || {};
+  const headers = await getAuthHeaders(customHeaders);
+  return fetch(input, { ...init, headers });
+}
+
 // NOTE: No global window.fetch interceptor.
 // X-Device-Fingerprint is set explicitly in each API helper (adminApiCall,
-// apiFetch, saveReaderState, apiPost). A global async interceptor wrapping
+// apiFetch, saveReaderState, apiPost, authenticatedFetch). A global async interceptor wrapping
 // window.fetch caused PATCH requests to fail due to async ordering issues
 // that confused the browser's CORS preflight/request pairing.
 

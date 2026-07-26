@@ -1,4 +1,4 @@
-import { getAuthToken, ApiError } from "./authClient";
+import { getAuthToken, ApiError, authenticatedFetch } from "./authClient";
 import { getBackendApiBase } from "./runtime-config";
 
 export const AVAILABLE_MODELS = [
@@ -31,15 +31,9 @@ export async function generateAIContent(payload: {
   provider?: string;
   temperature?: number;
 }): Promise<string> {
-  const token = getAuthToken();
-  const headers: Record<string, string> = {
-    "Content-Type": "application/json",
-  };
-  if (token) headers["Authorization"] = `Bearer ${token}`;
-
-  const res = await fetch(`${getBackendApiBase()}/api/ai/generate`, {
+  const res = await authenticatedFetch(`${getBackendApiBase()}/api/ai/generate`, {
     method: "POST",
-    headers,
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
   });
 

@@ -1,7 +1,7 @@
 "use client";
 import React, { useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { getAuthToken } from "@/utils/authClient";
+import { getAuthToken, authenticatedFetch } from "@/utils/authClient";
 import { getBackendApiBase } from "@/utils/runtime-config";
 
 export default function LegacyHTML({ data }: { data: any }) {
@@ -326,9 +326,7 @@ export default function LegacyHTML({ data }: { data: any }) {
               a.style.cursor = "wait";
 
               try {
-                const res = await fetch(`${BACKEND}/api/resolve-link?url=${encodeURIComponent(relativePath)}`, {
-                  headers: token ? { Authorization: `Bearer ${token}` } : {},
-                });
+                const res = await authenticatedFetch(`${BACKEND}/api/resolve-link?url=${encodeURIComponent(relativePath)}`);
 
                 if (res.ok) {
                   const data = await res.json();

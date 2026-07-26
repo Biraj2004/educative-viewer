@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import MonacoEditor from "@monaco-editor/react";
+import { authenticatedFetch } from "@/utils/authClient";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -455,7 +456,7 @@ function resolveJudge0LanguageId(
 }
 
 async function fetchJudge0Languages(provider: Judge0Provider): Promise<Judge0LanguageInfo[]> {
-  const response = await fetch(`/service/code-test/execute?provider=${encodeURIComponent(provider)}`, { method: "GET" });
+  const response = await authenticatedFetch(`/service/code-test/execute?provider=${encodeURIComponent(provider)}`, { method: "GET" });
   const payload = (await response.json().catch(() => ({}))) as
     | { languages?: unknown; error?: string; details?: unknown }
     | Record<string, unknown>;
@@ -1350,7 +1351,7 @@ export default function CodeTest({ data }: { data: CodeTestData }) {
         };
       }
 
-      const batchResponse = await fetch("/service/code-test/execute", {
+      const batchResponse = await authenticatedFetch("/service/code-test/execute", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import AppNavbar from '@/components/edu-viewer/AppNavbar';
 import { useAuth } from '@/components/edu-viewer/AuthProvider';
+import { authenticatedFetch } from '@/utils/authClient';
 import LazyLoadPlaceholder, { LazyLoadPlaceholderData } from '@/components/topic-details/LazyLoadPlaceholder';
 import EditorCode, { EditorCodeComponentData } from '@/components/topic-details/EditorCode';
 import SlateHTML from '@/components/topic-details/SlateHTML';
@@ -228,9 +229,7 @@ export default function ComponentTestPage() {
     const fetchTypes = async () => {
       try {
         const BACKEND = getBackendApiBase();
-        const response = await fetch(`${BACKEND}/api/admin/test-components/types`, {
-          headers: { Authorization: `Bearer ${authToken}` },
-        });
+        const response = await authenticatedFetch(`${BACKEND}/api/admin/test-components/types`);
         if (response.ok) {
           const data = await response.json();
           if (Array.isArray(data)) {
@@ -256,9 +255,7 @@ export default function ComponentTestPage() {
       }
       params.append("limit", countToFetch.toString());
 
-      const response = await fetch(`${API}/test-components?${params.toString()}`, {
-        headers: { Authorization: `Bearer ${authToken}` },
-      });
+      const response = await authenticatedFetch(`${API}/test-components?${params.toString()}`);
       if (response.status === 403 || response.status === 401) {
         setFetchStatus("forbidden");
         return;

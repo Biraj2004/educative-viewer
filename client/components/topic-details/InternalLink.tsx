@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { getAuthToken } from "@/utils/authClient";
+import { authenticatedFetch } from "@/utils/authClient";
 import { getBackendApiBase } from "@/utils/runtime-config";
 
 export default function InternalLink({ href, children }: { href: string; children: React.ReactNode }) {
@@ -17,11 +17,8 @@ export default function InternalLink({ href, children }: { href: string; childre
 
     try {
       const BACKEND = getBackendApiBase();
-      const token = getAuthToken();
       
-      const res = await fetch(`${BACKEND}/api/resolve-link?url=${encodeURIComponent(href)}`, {
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-      });
+      const res = await authenticatedFetch(`${BACKEND}/api/resolve-link?url=${encodeURIComponent(href)}`);
 
       if (res.ok) {
         const data = await res.json();

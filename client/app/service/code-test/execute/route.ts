@@ -30,11 +30,17 @@ async function proxyToBackend(request: Request, method: "GET" | "POST") {
     targetUrl.searchParams.set("provider", provider);
   }
 
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+  };
+  const authHeader = request.headers.get("authorization");
+  if (authHeader) headers["Authorization"] = authHeader;
+  const fingerprintHeader = request.headers.get("x-device-fingerprint");
+  if (fingerprintHeader) headers["X-Device-Fingerprint"] = fingerprintHeader;
+
   const upstream = await fetch(targetUrl.toString(), {
     method,
-    headers: {
-      "Content-Type": "application/json",
-    },
+    headers,
     body: method === "POST" ? await request.text() : undefined,
     cache: "no-store",
   });

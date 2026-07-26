@@ -5,6 +5,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import AppNavbar from "@/components/edu-viewer/AppNavbar";
 import { useAuth } from "@/components/edu-viewer/AuthProvider";
 import { getBackendApiBase } from "@/utils/runtime-config";
+import { authenticatedFetch } from "@/utils/authClient";
 
 // ─── Icons ────────────────────────────────────────────────────────────────────
 
@@ -53,11 +54,10 @@ export default function ContactPage() {
 
     try {
       const apiBase = getBackendApiBase();
-      const res = await fetch(`${apiBase}/api/contact`, {
+      const res = await authenticatedFetch(`${apiBase}/api/contact`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
         },
         body: JSON.stringify(formData),
       });

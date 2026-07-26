@@ -12,6 +12,7 @@ import {
   getProgress,
   getUser,
   getViewerCourseSettings,
+  authenticatedFetch,
   type ViewerDrawingNote,
   type ViewerHighlight,
   type ViewerTopicNote,
@@ -134,9 +135,9 @@ export default function TopicDetailPage() {
         const topicFetchKey = `topic-details-${courseId}-${topicIdx}`;
         let topicPromise = inflightFetches.get(topicFetchKey);
         if (!topicPromise) {
-          topicPromise = fetch(`${BACKEND}/api/topic-details`, {
+          topicPromise = authenticatedFetch(`${BACKEND}/api/topic-details`, {
             method: "POST",
-            headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+            headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ course_id: courseId, topic_index: topicIdx }),
           }).then(async (r) => {
             if (r.status === 401) throw Object.assign(new Error("Unauthorized"), { status: 401 });
@@ -150,9 +151,9 @@ export default function TopicDetailPage() {
         const courseFetchKey = `course-details-${courseId}`;
         let coursePromise = inflightFetches.get(courseFetchKey);
         if (!coursePromise) {
-          coursePromise = fetch(`${BACKEND}/api/course-details`, {
+          coursePromise = authenticatedFetch(`${BACKEND}/api/course-details`, {
             method: "POST",
-            headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+            headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ course_id: courseId }),
           }).then(async (r) => {
             if (r.status === 401) throw Object.assign(new Error("Unauthorized"), { status: 401 });

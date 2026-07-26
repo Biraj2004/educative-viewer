@@ -1,4 +1,4 @@
-import { getAuthToken, ApiError } from "./authClient";
+import { getAuthToken, ApiError, authenticatedFetch } from "./authClient";
 import { getBackendApiBase } from "./runtime-config";
 
 export interface GlobalSearchResult {
@@ -33,11 +33,7 @@ export async function searchCourseContent(query: string, limit = 25): Promise<Gl
     q,
     limit: String(limit),
   });
-  const res = await fetch(`${getBackendApiBase()}/api/search?${params.toString()}`, {
-    headers: {
-      Authorization: `Bearer ${token}`,
-    },
-  });
+  const res = await authenticatedFetch(`${getBackendApiBase()}/api/search?${params.toString()}`);
 
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {

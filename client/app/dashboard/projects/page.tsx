@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import AppNavbar from "@/components/edu-viewer/AppNavbar";
 import CoursesListClient from "@/components/edu-viewer/CoursesListClient";
 import UserMenu from "@/components/edu-viewer/UserMenu";
-import { getAuthToken, clearAuthToken, getProgress, getUser, getViewerFeatures } from "@/utils/authClient";
+import { getAuthToken, clearAuthToken, getProgress, getUser, getViewerFeatures, authenticatedFetch } from "@/utils/authClient";
 import { useAuth } from "@/components/edu-viewer/AuthProvider";
 import type { ProgressData } from "@/utils/authClient";
 import ScrollToTop from "@/components/edu-viewer/ScrollToTop";
@@ -56,9 +56,7 @@ export default function ProjectsPage() {
         const fetchKey = "projects-list";
         let projectsPromise = inflightFetches.get(fetchKey);
         if (!projectsPromise) {
-          projectsPromise = fetch(`${BACKEND}/api/projects`, {
-            headers: { Authorization: `Bearer ${token}` },
-          }).then(async (r) => {
+          projectsPromise = authenticatedFetch(`${BACKEND}/api/projects`).then(async (r) => {
             if (r.status === 401) throw Object.assign(new Error("Unauthorized"), { status: 401 });
             if (!r.ok) throw new Error(`Failed to load projects (${r.status})`);
             const json = await r.json();

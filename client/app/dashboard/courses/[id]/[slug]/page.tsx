@@ -16,6 +16,7 @@ import {
   resetCourseProgress,
   getViewerCourseSettings,
   updateViewerCourseSettings,
+  authenticatedFetch,
 } from "@/utils/authClient";
 import type {
   CourseResetScope,
@@ -238,9 +239,9 @@ export default function CourseDetailPage() {
         const fetchKey = `course-details-${courseId}`;
         let coursePromise = inflightFetches.get(fetchKey);
         if (!coursePromise) {
-          coursePromise = fetch(`${BACKEND}/api/course-details`, {
+          coursePromise = authenticatedFetch(`${BACKEND}/api/course-details`, {
             method: "POST",
-            headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+            headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ course_id: courseId }),
           }).then(async (r) => {
             if (r.status === 401) throw Object.assign(new Error("Unauthorized"), { status: 401 });

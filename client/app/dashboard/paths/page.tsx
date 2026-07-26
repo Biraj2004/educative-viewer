@@ -6,7 +6,7 @@ import { useSearchParams } from "next/navigation";
 import AppNavbar from "@/components/edu-viewer/AppNavbar";
 import UserMenu from "@/components/edu-viewer/UserMenu";
 import { useAuth } from "@/components/edu-viewer/AuthProvider";
-import { clearAuthToken, getAuthToken } from "@/utils/authClient";
+import { clearAuthToken, getAuthToken, authenticatedFetch } from "@/utils/authClient";
 import ActiveToggle from "@/components/edu-viewer/ActiveToggle";
 import { getBackendApiBase } from "@/utils/runtime-config";
 
@@ -130,11 +130,7 @@ export default function PathsPage() {
 
     let cancelled = false;
 
-    fetch(`${BACKEND}/api/paths`, {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-    })
+    authenticatedFetch(`${BACKEND}/api/paths`)
       .then(async (res) => {
         if (res.status === 401) {
           clearAuthToken();
@@ -175,11 +171,7 @@ export default function PathsPage() {
 
     let cancelled = false;
 
-    fetch(`${BACKEND}/api/paths/${selectedPathId}/courses`, {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-    })
+    authenticatedFetch(`${BACKEND}/api/paths/${selectedPathId}/courses`)
       .then(async (res) => {
         if (res.status === 401) {
           clearAuthToken();

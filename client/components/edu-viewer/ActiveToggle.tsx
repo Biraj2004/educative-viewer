@@ -12,6 +12,7 @@
 
 import { useState } from "react";
 import { getBackendApiBase } from "@/utils/runtime-config";
+import { authenticatedFetch } from "@/utils/authClient";
 
 const BACKEND = getBackendApiBase();
 
@@ -48,11 +49,10 @@ export default function ActiveToggle({
 
     try {
       const endpoint = entity === "user" ? "/api/admin/set-user-status" : "/api/admin/set-course-status";
-      const res = await fetch(`${BACKEND}${endpoint}`, {
+      const res = await authenticatedFetch(`${BACKEND}${endpoint}`, {
         method: "PATCH",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${authToken}`,
         },
         body: JSON.stringify({ entity, id: Number(entityId), is_active: next }),
       });
