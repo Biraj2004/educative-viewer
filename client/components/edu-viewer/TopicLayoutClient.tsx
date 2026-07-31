@@ -13,6 +13,7 @@ import {
   recordTopicVisit,
   getAuthToken,
   clearAuthToken,
+  authenticatedFetch,
   updateViewerCourseSettings,
   type ViewerDrawingNote,
   type ViewerDrawingScene,
@@ -1954,10 +1955,9 @@ export default function TopicLayoutClient({
     window.history.pushState({}, "", href);
     window.scrollTo(0, 0);
     try {
-      const token = getAuthToken();
-      const res = await fetch(`${BACKEND}/api/topic-details`, {
+      const res = await authenticatedFetch(`${BACKEND}/api/topic-details`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ course_id: courseId, topic_index: destIdx }),
       });
       if (res.status === 401) {
